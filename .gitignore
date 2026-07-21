@@ -53,6 +53,7 @@ data/backup/
 # Internal docs (plans, specs)
 docs/
 !docs/architecture/
+!docs/PROJECT_VISION.md
 !wiki/docs/
 !wiki/docs/**
 docs/screenshots/agent-run.png
