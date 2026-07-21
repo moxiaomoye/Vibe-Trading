@@ -52,14 +52,30 @@
 
 > ⚠️ **تحذير أمني:** حساب X باسم `VibeTrading_HKU`، ومشروع Virtuals رقم `101845`، وعقد التوكن `0x640BDBF77b6447E8b7DB7894cED84BD1c40571f4` كلّها غير رسمية ولا تتبع Vibe-Trading. لم نُطلق أو نؤيد مطلقًا أي توكن أو عملة ميم. لا تشترِ هذا التوكن، ولا تربط محفظتك، ولا توقّع أي شيء. [التفاصيل](SECURITY.md#official-channels--impersonation).
 
+- **2026-07-21** 🔧 **اكتمال محمّل البيانات + جولة إصلاحات للموثوقية**: أصبحت نتائج بيانات السوق الجزئية تُكمل الرموز المفقودة عبر سلسلة fallback وتفشل بأمان بدلًا من تقليص نطاق الاختبار الخلفي بصمت ([#689](https://github.com/HKUDS/Vibe-Trading/pull/689)، يُغلق [#681](https://github.com/HKUDS/Vibe-Trading/issues/681)، شكرًا @xkam7ar)، وتستخدم شموع OKX نقطة النهاية `history-candles` مع إعادة المحاولة عند حد المعدل لعمليات التعبئة التاريخية العميقة ([#644](https://github.com/HKUDS/Vibe-Trading/pull/644)، شكرًا @tyj147454413-cmd). بالإضافة إلى جولة إصلاحات: يقبل حارس شبكة MCP مضيفي IPv6 / المختلفين في حالة الأحرف ([#750](https://github.com/HKUDS/Vibe-Trading/pull/750)، شكرًا @Robin1987China)، ويتخطى محلّلو سجل التداول صفوف الرموز الفارغة/NaN ([#749](https://github.com/HKUDS/Vibe-Trading/pull/749)، شكرًا @Robin1987China)، ويتخطى Shadow Account بوابة ساعة الدخول المستخرجة على الشموع اليومية ([#748](https://github.com/HKUDS/Vibe-Trading/pull/748)، شكرًا @Robin1987China)، وأصبحت نقاط نهاية MiniMax الإقليمية قابلة للاختيار ([#731](https://github.com/HKUDS/Vibe-Trading/pull/731)، شكرًا @octo-patch).
+
+- **2026-07-20** 🔀 **مزوّدو النماذج وMetaTrader 5 ومراجعة للموثوقية**: انضم مزوّد **Anthropic Messages API** الأصلي (إضافة اختيارية `[anthropic]`، [#695](https://github.com/HKUDS/Vibe-Trading/pull/695)، شكرًا @jelech) و**SiliconFlow** ([#565](https://github.com/HKUDS/Vibe-Trading/pull/565)، شكرًا @UNHNQ) و**iFlytek Spark** ([#537](https://github.com/HKUDS/Vibe-Trading/pull/537)، شكرًا @FenjuFu) إلى قائمة المزوّدين، ووصل موصّل وسيط **MetaTrader 5 (Exness)** ومصدر بيانات `mt5` للفوركس/المعادن (موصّلات الوسطاء → **12**، [#481](https://github.com/HKUDS/Vibe-Trading/pull/481)، شكرًا @StaniellG). بالإضافة إلى محرّك **`llm-vision` OCR** المستقل عن المزوّد ([#548](https://github.com/HKUDS/Vibe-Trading/pull/548)، شكرًا @shadowinlife)، و**تحويل محاذاة الإشارات إلى متجهات بسرعة 80×** ([#698](https://github.com/HKUDS/Vibe-Trading/pull/698)، شكرًا @shadowinlife)، وبيانات **تمويل/شرائح USD-M** التاريخية من Binance ([#716](https://github.com/HKUDS/Vibe-Trading/pull/716)، شكرًا @honginp)، وذاكرة تخزين مؤقتة لاكتشاف MCP في swarm ([#704](https://github.com/HKUDS/Vibe-Trading/pull/704))، ودمج للموثوقية يُغلق **13** مشكلة في SSE/الجلسات/CLI/swarm/المجدول ([#584](https://github.com/HKUDS/Vibe-Trading/pull/584)، شكرًا @xkam7ar). تصحيحات الدقّة: أصبح **الإغلاق الجزئي** للخيارات يحترم الكمية المطلوبة بدلًا من تصفية العقدة بالكامل ([#577](https://github.com/HKUDS/Vibe-Trading/issues/577))، وتوحيد حلّ بيانات اعتماد المزوّد ([#563](https://github.com/HKUDS/Vibe-Trading/pull/563))، ومعالجة الإلغاء أثناء الانتظار ([#641](https://github.com/HKUDS/Vibe-Trading/pull/641))، وسباق DOM أثناء البث في الواجهة ([#717](https://github.com/HKUDS/Vibe-Trading/pull/717)، شكرًا @Marnie0415)، وعارضات CLI للموصّلات ([#726](https://github.com/HKUDS/Vibe-Trading/pull/726)، شكرًا @nareshkps).
+
+- **2026-07-19** 🔧 **مقالات أخبار حقيقية للأسهم الأمريكية/هونغ كونغ + إصلاح MCP factor-analysis + مراجعة للمتانة**: تُعيد أداة أخبار الأسهم الآن **مقالات Yahoo Finance** حقيقية (title/url/source/published/snippet) لرموز الأسهم الأمريكية وهونغ كونغ بدلًا من مطابقات الأدوات ذات الصلة، مع بقاء التوجيه عبر العميل المجمّد المحدود بمعدّل عناوين IP ([#730](https://github.com/HKUDS/Vibe-Trading/pull/730)، شكرًا @yxhuang). وأصبحت أداة MCP `factor_analysis` متوائمة مع عقد CSV الحقيقي للأداة المسجّلة، فلم تعُد الاستدعاءات تفشل بـ `KeyError` قبل التشغيل ([#715](https://github.com/HKUDS/Vibe-Trading/pull/715)، تغلق [#635](https://github.com/HKUDS/Vibe-Trading/issues/635)، شكرًا @Robin1987China). إضافةً إلى مراجعة للمتانة: تفرض **سلسلة Kimi K** بأكملها (k2/k3/…/`for-coding`) الآن `temperature=1` تلقائيًا كما يتطلب API ([#701](https://github.com/HKUDS/Vibe-Trading/pull/701)، شكرًا @sambazhu)، وتفشل `split_message` ونطاقات صفحات PDF ومرشّحات تواريخ سجل التداول فورًا عند المدخلات المنحلّة أو المعكوسة بدلًا من التعليق أو إرجاع نتيجة فارغة بصمت ([#727](https://github.com/HKUDS/Vibe-Trading/pull/727)–[#729](https://github.com/HKUDS/Vibe-Trading/pull/729)، شكرًا @santhreal).
+
+<details>
+<summary>أخبار سابقة</summary>
+
+- **2026-07-18** 🔧 **احتياطي عملات Binance المشفّرة + إصلاحات التنفيذ المتوازي والصحّة**: انضمّ loader لـ **Binance** إلى سلسلة الاحتياط (fallback) لبيانات العملات المشفّرة التاريخية ([#643](https://github.com/HKUDS/Vibe-Trading/pull/643)، شكرًا @tyj147454413-cmd)، وانتقل موصّل IBKR إلى تجمّع اتصالات محلي للخيط (thread-local) مع عروض أسعار لقطية، بما يصلح التعليق أثناء تشغيل الوكلاء المتوازي ([#636](https://github.com/HKUDS/Vibe-Trading/pull/636)، شكرًا @MikeCer). إضافةً إلى مراجعة للصحّة: يرفض factor analysis قيم `n_groups` غير الموجبة، وتفشل النطاقات الزمنية المعكوسة ونوافذ الكشف غير الموجبة فورًا، ويُعالَج `DatetimeIndex` غير المسمّى في correlation matrix بشكل صحيح، وتُقبَل أسماء أعمدة nav/value البديلة في `equity.csv`، ولم تعُد أكواد الأسهم الصينية (A-share) الفارغة تُحوَّل قسرًا إلى `000000.SZ` ([#709](https://github.com/HKUDS/Vibe-Trading/pull/709)–[#714](https://github.com/HKUDS/Vibe-Trading/pull/714)، شكرًا @santhreal). ينضمّ عامل استقرار إعادة ربط الارتباط (correlation-rewiring) إلى academic zoo ([#705](https://github.com/HKUDS/Vibe-Trading/pull/705)، شكرًا @ebujinovch)، وأُضيف fundamental zoo إلى القائمة البيضاء لـ factor analysis ([#707](https://github.com/HKUDS/Vibe-Trading/pull/707)، شكرًا @sambazhu)، وأصبحت حالة التشغيل المُخزَّنة مضمونة عبر fsync ([#645](https://github.com/HKUDS/Vibe-Trading/pull/645)، شكرًا @tyj147454413-cmd)، ويثبّت dev extra سلسلة أدوات Black/Ruff الموثّقة ([#634](https://github.com/HKUDS/Vibe-Trading/pull/634)، شكرًا @xkam7ar).
+
+- **2026-07-17** 🧩 **مهارة correlation-regime + مراجعة واسعة لصحة الاختبار الرجعي / البيانات / أمان التداول الحي**: مهارة كشف **correlation-regime** جديدة (المهارات المضمّنة → 88، [#557](https://github.com/HKUDS/Vibe-Trading/pull/557)، شكرًا @ebujinovch)، وبطاقة اتصال وقت التشغيل لـ Longbridge ([#569](https://github.com/HKUDS/Vibe-Trading/pull/569)، شكرًا @fanfpy)، وإعدادات swarm مُعرّفة من المستخدم تُحمّل من `~/.vibe-trading` ([#570](https://github.com/HKUDS/Vibe-Trading/pull/570)، شكرًا @darkknight4563). إضافةً إلى تحصين يشمل الحزمة بأكملها: إصلاحات لتلف البيانات الصامت في loaders الخاصة بـ Futu / Tencent / CCXT / mootdx، وضوابط لمنع تحيّز الاستشراف المسبق ولفرض strict-OOS في factor bench وShadow Account، وأمان التداول الحي (حدود انكشاف موقَّعة، وحدود أوامر يومية ذرّية، واعتمادات mandate بموافقة مسبقة، وحالة حية fail-closed)، وتحسينات على journal / ميزانية QVeris / swarm / بوابة CI ([#552](https://github.com/HKUDS/Vibe-Trading/pull/552)، شكرًا @xor-xe؛ ومعظم أعمال الصحّة من إنجاز @xkam7ar).
+
+- **2026-07-16** 🔧 **إصلاح قفل الاعتماديات + إصلاح حفظ الإعدادات على Windows**: أُعيد توليد قفل التشغيل المُتحقق منه بالتجزئة بحيث يعود `pip install --require-hashes` في Docker إلى الحل بنجاح، بإصلاح التثبيتات غير المتوافقة لـ `caio`/`pydantic-core`/`websockets` ([#564](https://github.com/HKUDS/Vibe-Trading/pull/564)، يغلق [#558](https://github.com/HKUDS/Vibe-Trading/issues/558)، شكرًا @tianrking). لم يعد حفظ إعدادات Agent LLM من واجهة الويب يعيد HTTP 500 على Windows — أصبح تحصين `os.fchmod` الخاص بأنظمة POSIX محروسًا حسب المنصة مع اختبار انحدار للمنصات التي لا تدعم `fchmod` ([#561](https://github.com/HKUDS/Vibe-Trading/pull/561)، شكرًا @CRui5in).
+
+- **2026-07-15** 🧮 **صحة الاختبار الرجعي + اكتمال نواة Portfolio Studio**: جمعت دفعة من 10 طلبات سحب (PR) إصلاحات تجعل إعادة الموازنة سببية وغير متأثرة بترتيب الرموز، وتحتسب تكاليف الإغلاق النهائي والدوران من الصفقات المنفذة، وتفرض حدود الانكشاف، وتحافظ على مخرجات تحقق رقمية منتهية وصارمة ([#530](https://github.com/HKUDS/Vibe-Trading/pull/530)/[#531](https://github.com/HKUDS/Vibe-Trading/pull/531)/[#532](https://github.com/HKUDS/Vibe-Trading/pull/532)/[#540](https://github.com/HKUDS/Vibe-Trading/pull/540)). تعيد الرسوم التاريخية استخدام مصدر البيانات الفعلي للتشغيل، ولا تُسقط استعلامات السوق المتكررة بصمت، ويُحدَّث cache الإعدادات بعد تحميل `.env` ([#535](https://github.com/HKUDS/Vibe-Trading/pull/535)/[#544](https://github.com/HKUDS/Vibe-Trading/pull/544)/[#554](https://github.com/HKUDS/Vibe-Trading/pull/554)). أُغلقت Portfolio Studio [#456](https://github.com/HKUDS/Vibe-Trading/issues/456) ومشكلة الإعداد [#541](https://github.com/HKUDS/Vibe-Trading/issues/541)، وكذلك إصلاحا provider [#528](https://github.com/HKUDS/Vibe-Trading/issues/528)/[#529](https://github.com/HKUDS/Vibe-Trading/issues/529). شكرًا @YZY0108 و@santhreal و@Robin1987China و@xkam7ar و@Marnie0415 و@marichu99.
+
+- **2026-07-14** 🌉 **بيانات Longbridge السوقية + نقل MCP الحديث + موثوقية المزوّدين**: انضم Longbridge إلى طبقة fallback للبيانات التاريخية مع بيانات اعتماد مفعّلة بالمفاتيح، وتقسيم نوافذ التاريخ، وفحوص صارمة للاكتمال، واعتماد SDK اختياري. وحصلت أربع أدوات لتدفقات السوق الصينية على fallback موثّق عبر Tushare، ولم تعد القيمة النهائية السالبة لصافي الأصول تعطّل مقاييس الاختبار الرجعي. يدعم MCP server الآن Streamable HTTP، وتستعيد `write_file` وسائط path البديلة أو المفقودة بأمان، وترفض تحديثات hypothesis الحقول غير المدعومة، وأصبحت طلبات Correlation خاضعة للمصادقة. وأصبح NVIDIA NIM مزوّدًا من الدرجة الأولى في Web Settings ومساري CLI onboarding، مع User-Agent متوافق يتضمن رقم الإصدار لمعالجة خطأ 403 المُبلّغ عنه. كما تكتب Web Settings الآن إلى المسار القياسي `~/.vibe-trading/.env`، وتنقل الإعدادات القديمة، وتعرض أخطاء الصلاحيات بوضوح، ما يصلح خطأ 500 عند حفظ DeepSeek ([#534](https://github.com/HKUDS/Vibe-Trading/pull/534)، يغلق [#516](https://github.com/HKUDS/Vibe-Trading/issues/516)/[#524](https://github.com/HKUDS/Vibe-Trading/issues/524)؛ [#528](https://github.com/HKUDS/Vibe-Trading/issues/528)/[#529](https://github.com/HKUDS/Vibe-Trading/issues/529)). شكرًا لكل من @fanfpy و@asahikiko و@santhreal و@sTunnaSu و@abhishekjaisinghani و@huangcheng و@ShiroKSH و@Meru143 و@DIEGOD79 و@not-knope على الكود والتقارير والتشخيص.
+
 - **2026-07-13** 🔒 **تحصين أمني: إغلاق جميع نتائج التدقيق الخارجي العشرة + دفعة مساهمين**: تمّت معالجة جميع النتائج العشر من التدقيق الأمني الخارجي بتاريخ 2026-07-10 (issue [#476](https://github.com/HKUDS/Vibe-Trading/issues/476)، نقاش [#468](https://github.com/HKUDS/Vibe-Trading/discussions/468)) على `main` — إعادة بناء Docker متعددة المراحل بصور أساسية مثبّتة عبر digest، وصندوق رملي للباكتيست مُحصّن بـ AST يمنع الشبكة/subprocess/eval/os.environ/فتح الملفات غير الآمن (حتى داخل أجسام الدوال المتداخلة)، وتذاكر مصادقة SSE قصيرة العمر وأحادية الاستخدام، وتحصين Compose (نظام ملفات جذري للقراءة فقط، إسقاط الصلاحيات، حدود الموارد)، ومصادقة + تحديد معدّل على `/correlation`، ورؤوس أمان، واعتماديات مثبّتة بالتجزئة، وغيرها. كما دُمج: **وضع TAP** الاختياري لعزل مفتاح Alpaca ([#377](https://github.com/HKUDS/Vibe-Trading/pull/377)، شكراً @0xZKnw)، وإظهار معدل دوران المحفظة المُحقَّق ضمن مقاييس الباكتيست ([#478](https://github.com/HKUDS/Vibe-Trading/pull/478)، شكراً @Robin1987China)، وعامل أكاديمي **Frazzini-Pedersen للمراهنة ضد بيتا** (Alpha Zoo → 461، [#480](https://github.com/HKUDS/Vibe-Trading/pull/480)، شكراً @YogeshModi24)، وإصلاح تحيّز الاستشراف المسبق عبر جميع محسّنات المحفظة الخمسة ([#487](https://github.com/HKUDS/Vibe-Trading/pull/487)، شكراً @YZY0108)، وإصلاحان لإعدادات preflight/provider ([#479](https://github.com/HKUDS/Vibe-Trading/pull/479)/[#484](https://github.com/HKUDS/Vibe-Trading/pull/484)، يغلقان [#477](https://github.com/HKUDS/Vibe-Trading/issues/477)/[#482](https://github.com/HKUDS/Vibe-Trading/issues/482)، شكراً @ananaymital/@Bortlesboat).
 
 - **2026-07-12** 🧪 **مدير تطوير الاستراتيجيات + دفعة إصلاحات المساهمين**: مهارة `strategy-dev-manager` الجديدة (رقم 87) تحوّل الأوراق الأكاديمية وتقارير الوسطاء إلى عوامل/استراتيجيات مسجلة مع مخزن artifacts دائم ومراقبة تلقائية لاضمحلال IC/Sharpe — تقود أدوات `sdm_register` / `sdm_status` / `sdm_decay_scan` دورة الحياة active → monitoring → decayed → disabled فوق `~/.vibe-trading/` ([#457](https://github.com/HKUDS/Vibe-Trading/pull/457)، يغلق [#455](https://github.com/HKUDS/Vibe-Trading/issues/455)، شكراً @shadowinlife). كما دُمج: يقبل تبويب Correlation رموزاً مجردة (`AAPL,SPY`) ويمشي سلسلة loader fallback كاملة ([#472](https://github.com/HKUDS/Vibe-Trading/pull/472)، يغلق [#471](https://github.com/HKUDS/Vibe-Trading/issues/471)، شكراً @yxhuang)، ويحترم `local` loader الفاصل الزمني المطلوب عبر إعادة تجميع OHLCV ([#467](https://github.com/HKUDS/Vibe-Trading/pull/467)، شكراً @Shizoqua)، ووصل تاريخ عقود Binance USD-M الدائمة مع توجيه صريح `BTC-USDT-PERP` وفصل سعر التنفيذ عن سعر العلامة كأول شريحة من [#462](https://github.com/HKUDS/Vibe-Trading/issues/462) ([#470](https://github.com/HKUDS/Vibe-Trading/pull/470)، شكراً @honginp)، وتعمل استيرادات FastMCP transport عبر كلا تخطيطي الوحدات ([#469](https://github.com/HKUDS/Vibe-Trading/pull/469)، شكراً @roberttidball)، وأصبح Requesty متاحاً كمزوّد بوابة LLM متوافقة مع OpenAI ([#474](https://github.com/HKUDS/Vibe-Trading/pull/474)، شكراً @Thibaultjaigu).
 
 - **2026-07-11** 🚀 **صدر الإصدار v0.1.11** (`pip install -U vibe-trading-ai`): يجمع ثلاثة أسابيع من العمل منذ 0.1.10 — اختبار رجعي من الدرجة الأولى للأسهم الهندية (NSE/BSE)، وطبقة العوامل الأساسية الآمنة زمنياً (PIT-safe) (Alpha Zoo → 460)، وبيئة تشغيل قنوات IM بـ16 محوّلاً، والأبحاث المجدولة من طرف إلى طرف، وبيانات QVeris المدفوعة الاختيارية، ودفعة مساهمي اليوم: محسّن يراعي الدوران ([#466](https://github.com/HKUDS/Vibe-Trading/pull/466)، شكراً @Robin1987China)، وأداة رؤية `analyze_image` + إقران NapCat DM + إصلاح قراءة وسائط IM ([#464](https://github.com/HKUDS/Vibe-Trading/pull/464)/[#463](https://github.com/HKUDS/Vibe-Trading/pull/463)/[#465](https://github.com/HKUDS/Vibe-Trading/issues/465)، شكراً @fei-moss)، وتسلسل Longbridge Decimal ([#459](https://github.com/HKUDS/Vibe-Trading/pull/459)، شكراً @fanfpy)، وحُرّاس عدّ المانيفست المحزوم ([#461](https://github.com/HKUDS/Vibe-Trading/pull/461)، شكراً @asahikiko). التفاصيل الكاملة: [CHANGELOG](CHANGELOG.md) · [ملاحظات الإصدار](https://github.com/HKUDS/Vibe-Trading/releases/tag/v0.1.11).
-
-<details>
-<summary>أخبار سابقة</summary>
 
 - **2026-07-10** 🇮🇳 **دعم الأسهم الهندية (NSE/BSE) + مركزية متغيرات البيئة**: محرك مخصص `IndiaEquityEngine` — تسوية T+1، ونطاقات حدود السعر، وحزمة تكاليف STT/الدمغة/البورصة/SEBI/GST قابلة للتهيئة — مع توجيه رموز `.NS`/`.BO`، وجسر بيانات Shoonya/Dhan للقراءة فقط (اختياري)، وانضمام 255 عاملاً من alpha101/qlib158 إلى الكون الجديد `equity_in` ([#305](https://github.com/HKUDS/Vibe-Trading/pull/305)، شكرًا @muku314115). تتدفق متغيرات البيئة الآن عبر مخطط Pydantic واحد `EnvConfig` مع بوابة CI تعتمد على AST لمنع انتشار `os.getenv` مستقبلاً ([#440](https://github.com/HKUDS/Vibe-Trading/pull/440)، يغلق [#438](https://github.com/HKUDS/Vibe-Trading/issues/438)، شكرًا @shadowinlife). أيضًا: مربع تأكيد ثانٍ قبل اعتماد تفويض تداول حقيقي مع توحيد رسائل الأخطاء ([#453](https://github.com/HKUDS/Vibe-Trading/pull/453)، شكرًا @wison1717-maker)، واختبارات مسارات scheduled-research ([#452](https://github.com/HKUDS/Vibe-Trading/pull/452)، شكرًا @Robin1987China)، ولم تعد نماذج GLM التفكيرية تفقد تدفق الاستدلال على مزود zhipu ([#458](https://github.com/HKUDS/Vibe-Trading/issues/458)).
 
@@ -300,7 +316,7 @@ vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, an
 
 ## 📡 مصادر البيانات والتراجع الذكي
 
-استدعاء واحد لـ `get_market_data`، **19 مصدر بيانات سوقية مجانية** (إضافة إلى سوق مدفوع اختياري **QVeris**). اضبط `source: "auto"` — يختار المُحمّل حسب الرمز، ثم يسير عبر سلسلة لكل سوق مرتبة بحسب **خطر حظر عنوان IP**: المصادر العامة التي لا تُحظر أبداً أولاً، والمصادر المُقيّدة أو المحمية بمفتاح أخيراً. بلا أي إعداد، ولا نقطة فشل واحدة.
+استدعاء واحد لـ `get_market_data`، **20 مصدر بيانات سوقية مجانية** (إضافة إلى سوق مدفوع اختياري **QVeris**). اضبط `source: "auto"` — يختار المُحمّل حسب الرمز، ثم يسير عبر سلسلة لكل سوق مرتبة بحسب **خطر حظر عنوان IP**: المصادر العامة التي لا تُحظر أبداً أولاً، والمصادر المُقيّدة أو المحمية بمفتاح أخيراً. بلا أي إعداد، ولا نقطة فشل واحدة.
 
 | Source | Markets | Auth | Role |
 |--------|---------|------|------|
@@ -314,6 +330,7 @@ vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, an
 | `qveris` | أصول عالمية متعددة | key · credits | **سوق مدفوع** — 63+ مزوداً بمفتاح واحد (اختيار صريح فقط، خارج التراجع التلقائي) |
 | `okx` · `ccxt` | crypto | none | OKX + 100+ exchanges |
 | `futu` | HK / A | OpenD | optional local FutuOpenD |
+| `mt5` | الفوركس / المعادن | طرفية MT5 | طرفية MetaTrader 5 محلية اختيارية (Windows) — تغذية وسيطك الفعلية كما هي، مع حلّ لواحق الرموز بأسلوب Exness تلقائياً |
 | `india_broker` | الهند (NSE/BSE) | تسجيل دخول الوسيط | قراءة فقط لأشرطة Shoonya / Dhan لرموز `.NS` / `.BO` (ذيل سلسلة التراجع) |
 | `local` | any | none | your own CSV / Parquet / DuckDB via `local:` prefix |
 
@@ -323,7 +340,8 @@ vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, an
 - **أسهم US** → `yahoo` · `stooq` · `sina` · `eastmoney` · `yfinance` · `tiingo` · `fmp` · `finnhub` · `alphavantage` · `akshare` · `local`
 - **أسهم HK** → `eastmoney` · `yahoo` · `futu` · `yfinance` · `akshare` · `local`
 - **أسهم الهند (NSE/BSE)** → `yahoo` · `yfinance` · `india_broker` · `local`
-- **الكريبتو** → `okx` · `ccxt` · `yfinance` · `local` &nbsp;·&nbsp; *(العقود الآجلة / الصناديق / الاقتصاد الكلي / الفوركس → `tushare`/`akshare` → `local`)*
+- **الكريبتو** → `okx` · `ccxt` · `yfinance` · `local` &nbsp;·&nbsp; *(العقود الآجلة / الصناديق / الاقتصاد الكلي → `tushare`/`akshare` → `local`)*
+- **الفوركس / المعادن** → `mt5` · `akshare` · `yfinance` · `local`
 
 إلى جانب OHLCV، تصل **18 أداة بيانات للقراءة فقط** إلى الأساسيات والتدفقات — تدفق الأموال، والتنين والنمر، والتدفق الشمالي، والهامش، والصفقات الكتلية، وعدد المساهمين، وفترة الإغلاق، والقطاعات، وتقارير الأبحاث، والأخبار، وإيداعات SEC، والقوائم المالية، وسلاسل الخيارات، والحيازات المؤسسية، وفحص السوق، والبحث عن الرموز، والاقتصاد الكلي — وكلها مكشوفة عبر MCP. ولا يتراجع رمز `local:` صريح أبداً وبصمت إلى مصدر شبكي.
 
@@ -332,7 +350,7 @@ vibe-trading run -p "Analyze my trading behavior, extract my shadow strategy, an
 
 <img src="https://www.qveris.com/logo-color.png" alt="QVeris" height="36">
 
-**البيانات المجانية هي الافتراضي، والمدفوعة عند الحاجة.** تبقى المصادر الـ19 المدمجة مجانية مع تراجع ذكي بحسب خطر الحظر، بلا مفتاح ولا تكلفة. عبر QVeris يفتح مفتاح واحد 63+ مزوداً و10,000+ capabilities (per QVeris) للـ options Greeks، والأساسيات المتقدمة، وبيانات الصين/هونغ كونغ/العالم، والماكرو، والكريبتو، والأخبار، والـ filings؛ ولا تُحتسب المكالمات الفاشلة. فعّله من Settings → QVeris أو `vibe-trading data mode paid`.
+**البيانات المجانية هي الافتراضي، والمدفوعة عند الحاجة.** تبقى المصادر الـ20 المدمجة مجانية مع تراجع ذكي بحسب خطر الحظر، بلا مفتاح ولا تكلفة. عبر QVeris يفتح مفتاح واحد 63+ مزوداً و10,000+ capabilities (per QVeris) للـ options Greeks، والأساسيات المتقدمة، وبيانات الصين/هونغ كونغ/العالم، والماكرو، والكريبتو، والأخبار، والـ filings؛ ولا تُحتسب المكالمات الفاشلة. فعّله من Settings → QVeris أو `vibe-trading data mode paid`.
 
 *QVeris disclosure: التسجيل عبر [رابط إحالة Vibe-Trading](https://qveris.ai/?ref=Vyjjo5G_1cAHJA) يمنحك **+1,000 رصيداً** إضافياً ويدعم المشروع.*
 <!-- QVERIS-END -->
@@ -861,7 +879,7 @@ vibe-trading serve --port 8899
 
 للتطوير على localhost، يبقي `vibe-trading serve` سير المتصفح بسيطاً. لأي عميل غير محلي، تتطلب نقاط API الحساسة `API_AUTH_KEY`؛ استخدم `Authorization: Bearer <key>` لطلبات JSON/الرفع. تتعامل Web UI مع تدفقات Browser EventSource بعد إدخال المفتاح نفسه مرة واحدة في Settings.
 
-تتوفر الأدوات القادرة على shell للـ CLI المحلي وتدفقات localhost الموثوقة، لكنها لا تُعرض لجلسات API البعيدة ما لم تضبط صراحة `VIBE_TRADING_ENABLE_SHELL_TOOLS=1`. قارئات المستندات والسجلات محدودة افتراضياً بجذور الرفع/الاستيراد؛ ضع الملفات تحت `agent/uploads` أو `agent/runs` أو `./uploads` أو `./data` أو `~/.vibe-trading/uploads` أو `~/.vibe-trading/imports`، أو أضف دليلاً مخصصاً عبر `VIBE_TRADING_ALLOWED_FILE_ROOTS`.
+الأدوات القادرة على shell (`bash` / `background_run`) مفعّلة فقط لواجهة CLI المحلية التفاعلية. أما بقية الأسطح — واجهة HTTP/SSE و MCP server على **جميع** وسائط النقل (بما في ذلك stdio) — فتبقى معطّلة ما لم تفعّلها صراحة عبر `VIBE_TRADING_ENABLE_SHELL_TOOLS=1` (أو تمرير `--enable-shell-tools` إلى `vibe-trading-mcp`). نوع وسيط النقل لا يمنح صلاحية shell ضمنيًا أبدًا. قارئات المستندات والسجلات محدودة افتراضياً بجذور الرفع/الاستيراد؛ ضع الملفات تحت `agent/uploads` أو `agent/runs` أو `./uploads` أو `./data` أو `~/.vibe-trading/uploads` أو `~/.vibe-trading/imports`، أو أضف دليلاً مخصصاً عبر `VIBE_TRADING_ALLOWED_FILE_ROOTS`.
 
 ### إعدادات Web UI
 
@@ -934,8 +952,9 @@ skills:
 <summary><b>Cursor / Windsurf / عملاء MCP آخرون</b></summary>
 
 ```bash
-vibe-trading-mcp                  # stdio (default)
-vibe-trading-mcp --transport sse  # SSE for web clients
+vibe-trading-mcp                   # stdio (default)
+vibe-trading-mcp --transport http  # Streamable HTTP (spec default) at /mcp
+vibe-trading-mcp --transport sse   # legacy SSE (deprecated)
 ```
 
 </details>
@@ -985,6 +1004,48 @@ npx clawhub@latest install vibe-trading --force
 سيكتشف OpenSpace كل المهارات الـ 87 تلقائياً، مما يتيح auto-fix وauto-improve والمشاركة المجتمعية. ابحث عن مهارات Vibe-Trading عبر `search_skills("finance backtest")` في أي وكيل متصل بـ OpenSpace.
 
 </details>
+
+### MetaTrader 5 (Exness وغيره من وسطاء MT5)
+
+يتصل بـ**طرفية MT5 تعمل محلياً** عبر حزمة `MetaTrader5` الرسمية (**Windows فقط**):
+
+```bash
+pip install "vibe-trading-ai[mt5]"
+```
+
+اضبط `~/.vibe-trading/mt5.json` (يُنشأ يدوياً، وبـ chmod 600 حيثما كان ذلك مدعوماً):
+
+```json
+{
+  "login": 12345678,
+  "password": "...",
+  "server": "Exness-MT5Trial8",
+  "symbol_suffix": "m",
+  "max_order_volume": 1.0,
+  "max_order_notional_usd": 10000
+}
+```
+
+ثم:
+
+```bash
+vibe-trading connector use mt5-paper-sdk
+vibe-trading connector check
+vibe-trading connector account
+vibe-trading connector quote EURUSD
+vibe-trading connector history EURUSD
+```
+
+| Profile | الحساب | الأوامر |
+|---------|--------|---------|
+| `mt5-paper-sdk` | demo | قراءة فقط |
+| `mt5-live-sdk-readonly` | real | قراءة فقط |
+| `mt5-paper-trade` | demo | مباشر (تسري حدود الحجم الخاصة بالموصل) |
+| `mt5-live-trade` | real | خاضع لبوابة التفويض (mandate) + مفتاح الإيقاف (kill-switch) |
+
+حدود الأمان: **"paper" هو حساب demo لدى الوسيط**، ويُتحقق من ذلك عند كل استدعاء — إذ تعيد الطرفية `account_info().trade_mode` ورقم تسجيل الدخول، لذا يُرفض رفضاً قاطعاً أي profile ورقي مربوط بحساب أموال حقيقية (أو العكس). يحدد MT5 أحجام الأوامر بوحدة **اللوت** (1 لوت EURUSD = 100,000 EUR)؛ وتسعّر بوابة التفويض في وضع live اللوتات عبر hook التسعير بالدولار الأمريكي في الموصل، كما تسري حدود `max_order_volume` / `max_order_notional_usd` الخاصة بالموصل على demo وlive معاً. ملاحظة لحسابات التحوط (وهي الوضع الافتراضي لدى Exness): أي أمر بالاتجاه المعاكس **يفتح تحوطاً** — أغلق المراكز عبر التذكرة (`trading_cancel_order` مع تذكرة المركز، أو `close_position`)، فذلك يثبّت الصفقة على المركز ولا يمكنه إلا تقليل الانكشاف. مسار التراجع/الإيقاف: يمنع مفتاح الإيقاف أوامر live الجديدة؛ وتبقى الإلغاءات متاحة وتُسجَّل في سجل التدقيق. حدود التفويض بالدولار الأمريكي؛ أما عملات الحسابات غير الدولارية فتُفرض هوامشها لدى الوسيط بعملة الحساب.
+
+يتشارك مُحمّل بيانات السوق `mt5` (رأس سلسلة تراجع الفوركس) ملف `mt5.json` نفسه — ومن دون هذا الملف يرتبط للقراءة فقط بآخر طرفية مستخدمة ومسجَّلة الدخول.
 
 ---
 
