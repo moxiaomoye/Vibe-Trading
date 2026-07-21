@@ -1,3 +1,7 @@
+> **Project North Star — AI Investment Researcher**
+>
+> This fork does not optimize for trade frequency, predictions, or recommendation count. Its research surface exists to find a small number of evidence-backed, point-in-time **Research Candidates** when markets may be mispricing long-term value. Every new capability must improve Research Quality, Decision Quality, Opportunity Discovery, Explainability, or Historical Validation. Agent, RAG, MCP, and LLM features are implementation tools, not product goals. See [the project constitution](wiki/AI_INVESTMENT_RESEARCHER.md).
+
 <p align="center">
   <b>English</b> | <a href="README_zh.md">中文</a> | <a href="README_ja.md">日本語</a> | <a href="README_ko.md">한국어</a> | <a href="README_ar.md">العربية</a>
 </p>

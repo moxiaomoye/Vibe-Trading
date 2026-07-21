@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "thesis_id": "ai-infrastructure",
+  "information_cutoff": "2026-07-21T09:30:00+00:00",
+  "initialized_at": "2026-07-21T10:00:00+00:00",
+  "evidence": [
+    {
+      "evidence_id": "example-support-1",
+      "provider": "example-only",
+      "source_locator": "example://replace-with-public-source/support-1",
+      "title": "Replace with verified supporting evidence",
+      "summary": "Replace this example with a point-in-time fact supporting the Thesis.",
+      "published_at": "2026-07-20T08:00:00+00:00",
+      "available_at": "2026-07-20T09:00:00+00:00",
+      "observed_at": "2026-07-21T08:00:00+00:00",
+      "quality_warnings": ["EXAMPLE ONLY: replace before initialization"]
+    },
+    {
+      "evidence_id": "example-counter-1",
+      "provider": "example-only",
+      "source_locator": "example://replace-with-public-source/counter-1",
+      "title": "Replace with verified counter evidence",
+      "summary": "Replace this example with the strongest point-in-time evidence opposing the Thesis.",
+      "published_at": "2026-07-20T08:00:00+00:00",
+      "available_at": "2026-07-20T09:00:00+00:00",
+      "observed_at": "2026-07-21T08:00:00+00:00",
+      "quality_warnings": ["EXAMPLE ONLY: replace before initialization"]
+    }
+  ],
+  "associations": [
+    {
+      "association_id": "c9dfe1b5-308e-51d7-827e-cf37a105dc9f",
+      "evidence_id": "example-support-1",
+      "direction": "supporting",
+      "assessed_at": "2026-07-21T09:30:00+00:00",
+      "assessor": "replace-with-researcher-identity",
+      "rationale": "Replace with the reason this fact supports this specific Thesis."
+    },
+    {
+      "association_id": "ac2378e0-2c2b-5b41-8860-294ca39f0073",
+      "evidence_id": "example-counter-1",
+      "direction": "counter",
+      "assessed_at": "2026-07-21T09:30:00+00:00",
+      "assessor": "replace-with-researcher-identity",
+      "rationale": "Replace with the reason this fact opposes this specific Thesis."
+    }
+  ],
+  "proposal": {
+    "status": "active",
+    "core_claim": "Replace with a falsifiable, long-term investment claim.",
+    "confidence": 0.5,
+    "supporting_evidence_ids": ["example-support-1"],
+    "counter_evidence_ids": ["example-counter-1"],
+    "catalysts": ["Replace with a dated or measurable catalyst"],
+    "kill_criteria": ["Replace with a measurable condition that invalidates the Thesis"],
+    "change_summary": "EXAMPLE ONLY: initial evidence-backed Thesis version.",
+    "next_review_at": "2026-08-20T10:00:00+00:00",
+    "initializer": "replace-with-reviewer-identity",
+    "approval_reference": "replace-with-approval-reference",
+    "evidence_set_review_id": "replace-with-recorded-evidence-set-review-id"
+  }
+}

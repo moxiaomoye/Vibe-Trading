@@ -1,0 +1,16 @@
+{
+  "channels": {
+    "replyTimeoutS": 1800,
+    "feishu": {
+      "enabled": true,
+      "app_id": "cli_a93a62f441b81cd1",
+      "app_secret": "wUeqddMpJ6Q9FVJjtH4zYdFY1isIRdbA",
+      "domain": "feishu",
+      "allow_from": ["*"],
+      "group_policy": "mention",
+      "reply_to_message": true,
+      "streaming": false,
+      "topic_isolation": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "manifest_id": "ai-infrastructure",
+  "version": 1,
+  "blueprints": [
+    {
+      "thesis_id": "ai-industry",
+      "name": "AI Industry",
+      "parent_thesis_id": null,
+      "scope": "theme",
+      "research_question": "Is AI creating a durable multi-year expansion in economically useful computing demand?",
+      "proposed_core_claim": "AI adoption can sustain a multi-year investment cycle when measurable productivity and monetization continue to justify infrastructure spending.",
+      "causal_chain": ["model capability improves", "adoption expands", "economic value becomes measurable", "infrastructure demand persists"],
+      "key_assumptions": ["users continue adopting AI workloads", "unit economics improve over time"],
+      "strongest_counter_questions": ["Is adoption mostly experimentation rather than durable demand?", "Will efficiency gains reduce aggregate infrastructure spending?"],
+      "draft_kill_criteria": ["Broad enterprise adoption and monetization stagnate across multiple reporting periods despite rising infrastructure costs."]
+    },
+    {
+      "thesis_id": "ai-infrastructure",
+      "name": "AI Infrastructure",
+      "parent_thesis_id": "ai-industry",
+      "scope": "value_chain",
+      "research_question": "Will spending on compute, networking, servers, power and cooling remain durable?",
+      "proposed_core_claim": "AI infrastructure demand remains durable while workload growth and deployment economics support continued capacity additions.",
+      "causal_chain": ["AI workload demand grows", "capacity utilization tightens", "operators add infrastructure", "suppliers gain addressable demand"],
+      "key_assumptions": ["capacity additions are demand-led", "bottlenecks do not permanently destroy project economics"],
+      "strongest_counter_questions": ["Has capacity been front-loaded?", "Are customers double-ordering across the supply chain?"],
+      "draft_kill_criteria": ["Major operators cut AI infrastructure plans for multiple periods because deployed capacity fails economic return thresholds."]
+    },
+    {
+      "thesis_id": "hyperscaler-capex",
+      "name": "Hyperscaler CapEx",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "value_chain",
+      "research_question": "Are hyperscaler capital plans durable and increasingly tied to real AI demand?",
+      "proposed_core_claim": "Hyperscaler AI capital expenditure can remain elevated when utilization, backlog and monetization validate incremental capacity.",
+      "causal_chain": ["customer demand/backlog rises", "utilization supports expansion", "capex budgets persist", "orders reach infrastructure suppliers"],
+      "key_assumptions": ["reported capex maps to AI capacity", "cash generation can fund the investment cycle"],
+      "strongest_counter_questions": ["Is capex exceeding monetization?", "Could project timing create a false growth signal?"],
+      "draft_kill_criteria": ["Leading hyperscalers materially reduce AI-related capex plans for two reporting cycles for demand or return reasons rather than timing delays."]
+    },
+    {
+      "thesis_id": "accelerators",
+      "name": "GPU and AI Accelerators",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "industry",
+      "research_question": "Will demand for accelerated computing remain structurally strong despite efficiency and competition?",
+      "proposed_core_claim": "Accelerator demand persists when workload growth outpaces efficiency gains and customers continue to value faster time-to-compute.",
+      "causal_chain": ["workloads grow", "accelerated compute remains scarce", "customers procure accelerators", "platform ecosystems reinforce demand"],
+      "key_assumptions": ["software ecosystems remain defensible", "performance gains retain economic value"],
+      "strongest_counter_questions": ["Will custom silicon displace merchant accelerators?", "Will inference efficiency sharply reduce unit demand?"],
+      "draft_kill_criteria": ["Sustained accelerator utilization and order growth fall while workload demand continues, indicating structural substitution or overcapacity."]
+    },
+    {
+      "thesis_id": "optical-interconnect",
+      "name": "High-speed Optical Interconnect",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "industry",
+      "research_question": "Does cluster scaling create durable demand for faster optical connectivity?",
+      "proposed_core_claim": "Larger AI clusters require higher-speed, lower-latency interconnect, supporting optical content growth when network architecture remains performance-critical.",
+      "causal_chain": ["cluster scale increases", "east-west traffic grows", "network bottlenecks intensify", "higher-speed optical content expands"],
+      "key_assumptions": ["cluster scale continues rising", "optical remains preferred at relevant distances"],
+      "strongest_counter_questions": ["Will architectural changes reduce optical content per compute unit?", "Is supply expansion eroding economics?"],
+      "draft_kill_criteria": ["Customer architectures reduce optical content per deployed compute unit for multiple product generations without offsetting cluster growth."]
+    },
+    {
+      "thesis_id": "ai-pcb",
+      "name": "AI Server PCB",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "industry",
+      "research_question": "Will AI server complexity sustain higher PCB value per system?",
+      "proposed_core_claim": "AI systems can increase PCB layer count, material requirements and value per server when platform complexity remains high.",
+      "causal_chain": ["platform complexity increases", "signal integrity requirements rise", "advanced PCB content grows", "qualified suppliers capture value"],
+      "key_assumptions": ["technical requirements remain difficult", "qualification creates durable supplier differentiation"],
+      "strongest_counter_questions": ["Will standardization commoditize advanced boards?", "Will rapid capacity expansion compress margins?"],
+      "draft_kill_criteria": ["Advanced PCB value per AI system and qualified-supplier economics decline structurally across consecutive platform generations."]
+    },
+    {
+      "thesis_id": "ai-servers",
+      "name": "AI Servers",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "industry",
+      "research_question": "Do system integration and deployment capabilities retain economic value as AI servers scale?",
+      "proposed_core_claim": "AI server demand supports selected integrators when design complexity, supply coordination and deployment capability remain differentiated.",
+      "causal_chain": ["accelerator deployments grow", "system complexity rises", "integration demand expands", "capable suppliers gain volume"],
+      "key_assumptions": ["integration is not fully commoditized", "working-capital demands remain financeable"],
+      "strongest_counter_questions": ["Are margins structurally too thin?", "Will customers internalize more system design?"],
+      "draft_kill_criteria": ["Integration value and returns remain below cost of capital despite sustained shipment growth."]
+    },
+    {
+      "thesis_id": "power-cooling",
+      "name": "Data-center Power and Cooling",
+      "parent_thesis_id": "ai-infrastructure",
+      "scope": "industry",
+      "research_question": "Will power density and grid constraints create durable value in power and cooling solutions?",
+      "proposed_core_claim": "Rising AI rack density increases demand for efficient power delivery and cooling where deployment bottlenecks create measurable customer value.",
+      "causal_chain": ["rack power density rises", "thermal and electrical constraints intensify", "specialized solutions become necessary", "qualified suppliers capture demand"],
+      "key_assumptions": ["power density continues increasing", "customers pay for efficiency and deployment speed"],
+      "strongest_counter_questions": ["Will standardized designs erase supplier differentiation?", "Will grid constraints delay demand rather than increase supplier value?"],
+      "draft_kill_criteria": ["Power density stabilizes or solution commoditization removes durable pricing and return advantages across the value chain."]
+    }
+  ]
+}

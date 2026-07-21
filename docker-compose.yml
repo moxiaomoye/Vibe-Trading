@@ -30,6 +30,13 @@ services:
       # src/api/helpers.py writes to /app/agent/.env) across container recreation.
       # env_file above still seeds the initial boot env from the same file.
       - ./agent/.env:/app/agent/.env
+      # Local feature overlays keep Value Hunter deployable even when Docker
+      # Desktop's BuildKit cache is unavailable. They are read-only; the SQLite
+      # scan history continues to live in the persistent vibe-home volume.
+      - ./agent/src/value_hunter:/app/agent/src/value_hunter:ro
+      - ./agent/src/api/value_hunter_routes.py:/app/agent/src/api/value_hunter_routes.py:ro
+      - ./agent/api_server.py:/app/agent/api_server.py:ro
+      - ./frontend/dist:/app/frontend/dist:ro
     # --- Runtime hardening (VT-007) ---
     cap_drop:
       - ALL

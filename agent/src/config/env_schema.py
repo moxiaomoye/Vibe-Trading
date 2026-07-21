@@ -33,6 +33,7 @@ __all__ = [
     "AgentTuningConfig",
     "PathConfig",
     "OcrConfig",
+    "ResearchDeliveryConfig",
 ]
 
 
@@ -296,6 +297,21 @@ class AgentTuningConfig(_EnvBase):
     vibe_live_authorize_timeout_s: int = Field(
         alias="VIBE_LIVE_AUTHORIZE_TIMEOUT_SECONDS", default=300,
     )
+    vibe_investment_research_enabled: EnvBool = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_ENABLED", default=False,
+    )
+    vibe_investment_research_shadow_mode: EnvBool = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_SHADOW_MODE", default=True,
+    )
+    vibe_investment_research_market_provider: str = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_MARKET_PROVIDER", default="none",
+    )
+    vibe_investment_research_provider_timeout_seconds: float = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_PROVIDER_TIMEOUT_SECONDS", default=90.0,
+    )
+    vibe_investment_research_issuer_disclosures_enabled: EnvBool = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_ISSUER_DISCLOSURES_ENABLED", default=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +337,41 @@ class PathConfig(_EnvBase):
     vibe_trading_strategy_store_db_path: str = Field(
         alias="VIBE_TRADING_STRATEGY_STORE_DB_PATH", default="",
     )
+    vibe_investment_research_db_path: str = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_DB_PATH", default="",
+    )
+    vibe_investment_research_watchlist_path: str = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_WATCHLIST_PATH", default="",
+    )
+    vibe_investment_research_cache_dir: str = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_CACHE_DIR", default="",
+    )
+    vibe_investment_research_issuer_subscriptions_path: str = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_ISSUER_SUBSCRIPTIONS_PATH", default="",
+    )
+
+
+class ResearchDeliveryConfig(_EnvBase):
+    """Opt-in notification settings; secrets are supplied only at runtime."""
+
+    mode: str = Field(alias="VIBE_RESEARCH_DELIVERY_MODE", default="disabled")
+    feishu_webhook_url: str = Field(alias="VIBE_RESEARCH_FEISHU_WEBHOOK_URL", default="")
+    smtp_host: str = Field(alias="VIBE_RESEARCH_SMTP_HOST", default="smtp.qq.com")
+    smtp_port: int = Field(alias="VIBE_RESEARCH_SMTP_PORT", default=465)
+    smtp_username: str = Field(alias="VIBE_RESEARCH_SMTP_USERNAME", default="")
+    smtp_authorization_code: str = Field(alias="VIBE_RESEARCH_SMTP_AUTHORIZATION_CODE", default="")
+    smtp_recipient: str = Field(alias="VIBE_RESEARCH_SMTP_RECIPIENT", default="")
+    run_timezone: str = Field(alias="VIBE_RESEARCH_RUN_TIMEZONE", default="Asia/Shanghai")
+    run_hour: int = Field(alias="VIBE_RESEARCH_RUN_HOUR", default=18)
+    run_minute: int = Field(alias="VIBE_RESEARCH_RUN_MINUTE", default=30)
+
+    @model_validator(mode="after")
+    def _validate_delivery(self) -> "ResearchDeliveryConfig":
+        if self.mode not in {"disabled", "dry_run", "live"}:
+            raise ValueError("VIBE_RESEARCH_DELIVERY_MODE must be disabled, dry_run, or live")
+        if not 0 <= self.run_hour <= 23 or not 0 <= self.run_minute <= 59:
+            raise ValueError("research delivery run time is invalid")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +397,7 @@ class EnvConfig(_EnvBase):
     agent_tuning: AgentTuningConfig = Field(default_factory=AgentTuningConfig)
     paths: PathConfig = Field(default_factory=PathConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
+    research_delivery: ResearchDeliveryConfig = Field(default_factory=ResearchDeliveryConfig)
 
     @model_validator(mode="after")
     def _resolve_api_key_alias(self) -> "EnvConfig":

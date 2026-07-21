@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "subscriptions": [
+    {
+      "subscription_id": "us-aapl-official-filings",
+      "asset_id": "asset-us-aapl",
+      "market": "US",
+      "symbol": "AAPL",
+      "issuer_id": "0000320193",
+      "forms": ["10-K", "10-Q", "8-K"],
+      "enabled": false
+    }
+  ]
+}

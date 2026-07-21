@@ -160,6 +160,31 @@ export const api = {
   getChannelStatus: () => request<ChannelRuntimeStatus>("/channels/status"),
   startChannels: () => request<ChannelRuntimeActionResponse>("/channels/start", { method: "POST" }),
   stopChannels: () => request<ChannelRuntimeActionResponse>("/channels/stop", { method: "POST" }),
+  getValueHunterStatus: () => request<ValueHunterStatus>("/value-hunter/status"),
+  getValueHunterHistory: (limit = 30) => request<ValueHunterScan[]>(`/value-hunter/history?limit=${encodeURIComponent(String(limit))}`),
+  runValueHunter: (notify = false) => request<ValueHunterScan>(`/value-hunter/run?notify=${notify ? "true" : "false"}`, { method: "POST" }),
+  getInvestmentResearchStatus: () => request<InvestmentResearchStatus>("/investment-research/status"),
+  listInvestmentResearchTheses: (asOf?: string) => {
+    const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+    return request<InvestmentResearchThesis[]>(`/investment-research/theses${query}`);
+  },
+  listInvestmentResearchEvidenceReadiness: (asOf?: string) => {
+    const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+    return request<InvestmentResearchEvidenceReadiness[]>(
+      `/investment-research/evidence-readiness${query}`,
+    );
+  },
+  getInvestmentResearchDaily: (reportDate: string, mode = "shadow") =>
+    request<InvestmentResearchDailyReport>(
+      `/investment-research/daily-research/${encodeURIComponent(reportDate)}?mode=${encodeURIComponent(mode)}`,
+    ),
+  listInvestmentResearchEvidenceInbox: (status?: InvestmentResearchEvidenceInboxStatus, limit = 100) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (status) params.set("status", status);
+    return request<InvestmentResearchEvidenceInboxItem[]>(
+      `/investment-research/evidence-inbox?${params.toString()}`,
+    );
+  },
   runChannelPairingCommand: (body: ChannelPairingCommandRequest) =>
     request<ChannelPairingCommandResponse>("/channels/pairing/command", {
       method: "POST",
@@ -225,6 +250,169 @@ export const api = {
       body: JSON.stringify({ broker }),
     }),
 };
+
+export interface ValueHunterIndexObservation {
+  symbol: string; name: string; close: number; daily_return_pct: number;
+  drawdown_252_pct: number; below_ma250: boolean; below_120d_low: boolean;
+}
+
+export interface ValueHunterCandidate {
+  observation: {
+    symbol: string; name: string; sector: string; theme: string;
+    market_cap_billion?: number | null; pe_ttm?: number | null; pb?: number | null;
+    drawdown_252_pct?: number | null; warnings: string[];
+  };
+  score: { quality: number; valuation: number; fundamentals: number; dislocation: number; risk_cleanliness: number; total: number };
+  bucket: string; status: string; reasons: string[]; first_rejection: string; missing_fields: string[];
+}
+
+export interface ValueHunterScan {
+  run_id: string; started_at: string; completed_at: string; mode: string;
+  market: {
+    observation: { as_of: string; source: string; warnings: string[]; indices: ValueHunterIndexObservation[] };
+    score: number; level: string; components: Record<string, number>; reasons: string[];
+  };
+  candidates: ValueHunterCandidate[];
+  notification_required: boolean; notification_reason: string; errors: string[];
+}
+
+export interface ValueHunterStatus {
+  enabled: boolean; provider: string; schedule: string; timezone: string;
+  notification_channels: string[]; notification_ready: boolean;
+  missing_notification_settings: string[]; latest: ValueHunterScan | null;
+}
+
+export interface InvestmentResearchStatus {
+  enabled: boolean;
+  shadow_mode: boolean;
+  schema_version: number;
+  schema_components: {
+    research_core: number;
+    evidence_inbox: number;
+    evidence_association: number;
+    evidence_set_review: number;
+  };
+  thesis_count: number;
+  evidence_inbox: Record<InvestmentResearchEvidenceInboxStatus, number>;
+  positioning: string;
+  output_contract: string;
+}
+
+export type InvestmentResearchEvidenceInboxStatus = "pending" | "accepted" | "rejected";
+
+export interface InvestmentResearchEvidenceInboxItem {
+  inbox_item_id: string;
+  status: InvestmentResearchEvidenceInboxStatus;
+  provider: string;
+  source_locator: string;
+  title: string;
+  summary: string;
+  published_at: string;
+  available_at: string;
+  observed_at: string;
+  ingested_at: string;
+  quality_warnings: string[];
+  proposed_subject_type: "thesis" | "market" | "asset" | "opportunity" | "validation";
+  proposed_subject_id: string;
+  proposed_direction: "supporting" | "counter" | "neutral";
+  review: null | {
+    review_id: string;
+    decision: "accept" | "reject";
+    rationale: string;
+    reviewer: string;
+    reviewed_at: string;
+    final_subject_type: "thesis" | "market" | "asset" | "opportunity" | "validation" | null;
+    final_subject_id: string | null;
+    final_direction: "supporting" | "counter" | "neutral" | null;
+  };
+}
+
+export interface InvestmentResearchVersion {
+  thesis_version_id: string;
+  thesis_id: string;
+  version_number: number;
+  status: "draft" | "active" | "weakening" | "invalidated" | "archived";
+  core_claim: string;
+  confidence: number;
+  evidence_set_id: string;
+  supporting_evidence_ids: string[];
+  counter_evidence_ids: string[];
+  catalysts: string[];
+  kill_criteria: string[];
+  change_summary: string;
+  effective_from: string;
+  next_review_at: string;
+  supersedes_version_id: string | null;
+}
+
+export interface InvestmentResearchThesis {
+  thesis_id: string;
+  name: string;
+  parent_thesis_id: string | null;
+  scope: "macro" | "theme" | "industry" | "value_chain" | "company";
+  created_at: string;
+  current_version: InvestmentResearchVersion | null;
+  research_state: "versioned" | "uninitialized";
+}
+
+export type InvestmentResearchEvidenceReadinessVerdict =
+  | "not_ready"
+  | "needs_support"
+  | "needs_counter"
+  | "needs_quality_review"
+  | "ready_for_human_review"
+  | "approved_for_initialization";
+
+export interface InvestmentResearchEvidenceReadiness {
+  thesis_id: string;
+  as_of: string;
+  verdict: InvestmentResearchEvidenceReadinessVerdict;
+  supporting_association_ids: string[];
+  counter_association_ids: string[];
+  neutral_association_ids: string[];
+  blocking_gaps: string[];
+  quality_warnings: string[];
+  first_rejection_question: string;
+  approval_review_id: string | null;
+}
+
+export interface InvestmentResearchDiscoveryLead {
+  lead_id: string;
+  asset_id: string;
+  thesis_version_id: string;
+  disposition: "evidence_gap" | "attribution_required" | "opportunity_review";
+  reasons: string[];
+  missing_evidence: string[];
+  first_rejection_question: string;
+}
+
+export interface InvestmentResearchCandidateBrief {
+  candidate_id: string;
+  asset_id: string;
+  action_level: "watch" | "research" | "prepare" | "action_candidate";
+  research_priority: "immediate" | "high" | "normal" | "low";
+  confidence_band: "low" | "medium" | "high" | "very_high";
+  first_rejection_question: string;
+  alert_eligible: boolean;
+  failed_alert_gates: string[];
+}
+
+export interface InvestmentResearchDailyReport {
+  report_id: string;
+  trade_date: string;
+  information_cutoff: string;
+  mode: string;
+  market_state: null | {
+    regime: "normal" | "correction" | "systemic_stress" | "panic" | "unknown";
+    drivers: string[];
+    data_gaps: string[];
+    confidence: number;
+  };
+  discovery_leads: InvestmentResearchDiscoveryLead[];
+  candidates: InvestmentResearchCandidateBrief[];
+  warnings: string[];
+  conclusion: string;
+}
 
 // --- Swarm types ---
 

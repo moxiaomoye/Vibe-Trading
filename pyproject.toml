@@ -50,6 +50,7 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "websockets>=12.0",
     "pydantic>=2.0.0",
+    "tzdata>=2025.2",
     "python-multipart>=0.0.18",
     "sse-starlette>=1.6.0",
     "fastmcp>=2.14.0",
@@ -90,6 +91,7 @@ include = ["src*", "backtest*", "cli*"]
     "shadow_account/templates/*.html",
     "shadow_account/templates/*.css",
 ]
+"src.investment_research.thesis" = ["seeds/*.json"]
 "backtest" = ["*.py"]
 "src.factors" = ["zoo/**/*.yaml", "zoo/**/*.md", "zoo/**/NOTICE"]
 
