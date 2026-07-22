@@ -301,6 +301,27 @@ from src.api.scheduled_routes import (  # noqa: E402, F401
     _scheduled_research_scheduler_enabled,
 )
 
+# --- Optional feature routes (lazy-loaded, fault-tolerant) ---
+from src.api.optional_routes import try_register_routes  # noqa: E402
+
+try_register_routes(
+    app,
+    feature_name="Value Hunter",
+    env_var="VALUE_HUNTER_ROUTES_ENABLED",
+    module_path="src.api.value_hunter_routes",
+    register_func_name="register_value_hunter_routes",
+    require_auth=require_auth,
+)
+
+try_register_routes(
+    app,
+    feature_name="Investment Research",
+    env_var="INVESTMENT_RESEARCH_ROUTES_ENABLED",
+    module_path="src.api.investment_research_routes",
+    register_func_name="register_investment_research_routes",
+    require_auth=require_auth,
+)
+
 
 # ============================================================================
 # Main Entry Point
