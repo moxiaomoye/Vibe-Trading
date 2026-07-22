@@ -38,7 +38,7 @@ from src.value_hunter.trading_rules import (
     is_limit_down as check_limit_down,
     is_stock_st,
 )
-from src.value_hunter.watchlist_loader import load_watchlist_symbols
+from src.value_hunter.watchlist_loader import load_watchlist
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,8 @@ class PanicScanResult:
     data_date: date | None = None
     availability_date: date | None = None
     source: str = "unknown"
+    watchlist_hash: str = ""
+    watchlist_version: str = ""
     data_gaps: list[ProviderDataGap] = field(default_factory=list)
     provider_errors: list[UpstreamError] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -87,12 +89,12 @@ def run_panic_scan(
         watchlist_path: 观察池配置文件路径。为 None 时使用默认路径。
         thresholds: 恐慌阈值。为 None 时使用默认值。
     """
-    now = datetime.now(timezone.utc)
     errors: list[str] = []
 
     if panel_data is None:
         normalized = (provider or AksharePostCloseProvider()).load(as_of=as_of)
         panel_data = normalized.to_panel_data()
+    now = panel_data.get("now", datetime.now(timezone.utc))
 
     # 第 1 步：获取市场数据
     snapshot = _fetch_market_data(panel_data)
@@ -110,7 +112,8 @@ def run_panic_scan(
 
     # 第 3 步：加载观察池
     try:
-        symbols = load_watchlist_symbols(Path(watchlist_path) if watchlist_path else None)
+        watchlist_config = load_watchlist(Path(watchlist_path) if watchlist_path else None)
+        symbols = list(watchlist_config.symbols)
     except (FileNotFoundError, ValueError) as exc:
         errors.append(f"观察池加载失败: {exc}")
         return PanicScanResult(
@@ -121,6 +124,8 @@ def run_panic_scan(
             data_date=snapshot.trade_date,
             availability_date=panel_data.get("availability_date", snapshot.trade_date),
             source=panel_data.get("source", "fixture"),
+            watchlist_hash="",
+            watchlist_version="",
             data_gaps=list(panel_data.get("data_gaps", [])),
             provider_errors=list(panel_data.get("provider_errors", [])),
             errors=errors,
@@ -137,6 +142,8 @@ def run_panic_scan(
         data_date=snapshot.trade_date,
         availability_date=panel_data.get("availability_date", snapshot.trade_date),
         source=panel_data.get("source", "fixture"),
+        watchlist_hash=watchlist_config.content_hash,
+        watchlist_version=watchlist_config.version,
         data_gaps=list(panel_data.get("data_gaps", [])),
         provider_errors=list(panel_data.get("provider_errors", [])),
         errors=errors,

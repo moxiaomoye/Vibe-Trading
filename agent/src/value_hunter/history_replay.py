@@ -252,6 +252,12 @@ def run_history_replay(
             panic=panic,
             watchlist=candidates,
             data_date=trade_date,
+            availability_date=panel.get("availability_date", trade_date),
+            source=panel.get("source", "history-replay"),
+            watchlist_hash=watchlist_cfg.content_hash,
+            watchlist_version=watchlist_cfg.version,
+            data_gaps=list(panel.get("data_gaps", [])),
+            provider_errors=list(panel.get("provider_errors", [])),
         )
         entries.append(HistoryReplayEntry(
             trade_date=trade_date,

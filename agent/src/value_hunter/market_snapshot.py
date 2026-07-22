@@ -32,6 +32,7 @@ class MarketSnapshot:
     large_decline: int    # <= -4%
     limit_up: int
     limit_down: int
+    median_daily_return: float | None
     advance_ratio: float
     decline_ratio: float
     source: str
@@ -63,6 +64,7 @@ def build_snapshot_from_akshare(
             total_stocks=0, advance=0, decline=0, flat=0,
             large_rise=0, large_decline=0,
             limit_up=0, limit_down=0,
+            median_daily_return=None,
             advance_ratio=0.0, decline_ratio=0.0,
             source=source,
             data_gap=DataGap(description="无数据"),
@@ -81,6 +83,7 @@ def build_snapshot_from_akshare(
     flat = total - advance - decline
     large_rise = int((df["涨跌幅"] >= 4).sum())
     large_decline = int((df["涨跌幅"] <= -4).sum())
+    median_daily_return = float(df["涨跌幅"].median()) / 100.0
 
     # 若专用 pool 不可用则回退到涨跌幅判断
     if ld == 0 and decline > 0:
@@ -135,6 +138,7 @@ def build_snapshot_from_akshare(
         large_decline=large_decline,
         limit_up=lu,
         limit_down=ld,
+        median_daily_return=median_daily_return,
         advance_ratio=advance_ratio,
         decline_ratio=decline_ratio,
         source=source,
