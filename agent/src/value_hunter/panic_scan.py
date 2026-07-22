@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from src.value_hunter.market_snapshot import (
@@ -20,6 +21,12 @@ from src.value_hunter.panic_classifier import (
     PanicThresholds,
     RULE_VERSION,
     classify_panic,
+)
+from src.value_hunter.post_close_provider import (
+    AksharePostCloseProvider,
+    PostCloseProvider,
+    ProviderDataGap,
+    UpstreamError,
 )
 from src.value_hunter.relative_strength import (
     RelativeStrengthResult,
@@ -57,6 +64,10 @@ class PanicScanResult:
     watchlist: list[ScannedCandidate]
     rule_version: str = RULE_VERSION
     data_date: date | None = None
+    availability_date: date | None = None
+    source: str = "unknown"
+    data_gaps: list[ProviderDataGap] = field(default_factory=list)
+    provider_errors: list[UpstreamError] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
@@ -65,6 +76,8 @@ def run_panic_scan(
     panel_data: Optional[dict[str, Any]] = None,
     watchlist_path: Optional[str] = None,
     thresholds: Optional[PanicThresholds] = None,
+    provider: PostCloseProvider | None = None,
+    as_of: date | None = None,
 ) -> PanicScanResult:
     """执行一次 A 股盘后恐慌初筛 dry-run。
 
@@ -75,6 +88,10 @@ def run_panic_scan(
     """
     now = datetime.now(timezone.utc)
     errors: list[str] = []
+
+    if panel_data is None:
+        normalized = (provider or AksharePostCloseProvider()).load(as_of=as_of)
+        panel_data = normalized.to_panel_data()
 
     # 第 1 步：获取市场数据
     snapshot = _fetch_market_data(panel_data)
@@ -92,7 +109,7 @@ def run_panic_scan(
 
     # 第 3 步：加载观察池
     try:
-        symbols = load_watchlist_symbols()
+        symbols = load_watchlist_symbols(Path(watchlist_path) if watchlist_path else None)
     except (FileNotFoundError, ValueError) as exc:
         errors.append(f"观察池加载失败: {exc}")
         return PanicScanResult(
@@ -100,6 +117,11 @@ def run_panic_scan(
             market_snapshot=snapshot,
             panic=panic,
             watchlist=[],
+            data_date=snapshot.trade_date,
+            availability_date=panel_data.get("availability_date", snapshot.trade_date),
+            source=panel_data.get("source", "fixture"),
+            data_gaps=list(panel_data.get("data_gaps", [])),
+            provider_errors=list(panel_data.get("provider_errors", [])),
             errors=errors,
         )
 
@@ -112,23 +134,24 @@ def run_panic_scan(
         panic=panic,
         watchlist=candidates,
         data_date=snapshot.trade_date,
+        availability_date=panel_data.get("availability_date", snapshot.trade_date),
+        source=panel_data.get("source", "fixture"),
+        data_gaps=list(panel_data.get("data_gaps", [])),
+        provider_errors=list(panel_data.get("provider_errors", [])),
         errors=errors,
     )
 
 
-def _fetch_market_data(panel_data: dict | None = None) -> MarketSnapshot:
-    """获取市场快照。panel_data 不为 None 时用于测试。"""
-    if panel_data is not None:
-        return build_snapshot_from_akshare(
-            spot_df=panel_data.get("spot_df", __import__("pandas").DataFrame()),
-            limit_up_symbols=set(panel_data.get("limit_up_symbols", [])),
-            limit_down_symbols=set(panel_data.get("limit_down_symbols", [])),
-            data_date=panel_data.get("data_date", date.today()),
-            now=panel_data.get("now", datetime.now(timezone.utc)),
-        )
-    # 实时模式（仅供参考，CI 不使用）
-    logger.warning("恐慌扫描实时模式需要 AKShare 和网络连接")
-    raise NotImplementedError("实时模式需要 AKShare 集成")
+def _fetch_market_data(panel_data: dict) -> MarketSnapshot:
+    """从 Provider 标准面板构建市场快照。"""
+    return build_snapshot_from_akshare(
+        spot_df=panel_data.get("spot_df", __import__("pandas").DataFrame()),
+        limit_up_symbols=set(panel_data.get("limit_up_symbols", [])),
+        limit_down_symbols=set(panel_data.get("limit_down_symbols", [])),
+        data_date=panel_data.get("data_date", date.today()),
+        now=panel_data.get("now", datetime.now(timezone.utc)),
+        source=panel_data.get("source", "fixture"),
+    )
 
 
 def _scan_watchlist(
