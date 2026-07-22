@@ -12,6 +12,7 @@ from src.value_hunter.market_snapshot import DataGap, build_snapshot_from_akshar
 from src.value_hunter.panic_classifier import PanicThresholds, RULE_VERSION, classify_panic
 from src.value_hunter.panic_scan import PanicScanResult, ScannedCandidate
 from src.value_hunter.relative_strength import compute_relative_strength
+from src.value_hunter.sector_relative_strength import resolve_sector_relative_input
 from src.value_hunter.trading_rules import (
     classify_limit_rule,
     is_limit_down,
@@ -58,6 +59,11 @@ def _scan_day_candidates(
     *,
     market_change_pct: Optional[float] = None,
     sector_map: Optional[dict[str, float]] = None,
+    sector_memberships: Optional[list[Any]] = None,
+    sector_returns: Optional[dict[str, float]] = None,
+    sector_return_date: Optional[date] = None,
+    sector_return_availability_date: Optional[date] = None,
+    trade_date: Optional[date] = None,
 ) -> list[ScannedCandidate]:
     """扫描单日观察池个股。"""
     code_to_row: dict[str, Any] = {}
@@ -102,11 +108,26 @@ def _scan_day_candidates(
             except (ValueError, TypeError):
                 ld = None
 
-        sector_cp = None
-        if sector_map is not None:
+        sector_gap = None
+        if sector_memberships is not None or sector_returns is not None:
+            sector_input = resolve_sector_relative_input(
+                symbol=symbol,
+                scan_date=trade_date or date.min,
+                memberships=sector_memberships or [],
+                sector_returns=sector_returns or {},
+                sector_return_date=sector_return_date,
+                sector_return_availability_date=sector_return_availability_date,
+            )
+            sector_cp = sector_input.sector_change_pct
+            sector_gap = sector_input.data_gap
+        else:
+            sector_cp = None
+        if sector_cp is None and sector_map is not None and sector_memberships is None:
             sector_cp = sector_map.get(symbol)
             if sector_cp is None:
                 sector_cp = sector_map.get(raw_code)
+        if sector_cp is None and sector_gap is None:
+            sector_gap = DataGap(description="缺少行业收益数据")
         rs = compute_relative_strength(
             stock_change_pct=change_pct_f,
             market_change_pct=market_change_pct,
@@ -124,11 +145,7 @@ def _scan_day_candidates(
             is_limit_down=ld,
             is_sharp_decline=rs.is_sharp_decline,
             is_suspended=None,
-            data_gap=(
-                DataGap()
-                if sector_cp is not None
-                else DataGap(description="缺少行业收益数据")
-            ),
+            data_gap=sector_gap or DataGap(),
         ))
 
     return results
@@ -217,6 +234,11 @@ def run_history_replay(
             symbols, spot_df,
             market_change_pct=market_change,
             sector_map=sector_map,
+            sector_memberships=panel.get("sector_memberships"),
+            sector_returns=panel.get("sector_returns"),
+            sector_return_date=panel.get("sector_return_date"),
+            sector_return_availability_date=panel.get("sector_return_availability_date"),
+            trade_date=trade_date,
         )
 
         scanned_at = panel.get("now") or datetime.combine(

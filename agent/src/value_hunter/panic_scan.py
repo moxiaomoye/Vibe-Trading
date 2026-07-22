@@ -32,6 +32,7 @@ from src.value_hunter.relative_strength import (
     RelativeStrengthResult,
     compute_relative_strength,
 )
+from src.value_hunter.sector_relative_strength import resolve_sector_relative_input
 from src.value_hunter.trading_rules import (
     classify_limit_rule,
     is_limit_down as check_limit_down,
@@ -179,14 +180,16 @@ def _scan_watchlist(
     sector_map = panel_data.get("sector_map", {})
     code_to_row = {}
     if spot_df is not None:
-        spot_df["代码_str"] = spot_df["代码"].astype(str).str.strip()
-        for _, row in spot_df.iterrows():
-            code_to_row[row["代码_str"]] = row
+        normalized_codes = spot_df["代码"].astype(str).str.strip()
+        for code, (_, row) in zip(normalized_codes, spot_df.iterrows()):
+            code_to_row[code] = row
 
     results: list[ScannedCandidate] = []
     for symbol in symbols:
         raw_code = symbol.split(".")[0]
-        row = code_to_row.get(symbol) or code_to_row.get(raw_code)
+        row = code_to_row.get(symbol)
+        if row is None:
+            row = code_to_row.get(raw_code)
         if row is None:
             results.append(ScannedCandidate(
                 symbol=symbol, name="",
@@ -217,7 +220,24 @@ def _scan_watchlist(
             except (ValueError, TypeError):
                 ld = None
 
-        sector_cp = sector_map.get(symbol)
+        sector_gap = None
+        if "sector_memberships" in panel_data or "sector_returns" in panel_data:
+            sector_input = resolve_sector_relative_input(
+                symbol=symbol,
+                scan_date=snapshot.trade_date,
+                memberships=panel_data.get("sector_memberships", []),
+                sector_returns=panel_data.get("sector_returns", {}),
+                sector_return_date=panel_data.get("sector_return_date"),
+                sector_return_availability_date=panel_data.get("sector_return_availability_date"),
+            )
+            sector_cp = sector_input.sector_change_pct
+            sector_gap = sector_input.data_gap
+        else:
+            sector_cp = sector_map.get(symbol)
+            if sector_cp is None:
+                sector_cp = sector_map.get(raw_code)
+            if sector_cp is None:
+                sector_gap = DataGap(description="缺少行业收益数据")
         rs = compute_relative_strength(
             stock_change_pct=change_pct_f,
             market_change_pct=market_change,
@@ -235,7 +255,7 @@ def _scan_watchlist(
             is_limit_down=ld,
             is_sharp_decline=rs.is_sharp_decline,
             is_suspended=None,
-            data_gap=DataGap(),
+            data_gap=sector_gap or DataGap(),
         ))
 
     return results

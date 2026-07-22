@@ -40,6 +40,7 @@ class SectorMembership:
     sector: str
     source_date: date
     availability_date: date
+    valid_through: date | None = None
 
 
 @dataclass(frozen=True)
@@ -65,12 +66,6 @@ class PostCloseData:
             raise ValueError("retrieved_at must be timezone-aware")
 
     def to_panel_data(self, benchmark: str = "000300.SH") -> dict[str, Any]:
-        memberships = {item.symbol: item.sector for item in self.sector_memberships}
-        sector_map = {
-            symbol: self.sector_returns[sector]
-            for symbol, sector in memberships.items()
-            if sector in self.sector_returns
-        }
         return {
             "spot_df": self.spot_df.copy(),
             "limit_up_symbols": set(self.limit_up_symbols),
@@ -79,7 +74,11 @@ class PostCloseData:
             "availability_date": self.availability_date,
             "now": self.retrieved_at,
             "market_change_pct": self.benchmark_returns.get(benchmark),
-            "sector_map": sector_map,
+            "sector_map": {},
+            "sector_memberships": list(self.sector_memberships),
+            "sector_returns": dict(self.sector_returns),
+            "sector_return_date": self.source_date,
+            "sector_return_availability_date": self.availability_date,
             "source": self.source,
             "provider_errors": list(self.errors),
             "data_gaps": list(self.data_gaps),
