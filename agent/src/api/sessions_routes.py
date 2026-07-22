@@ -290,7 +290,7 @@ def register_sessions_routes(app: FastAPI) -> None:
     """
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     if host is None:
         raise RuntimeError(
             "register_sessions_routes: api_server module not in sys.modules; "
@@ -303,15 +303,15 @@ def register_sessions_routes(app: FastAPI) -> None:
 
     # Late-access closures for shared host symbols (monkeypatch-safe)
     def _host_get_session_service():
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._get_session_service()
 
     def _host_validate_path_param(value: str, kind: str) -> None:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._validate_path_param(value, kind)
 
     def _host_shell_tools_enabled_for_request(request: Request) -> bool:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._shell_tools_enabled_for_request(request)
 
     def _get_existing_session_or_404(session_id: str):

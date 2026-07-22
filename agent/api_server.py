@@ -151,10 +151,6 @@ from src.api.scheduled_routes import (  # noqa: E402
     _start_scheduled_research_executor,
     _stop_scheduled_research_executor,
 )
-from src.api.value_hunter_routes import (  # noqa: E402
-    start_value_hunter,
-    stop_value_hunter,
-)
 
 
 @app.on_event("startup")
@@ -164,7 +160,6 @@ async def _run_startup_preflight() -> None:
 
     run_preflight(console)
     _start_scheduled_research_executor()
-    start_value_hunter()
     from src.config.accessor import get_env_config
 
     if get_env_config().agent_tuning.vibe_trading_channels_auto_start:
@@ -175,7 +170,6 @@ async def _run_startup_preflight() -> None:
 async def _stop_scheduled_research_on_shutdown() -> None:
     """Stop the scheduled research executor on server shutdown."""
     await _stop_channel_runtime()
-    await stop_value_hunter()
     await _stop_scheduled_research_executor()
 
 
@@ -297,14 +291,6 @@ register_auth_routes(app)
 
 from src.api.scheduled_routes import register_scheduled_routes  # noqa: E402
 register_scheduled_routes(app)
-
-# --- Value Hunter: A-share panic and technology research candidates ---
-from src.api.value_hunter_routes import register_value_hunter_routes  # noqa: E402
-register_value_hunter_routes(app, require_auth)
-
-# --- AI Investment Researcher V2: read-only shadow research surface ---
-from src.api.investment_research_routes import register_investment_research_routes  # noqa: E402
-register_investment_research_routes(app, require_auth)
 
 from src.api.scheduled_routes import (  # noqa: E402, F401
     CreateScheduledRunRequest,

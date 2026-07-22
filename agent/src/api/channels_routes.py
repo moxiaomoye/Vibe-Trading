@@ -31,7 +31,7 @@ async def _start_channel_runtime():
     """Start the IM channel runtime."""
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     runtime = host._get_channel_runtime()
     await runtime.start(start_manager=True)
     return runtime
@@ -41,7 +41,7 @@ async def _stop_channel_runtime() -> None:
     """Stop the IM channel runtime if it was initialized."""
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     if host._channel_runtime is None:
         return
     await host._channel_runtime.stop()
@@ -66,7 +66,7 @@ def register_channels_routes(
     # Resolve host dependencies via sys.modules fallback
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
 
     if host is None:
         raise RuntimeError(
@@ -80,7 +80,7 @@ def register_channels_routes(
     # Late-access closure for monkeypatch compatibility
     def _get_channel_runtime():
         """Late-access _get_channel_runtime for test monkeypatch compat."""
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._get_channel_runtime()
 
     # --- Routes ---

@@ -64,7 +64,7 @@ class QVerisStatusResponse(BaseModel):
 
 
 def _host():
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     if host is None:
         raise RuntimeError("api_server module is not loaded")
     return host
