@@ -333,3 +333,129 @@ class TestOldVarsIgnored:
         assert "/live" in paths
         assert "/value-hunter/status" not in paths
         assert "src.api.value_hunter_routes" not in sys.modules
+
+
+class TestValueHunterRouteIsolation:
+    """Value Hunter routes are registered WITHOUT starting the scheduler or
+    sending notifications.  Core routes remain intact."""
+
+    def test_scheduler_not_started(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify start_value_hunter is never called during route registration."""
+        _clean_modules()
+        monkeypatch.setenv("VALUE_HUNTER_ROUTES_ENABLED", "true")
+        monkeypatch.setenv("INVESTMENT_RESEARCH_ROUTES_ENABLED", "false")
+
+        start_called: list[bool] = []
+
+        def _tracking_start() -> None:
+            start_called.append(True)
+
+        # Import before try_register_routes so we can patch the function
+        # before the cached module is consumed by importlib.import_module.
+        import src.api.value_hunter_routes as vh  # noqa: E402
+
+        monkeypatch.setattr(vh, "start_value_hunter", _tracking_start)
+
+        from src.api.optional_routes import try_register_routes
+
+        app = FastAPI()
+        app.get("/live")(lambda: {"status": "ok"})
+
+        result = try_register_routes(
+            app, feature_name="Value Hunter", env_var="VALUE_HUNTER_ROUTES_ENABLED",
+            module_path="src.api.value_hunter_routes",
+            register_func_name="register_value_hunter_routes",
+            require_auth=lambda: None,
+        )
+
+        assert result.status == LoadStatus.LOADED
+        assert start_called == [], "start_value_hunter must NOT be called during route registration"
+        # _scheduler must remain None (not constructed)
+        assert vh._scheduler is None, "scheduler must NOT be created during route registration"
+
+    def test_no_notifications_during_registration(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify route registration does not send any notifications.
+
+        register_value_hunter_routes only registers @app.get/post decorators;
+        it never calls notify, feishu, or SMTP.  We prove this by patching
+        the notification-sending path to fail if invoked.
+        """
+        _clean_modules()
+        monkeypatch.setenv("VALUE_HUNTER_ROUTES_ENABLED", "true")
+        monkeypatch.setenv("INVESTMENT_RESEARCH_ROUTES_ENABLED", "false")
+
+        network_called: list[tuple[str, object]] = []
+
+        def _track_urlopen(
+            url: str, *args: object, **kwargs: object
+        ) -> object:
+            network_called.append(("urlopen", url))
+            msg = "network call intercepted during route registration"
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(
+            "urllib.request.urlopen", _track_urlopen, raising=False
+        )
+
+        from src.api.optional_routes import try_register_routes
+
+        app = FastAPI()
+        app.get("/live")(lambda: {"status": "ok"})
+
+        result = try_register_routes(
+            app, feature_name="Value Hunter", env_var="VALUE_HUNTER_ROUTES_ENABLED",
+            module_path="src.api.value_hunter_routes",
+            register_func_name="register_value_hunter_routes",
+            require_auth=lambda: None,
+        )
+
+        assert result.status == LoadStatus.LOADED
+        assert network_called == [], (
+            f"no network calls expected during registration, got: {network_called}"
+        )
+
+    def test_core_routes_preserved(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Core API routes survive after VH route registration."""
+        _clean_modules()
+        monkeypatch.setenv("VALUE_HUNTER_ROUTES_ENABLED", "true")
+        monkeypatch.setenv("INVESTMENT_RESEARCH_ROUTES_ENABLED", "false")
+
+        from src.api.optional_routes import try_register_routes
+
+        app = FastAPI()
+        # System
+        app.get("/live")(lambda: {"status": "ok"})
+        app.get("/health")(lambda: {"status": "ok"})
+        # Settings
+        app.get("/settings/llm")(lambda: {"ok": True})
+        app.get("/settings/data-sources")(lambda: {"ok": True})
+        # Swarm (sessions / agent)
+        app.get("/swarm/presets")(lambda: [])
+        app.get("/swarm/runs")(lambda: [])
+
+        result = try_register_routes(
+            app, feature_name="Value Hunter", env_var="VALUE_HUNTER_ROUTES_ENABLED",
+            module_path="src.api.value_hunter_routes",
+            register_func_name="register_value_hunter_routes",
+            require_auth=lambda: None,
+        )
+
+        assert result.status == LoadStatus.LOADED
+
+        paths = _route_paths(app)
+        # Core routes survive
+        assert "/live" in paths
+        assert "/health" in paths
+        assert "/settings/llm" in paths
+        assert "/settings/data-sources" in paths
+        assert "/swarm/presets" in paths
+        assert "/swarm/runs" in paths
+        # VH routes registered
+        assert "/value-hunter/status" in paths
+        assert "/value-hunter/history" in paths
+        # IR routes NOT registered
+        assert "/investment-research/status" not in paths
+        # IR module not imported
+        assert "src.api.investment_research_routes" not in sys.modules
