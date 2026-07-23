@@ -81,6 +81,22 @@ def test_company_specific_event_attribution():
     assert result.counter_evidence_ids == ("counter-event-a",)
 
 
+_REMAINING_EVENT_TYPES = [
+    pytest.param(EventType.REGULATORY_PENALTY, id="regulatory_penalty"),
+    pytest.param(EventType.MATERIAL_LITIGATION, id="material_litigation"),
+    pytest.param(EventType.HOLDER_SELLING, id="holder_selling"),
+    pytest.param(EventType.SHARE_PLEDGE, id="share_pledge"),
+    pytest.param(EventType.MAJOR_ORDER_CHANGE, id="major_order_change"),
+    pytest.param(EventType.COMPANY_ANNOUNCEMENT, id="company_announcement"),
+]
+
+
+@pytest.mark.parametrize("event_type", _REMAINING_EVENT_TYPES)
+def test_each_declared_event_type_produces_company_specific_attribution(event_type):
+    result = _evaluate(_context(), [_event(event_type=event_type)])
+    assert result.scope == AttributionScope.COMPANY_SPECIFIC
+
+
 def test_sector_attribution_from_policy_and_aligned_return():
     context = _context(
         sector_return=-0.09,
