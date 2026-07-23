@@ -66,6 +66,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+/** True when an optional-backend-route returned HTML instead of JSON (feature disabled). */
+export function isDisabledFeatureError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 200 && error.message.startsWith("Expected JSON from");
+}
+
 export interface UploadResult {
   status: string;
   file_path: string;

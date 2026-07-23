@@ -3,6 +3,7 @@ import { BookOpenCheck, CircleDashed, FileCheck2, FlaskConical, Search, ShieldCh
 
 import {
   api,
+  isDisabledFeatureError,
   type InvestmentResearchDailyReport,
   type InvestmentResearchEvidenceInboxItem,
   type InvestmentResearchEvidenceReadiness,
@@ -324,7 +325,16 @@ export function InvestmentResearch() {
       setReadiness(nextReadiness);
       try { setDaily(await api.getInvestmentResearchDaily(shanghaiDate())); } catch { setDaily(null); }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "读取投资研究数据失败");
+      if (isDisabledFeatureError(reason)) {
+        setStatus({
+          enabled: false, shadow_mode: false, schema_version: 0,
+          schema_components: { research_core: 0, evidence_inbox: 0, evidence_association: 0, evidence_set_review: 0 },
+          thesis_count: 0, evidence_inbox: { pending: 0, accepted: 0, rejected: 0 },
+          positioning: "", output_contract: "",
+        });
+      } else {
+        setError(reason instanceof Error ? reason.message : "读取投资研究数据失败");
+      }
     }
     try {
       const shadowRaw = await api.getPanicShadowStatus();
@@ -334,7 +344,11 @@ export function InvestmentResearch() {
         setShadowStatus(panicResearchLoading());
       }
     } catch (reason) {
-      setShadowStatus(panicResearchError(reason));
+      if (isDisabledFeatureError(reason)) {
+        setShadowStatus(panicResearchDisabled("影子报告后端功能未启用，需要设置 INVESTMENT_RESEARCH_ROUTES_ENABLED 和 PANIC_SHADOW_REPORT_API_ENABLED"));
+      } else {
+        setShadowStatus(panicResearchError(reason));
+      }
     }
     setLoading(false);
   }, []);

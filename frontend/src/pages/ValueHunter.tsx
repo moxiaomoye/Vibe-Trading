@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database, RefreshCw, ShieldAlert } from "lucide-react";
-import { api, type ValueHunterCandidate, type ValueHunterScan, type ValueHunterStatus } from "@/lib/api";
+import { api, isDisabledFeatureError, type ValueHunterCandidate, type ValueHunterScan, type ValueHunterStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function scoreTone(score: number) {
@@ -68,7 +68,15 @@ export function ValueHunter() {
       setStatus(value);
       setScan(value.latest);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取失败");
+      if (isDisabledFeatureError(err)) {
+        setStatus({
+          enabled: false, provider: "", schedule: "", timezone: "",
+          notification_channels: [], notification_ready: true,
+          missing_notification_settings: [], latest: null,
+        });
+      } else {
+        setError(err instanceof Error ? err.message : "读取失败");
+      }
     } finally {
       setLoading(false);
     }
