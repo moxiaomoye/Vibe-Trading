@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 
+from src.api.optional_routes import try_register_routes
 from src.config.accessor import get_env_config
 from src.config.paths import get_data_dir
 from src.investment_research.discovery.models import DiscoveryDisposition
@@ -154,6 +155,14 @@ def _readiness_payload(readiness: Any) -> dict[str, Any]:
 
 
 def register_investment_research_routes(app: FastAPI, require_auth: AuthDep) -> None:
+    try_register_routes(
+        app,
+        feature_name="Panic Shadow Report API",
+        env_var="PANIC_SHADOW_REPORT_API_ENABLED",
+        module_path="src.api.panic_shadow_report_routes",
+        register_func_name="register_panic_shadow_report_routes",
+        require_auth=require_auth,
+    )
     dependencies = [Depends(require_auth)]
 
     @app.get("/investment-research/status", dependencies=dependencies)
