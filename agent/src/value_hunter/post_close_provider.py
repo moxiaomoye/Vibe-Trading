@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+import re
 from typing import Any, Callable, Mapping, Protocol
 
 import pandas as pd
@@ -87,6 +88,106 @@ class PostCloseData:
 
 class PostCloseProvider(Protocol):
     def load(self, *, as_of: date | None = None) -> PostCloseData: ...
+
+
+class SinaSpotAdapter:
+    """Current-day Sina A-share spot adapter with one bounded upstream call."""
+
+    source = "akshare_sina"
+
+    def __init__(
+        self,
+        *,
+        ak_module: Any | None = None,
+        today: Callable[[], date] = date.today,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._ak_module = ak_module
+        self._today = today
+        self._now = now or (lambda: datetime.now(timezone.utc))
+
+    def load(self, *, as_of: date | None = None) -> PostCloseData:
+        current_date = self._today()
+        target_date = as_of or current_date
+        retrieved_at = self._now()
+        if target_date != current_date:
+            return PostCloseData(
+                source=self.source,
+                source_date=target_date,
+                availability_date=current_date,
+                retrieved_at=retrieved_at,
+                spot_df=pd.DataFrame(),
+                data_gaps=(
+                    ProviderDataGap(
+                        "all_a_spot",
+                        "Sina spot endpoint cannot serve point-in-time historical panels",
+                        target_date,
+                        current_date,
+                    ),
+                ),
+            )
+
+        try:
+            ak = self._ak()
+        except Exception as exc:
+            return _failed_sina_spot(
+                target_date,
+                retrieved_at,
+                "provider_initialization",
+                exc,
+                retryable=False,
+            )
+
+        try:
+            raw = ak.stock_zh_a_spot()
+        except Exception as exc:
+            return _failed_sina_spot(
+                target_date,
+                retrieved_at,
+                "all_a_spot_sina",
+                exc,
+                retryable=True,
+            )
+
+        spot, normalization_gaps = _normalize_sina_spot(raw, target_date)
+        gaps = list(normalization_gaps)
+        if spot.empty:
+            gaps.append(
+                ProviderDataGap(
+                    "all_a_spot",
+                    "Sina spot response is empty or lacks usable symbols",
+                    target_date,
+                    target_date,
+                )
+            )
+        metadata = _normalize_symbol_metadata(spot, target_date)
+        if not metadata:
+            gaps.append(
+                ProviderDataGap(
+                    "symbol_metadata",
+                    "symbol metadata unavailable",
+                    target_date,
+                    target_date,
+                )
+            )
+        return PostCloseData(
+            source=self.source,
+            source_date=target_date,
+            availability_date=target_date,
+            retrieved_at=retrieved_at,
+            spot_df=spot,
+            symbol_metadata=metadata,
+            data_gaps=tuple(gaps),
+        )
+
+    def _ak(self) -> Any:
+        if self._ak_module is not None:
+            return self._ak_module
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AKShare is unavailable") from exc
+        return ak
 
 
 class AksharePostCloseProvider:
@@ -327,3 +428,75 @@ def _normalize_symbol_metadata(frame: Any, source_date: date) -> tuple[SymbolMet
         )
         for symbol, name in zip(frame["代码"], names)
     )
+
+
+def _failed_sina_spot(
+    target_date: date,
+    retrieved_at: datetime,
+    operation: str,
+    exc: Exception,
+    *,
+    retryable: bool,
+) -> PostCloseData:
+    return PostCloseData(
+        source=SinaSpotAdapter.source,
+        source_date=target_date,
+        availability_date=target_date,
+        retrieved_at=retrieved_at,
+        spot_df=pd.DataFrame(),
+        errors=(
+            UpstreamError(
+                operation=operation,
+                error_type=type(exc).__name__,
+                message=str(exc)[:200],
+                attempts=1,
+                retryable=retryable,
+            ),
+        ),
+        data_gaps=(
+            ProviderDataGap(
+                "all_a_spot",
+                "Sina spot request failed",
+                target_date,
+                target_date,
+            ),
+        ),
+    )
+
+
+def _normalize_sina_spot(
+    frame: Any,
+    source_date: date,
+) -> tuple[pd.DataFrame, tuple[ProviderDataGap, ...]]:
+    if frame is None or not isinstance(frame, pd.DataFrame) or frame.empty:
+        return pd.DataFrame(), ()
+    if "代码" not in frame:
+        return (
+            pd.DataFrame(),
+            (
+                ProviderDataGap(
+                    "all_a_spot",
+                    "Sina spot response is missing code column",
+                    source_date,
+                    source_date,
+                ),
+            ),
+        )
+
+    normalized = frame.copy()
+    normalized["代码"] = normalized["代码"].map(_normalize_a_share_code)
+    normalized = normalized[normalized["代码"].notna()].copy()
+    for column in ("名称", "最新价", "涨跌幅", "昨收"):
+        if column not in normalized:
+            normalized[column] = pd.NA
+    if "成交量" in normalized:
+        normalized["成交量"] = pd.to_numeric(
+            normalized["成交量"], errors="coerce"
+        ) / 100.0
+    return normalized.reset_index(drop=True), ()
+
+
+def _normalize_a_share_code(value: Any) -> str | None:
+    text = str(value).strip().lower()
+    match = re.fullmatch(r"(?:sh|sz|bj)?(\d{6})(?:\.(?:sh|sz|bj))?", text)
+    return match.group(1) if match else None

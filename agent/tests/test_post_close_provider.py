@@ -5,7 +5,11 @@ from datetime import date, datetime, timezone
 import pandas as pd
 
 from src.value_hunter.panic_scan import run_panic_scan
-from src.value_hunter.post_close_provider import AksharePostCloseProvider, PostCloseData
+from src.value_hunter.post_close_provider import (
+    AksharePostCloseProvider,
+    PostCloseData,
+    SinaSpotAdapter,
+)
 
 
 TODAY = date(2026, 7, 22)
@@ -52,12 +56,78 @@ class FakeAkshare:
         return pd.DataFrame({"板块名称": ["半导体"], "涨跌幅": [-3.0]})
 
 
+class FakeSinaAkshare:
+    def __init__(self, *, fail: bool = False):
+        self.fail = fail
+        self.spot_calls = 0
+
+    def stock_zh_a_spot(self):
+        self.spot_calls += 1
+        if self.fail:
+            raise ConnectionError("Sina fixture unavailable")
+        return pd.DataFrame(
+            {
+                "代码": ["sh600522", "sz300308"],
+                "名称": ["fixture-a", "fixture-b"],
+                "最新价": [10.0, 20.0],
+                "涨跌幅": [-5.0, 2.0],
+                "昨收": [10.5, 19.6],
+                "成交量": [123400.0, 900.0],
+            }
+        )
+
+
 def _provider(fake=None):
     return AksharePostCloseProvider(
         ak_module=fake or FakeAkshare(),
         today=lambda: TODAY,
         now=lambda: NOW,
     )
+
+
+def _sina_adapter(fake=None):
+    return SinaSpotAdapter(
+        ak_module=fake or FakeSinaAkshare(),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+
+def test_sina_spot_normalizes_codes_volume_and_point_in_time_metadata():
+    fake = FakeSinaAkshare()
+    result = _sina_adapter(fake).load(as_of=TODAY)
+
+    assert fake.spot_calls == 1
+    assert result.source == "akshare_sina"
+    assert result.source_date == TODAY
+    assert result.availability_date == TODAY
+    assert result.retrieved_at == NOW
+    assert result.spot_df["代码"].tolist() == ["600522", "300308"]
+    assert result.spot_df["成交量"].tolist() == [1234.0, 9.0]
+    assert {item.symbol for item in result.symbol_metadata} == {"600522", "300308"}
+    assert result.errors == ()
+
+
+def test_sina_spot_rejects_historical_request_before_network_call():
+    fake = FakeSinaAkshare()
+    result = _sina_adapter(fake).load(as_of=date(2026, 7, 21))
+
+    assert fake.spot_calls == 0
+    assert result.spot_df.empty
+    assert result.source_date == date(2026, 7, 21)
+    assert result.availability_date == TODAY
+    assert result.data_gaps[0].field == "all_a_spot"
+
+
+def test_sina_spot_attempts_paged_endpoint_only_once_on_failure():
+    fake = FakeSinaAkshare(fail=True)
+    result = _sina_adapter(fake).load(as_of=TODAY)
+
+    assert fake.spot_calls == 1
+    assert result.spot_df.empty
+    assert result.errors[0].operation == "all_a_spot_sina"
+    assert result.errors[0].attempts == 1
+    assert result.errors[0].retryable is True
 
 
 def test_provider_normalizes_post_close_contract():
