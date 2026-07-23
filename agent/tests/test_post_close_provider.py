@@ -7,8 +7,11 @@ import pandas as pd
 from src.value_hunter.panic_scan import run_panic_scan
 from src.value_hunter.post_close_provider import (
     AksharePostCloseProvider,
+    ComponentFallbackPostCloseProvider,
     PostCloseData,
+    ProviderDataGap,
     SinaSpotAdapter,
+    UpstreamError,
 )
 
 
@@ -93,6 +96,38 @@ def _sina_adapter(fake=None):
     )
 
 
+class RecordingProvider:
+    def __init__(self, result):
+        self.result = result
+        self.calls = 0
+
+    def load(self, *, as_of=None):
+        self.calls += 1
+        return self.result
+
+
+def _post_close(
+    *,
+    source="fixture",
+    spot=None,
+    benchmark=None,
+    errors=(),
+    gaps=(),
+    component_sources=None,
+):
+    return PostCloseData(
+        source=source,
+        source_date=TODAY,
+        availability_date=TODAY,
+        retrieved_at=NOW,
+        spot_df=spot if spot is not None else pd.DataFrame(),
+        benchmark_returns=benchmark or {},
+        errors=errors,
+        data_gaps=gaps,
+        component_sources=component_sources or {},
+    )
+
+
 def test_sina_spot_normalizes_codes_volume_and_point_in_time_metadata():
     fake = FakeSinaAkshare()
     result = _sina_adapter(fake).load(as_of=TODAY)
@@ -128,6 +163,130 @@ def test_sina_spot_attempts_paged_endpoint_only_once_on_failure():
     assert result.errors[0].operation == "all_a_spot_sina"
     assert result.errors[0].attempts == 1
     assert result.errors[0].retryable is True
+
+
+def test_component_fallback_does_not_call_sina_when_em_components_succeed():
+    primary = RecordingProvider(_provider().load(as_of=TODAY))
+    spot_fallback = RecordingProvider(_post_close(source="akshare_sina"))
+    benchmark_fallback = RecordingProvider(_post_close(source="akshare_sina"))
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=spot_fallback,
+        benchmark_fallback=benchmark_fallback,
+    ).load(as_of=TODAY)
+
+    assert primary.calls == 1
+    assert spot_fallback.calls == 0
+    assert benchmark_fallback.calls == 0
+    assert result.source == "akshare"
+    assert result.component_sources["spot"] == "akshare_em"
+    assert result.component_sources["benchmark"] == "akshare_em"
+
+
+def test_component_fallback_replaces_only_missing_spot_and_preserves_em_error():
+    em_error = UpstreamError(
+        "all_a_spot", "ConnectionError", "fixture", 2, True
+    )
+    primary = RecordingProvider(
+        _post_close(
+            source="akshare",
+            benchmark={"000300.SH": -0.02},
+            errors=(em_error,),
+            gaps=(ProviderDataGap("all_a_spot", "upstream request failed"),),
+            component_sources={
+                "spot": "unavailable",
+                "benchmark": "akshare_em",
+                "sector_returns": "unavailable",
+            },
+        )
+    )
+    sina_spot = _sina_adapter().load(as_of=TODAY)
+    spot_fallback = RecordingProvider(sina_spot)
+    benchmark_fallback = RecordingProvider(_post_close(source="akshare_sina"))
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=spot_fallback,
+        benchmark_fallback=benchmark_fallback,
+    ).load(as_of=TODAY)
+
+    assert spot_fallback.calls == 1
+    assert benchmark_fallback.calls == 0
+    assert result.spot_df["代码"].tolist() == ["600522", "300308"]
+    assert result.benchmark_returns == {"000300.SH": -0.02}
+    assert result.component_sources["spot"] == "akshare_sina"
+    assert result.component_sources["benchmark"] == "akshare_em"
+    assert result.source == "akshare_mixed"
+    assert em_error in result.errors
+
+
+def test_component_fallback_replaces_only_missing_benchmark():
+    spot = _sina_adapter().load(as_of=TODAY).spot_df
+    primary = RecordingProvider(
+        _post_close(
+            source="akshare",
+            spot=spot,
+            component_sources={"spot": "akshare_em", "benchmark": "unavailable"},
+        )
+    )
+    spot_fallback = RecordingProvider(_post_close(source="akshare_sina"))
+    benchmark_fallback = RecordingProvider(
+        _post_close(
+            source="akshare_sina",
+            benchmark={"000300.SH": -0.03},
+            component_sources={"benchmark": "akshare_sina"},
+        )
+    )
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=spot_fallback,
+        benchmark_fallback=benchmark_fallback,
+    ).load(as_of=TODAY)
+
+    assert spot_fallback.calls == 0
+    assert benchmark_fallback.calls == 1
+    assert result.component_sources == {
+        "spot": "akshare_em",
+        "benchmark": "akshare_sina",
+    }
+    assert result.benchmark_returns == {"000300.SH": -0.03}
+
+
+def test_component_fallback_returns_structured_failures_when_both_spots_fail():
+    em_error = UpstreamError(
+        "all_a_spot", "ConnectionError", "em fixture", 2, True
+    )
+    sina_error = UpstreamError(
+        "all_a_spot_sina", "ConnectionError", "sina fixture", 1, True
+    )
+    primary = RecordingProvider(
+        _post_close(
+            source="akshare",
+            errors=(em_error,),
+            gaps=(ProviderDataGap("all_a_spot", "EM failed"),),
+            component_sources={"spot": "unavailable"},
+        )
+    )
+    spot_fallback = RecordingProvider(
+        _post_close(
+            source="akshare_sina",
+            errors=(sina_error,),
+            gaps=(ProviderDataGap("all_a_spot", "Sina failed"),),
+            component_sources={"spot": "unavailable"},
+        )
+    )
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=spot_fallback,
+    ).load(as_of=TODAY)
+
+    assert result.spot_df.empty
+    assert result.component_sources["spot"] == "unavailable"
+    assert result.errors == (em_error, sina_error)
+    assert [gap.reason for gap in result.data_gaps] == ["EM failed", "Sina failed"]
 
 
 def test_provider_normalizes_post_close_contract():

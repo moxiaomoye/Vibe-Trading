@@ -59,6 +59,7 @@ class PostCloseData:
     symbol_metadata: tuple[SymbolMetadata, ...] = ()
     errors: tuple[UpstreamError, ...] = ()
     data_gaps: tuple[ProviderDataGap, ...] = ()
+    component_sources: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.availability_date < self.source_date:
@@ -81,6 +82,7 @@ class PostCloseData:
             "sector_return_date": self.source_date,
             "sector_return_availability_date": self.availability_date,
             "source": self.source,
+            "component_sources": dict(self.component_sources),
             "provider_errors": list(self.errors),
             "data_gaps": list(self.data_gaps),
         }
@@ -178,6 +180,9 @@ class SinaSpotAdapter:
             spot_df=spot,
             symbol_metadata=metadata,
             data_gaps=tuple(gaps),
+            component_sources={
+                "spot": self.source if not spot.empty else "unavailable",
+            },
         )
 
     def _ak(self) -> Any:
@@ -188,6 +193,87 @@ class SinaSpotAdapter:
         except ImportError as exc:
             raise RuntimeError("AKShare is unavailable") from exc
         return ak
+
+
+class ComponentFallbackPostCloseProvider:
+    """Merge independently sourced post-close components without all-or-nothing fallback."""
+
+    def __init__(
+        self,
+        *,
+        primary: PostCloseProvider | None = None,
+        spot_fallback: PostCloseProvider | None = None,
+        benchmark_fallback: PostCloseProvider | None = None,
+    ) -> None:
+        self._primary = primary or AksharePostCloseProvider()
+        self._spot_fallback = spot_fallback or SinaSpotAdapter()
+        self._benchmark_fallback = benchmark_fallback
+
+    def load(self, *, as_of: date | None = None) -> PostCloseData:
+        primary = self._primary.load(as_of=as_of)
+        spot_result = None
+        benchmark_result = None
+
+        if primary.spot_df.empty and self._spot_fallback is not None:
+            spot_result = self._spot_fallback.load(as_of=as_of)
+        if not primary.benchmark_returns and self._benchmark_fallback is not None:
+            benchmark_result = self._benchmark_fallback.load(as_of=as_of)
+
+        spot = primary.spot_df
+        metadata = primary.symbol_metadata
+        spot_source = _component_source(primary, "spot", present=not spot.empty)
+        if spot_result is not None and not spot_result.spot_df.empty:
+            spot = spot_result.spot_df
+            metadata = spot_result.symbol_metadata
+            spot_source = _component_source(spot_result, "spot", present=True)
+
+        benchmark_returns = primary.benchmark_returns
+        benchmark_source = _component_source(
+            primary,
+            "benchmark",
+            present=bool(benchmark_returns),
+        )
+        if benchmark_result is not None and benchmark_result.benchmark_returns:
+            benchmark_returns = benchmark_result.benchmark_returns
+            benchmark_source = _component_source(
+                benchmark_result,
+                "benchmark",
+                present=True,
+            )
+
+        component_sources = dict(primary.component_sources)
+        component_sources["spot"] = spot_source
+        component_sources["benchmark"] = benchmark_source
+        errors = list(primary.errors)
+        gaps = list(primary.data_gaps)
+        retrieved_at = primary.retrieved_at
+        for fallback in (spot_result, benchmark_result):
+            if fallback is None:
+                continue
+            errors.extend(fallback.errors)
+            gaps.extend(fallback.data_gaps)
+            retrieved_at = max(retrieved_at, fallback.retrieved_at)
+
+        source_names = {
+            value for value in component_sources.values() if value != "unavailable"
+        }
+        source = primary.source if len(source_names) <= 1 else "akshare_mixed"
+        return PostCloseData(
+            source=source,
+            source_date=primary.source_date,
+            availability_date=primary.availability_date,
+            retrieved_at=retrieved_at,
+            spot_df=spot,
+            benchmark_returns=benchmark_returns,
+            limit_up_symbols=primary.limit_up_symbols,
+            limit_down_symbols=primary.limit_down_symbols,
+            sector_returns=primary.sector_returns,
+            sector_memberships=primary.sector_memberships,
+            symbol_metadata=metadata,
+            errors=tuple(errors),
+            data_gaps=tuple(gaps),
+            component_sources=component_sources,
+        )
 
 
 class AksharePostCloseProvider:
@@ -327,6 +413,31 @@ class AksharePostCloseProvider:
             symbol_metadata=metadata,
             errors=tuple(errors),
             data_gaps=tuple(gaps),
+            component_sources={
+                "spot": (
+                    "unavailable"
+                    if spot.empty
+                    else "akshare_em"
+                ),
+                "benchmark": (
+                    "akshare_em"
+                    if self.benchmark in benchmark_returns
+                    else "unavailable"
+                ),
+                "limit_up": (
+                    "unavailable"
+                    if _operation_failed(errors, "limit_up_pool")
+                    else "akshare_em"
+                ),
+                "limit_down": (
+                    "unavailable"
+                    if _operation_failed(errors, "limit_down_pool")
+                    else "akshare_em"
+                ),
+                "sector_returns": (
+                    "akshare_em" if sector_returns else "unavailable"
+                ),
+            },
         )
 
     def _ak(self) -> Any:
@@ -392,6 +503,21 @@ def _last_daily_return(frame: Any, target_date: date) -> float | None:
     if len(closes) < 2 or float(closes.iloc[-2]) <= 0:
         return None
     return round(float(closes.iloc[-1]) / float(closes.iloc[-2]) - 1.0, 8)
+
+
+def _component_source(
+    result: PostCloseData,
+    component: str,
+    *,
+    present: bool,
+) -> str:
+    if not present:
+        return "unavailable"
+    return result.component_sources.get(component, result.source)
+
+
+def _operation_failed(errors: list[UpstreamError], operation: str) -> bool:
+    return any(error.operation == operation for error in errors)
 
 
 def _extract_symbols(frame: Any) -> set[str]:
@@ -461,6 +587,7 @@ def _failed_sina_spot(
                 target_date,
             ),
         ),
+        component_sources={"spot": "unavailable"},
     )
 
 
