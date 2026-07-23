@@ -247,10 +247,8 @@ def test_component_fallback_replaces_only_missing_benchmark():
 
     assert spot_fallback.calls == 0
     assert benchmark_fallback.calls == 1
-    assert result.component_sources == {
-        "spot": "akshare_em",
-        "benchmark": "akshare_sina",
-    }
+    assert result.component_sources["spot"] == "akshare_em"
+    assert result.component_sources["benchmark"] == "akshare_sina"
     assert result.benchmark_returns == {"000300.SH": -0.03}
 
 
@@ -286,7 +284,80 @@ def test_component_fallback_returns_structured_failures_when_both_spots_fail():
     assert result.spot_df.empty
     assert result.component_sources["spot"] == "unavailable"
     assert result.errors == (em_error, sina_error)
-    assert [gap.reason for gap in result.data_gaps] == ["EM failed", "Sina failed"]
+    reasons = [gap.reason for gap in result.data_gaps]
+    assert reasons[:2] == ["EM failed", "Sina failed"]
+    assert any("insufficient spot data" in reason for reason in reasons)
+
+
+def test_limit_pool_fallback_reuses_board_and_st_trading_rules():
+    spot = pd.DataFrame(
+        {
+            "代码": ["600001", "300001", "688001", "830001", "600002"],
+            "名称": ["main", "gem", "star", "bse", "*ST fixture"],
+            "最新价": [11.0, 12.0, 8.0, 13.0, 9.5],
+            "昨收": [10.0] * 5,
+            "涨跌幅": [10.0, 20.0, -20.0, 30.0, -5.0],
+        }
+    )
+    primary = RecordingProvider(
+        _post_close(
+            source="akshare",
+            spot=spot,
+            component_sources={
+                "spot": "akshare_em",
+                "limit_up": "unavailable",
+                "limit_down": "unavailable",
+            },
+        )
+    )
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=RecordingProvider(_post_close()),
+    ).load(as_of=TODAY)
+
+    assert result.limit_up_symbols == frozenset(
+        {"600001", "300001", "830001"}
+    )
+    assert result.limit_down_symbols == frozenset({"688001", "600002"})
+    assert result.component_sources["limit_up"] == "computed_from_spot"
+    assert result.component_sources["limit_down"] == "computed_from_spot"
+    assert any(
+        gap.field == "limit_pools" and "not official pools" in gap.reason
+        for gap in result.data_gaps
+    )
+
+
+def test_limit_pool_fallback_stays_empty_when_required_spot_fields_are_missing():
+    primary = RecordingProvider(
+        _post_close(
+            source="akshare",
+            spot=pd.DataFrame(
+                {"代码": ["600001"], "名称": ["fixture"], "最新价": [9.0]}
+            ),
+            component_sources={
+                "spot": "akshare_em",
+                "limit_up": "unavailable",
+                "limit_down": "unavailable",
+            },
+        )
+    )
+
+    result = ComponentFallbackPostCloseProvider(
+        primary=primary,
+        spot_fallback=RecordingProvider(_post_close()),
+    ).load(as_of=TODAY)
+
+    assert result.limit_up_symbols == frozenset()
+    assert result.limit_down_symbols == frozenset()
+    assert result.component_sources["limit_up"] == "unavailable"
+    assert result.component_sources["limit_down"] == "unavailable"
+    assert any(
+        gap.field == "limit_pools"
+        and "insufficient" in gap.reason
+        and "昨收" in gap.reason
+        for gap in result.data_gaps
+    )
 
 
 def test_provider_normalizes_post_close_contract():

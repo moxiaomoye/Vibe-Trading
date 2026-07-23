@@ -9,6 +9,13 @@ from typing import Any, Callable, Mapping, Protocol
 
 import pandas as pd
 
+from src.value_hunter.trading_rules import (
+    classify_limit_rule,
+    is_limit_down,
+    is_limit_up,
+    is_stock_st,
+)
+
 
 @dataclass(frozen=True)
 class UpstreamError:
@@ -254,6 +261,27 @@ class ComponentFallbackPostCloseProvider:
             gaps.extend(fallback.data_gaps)
             retrieved_at = max(retrieved_at, fallback.retrieved_at)
 
+        limit_up_symbols = primary.limit_up_symbols
+        limit_down_symbols = primary.limit_down_symbols
+        missing_limit_up = (
+            component_sources.get("limit_up", "unavailable") == "unavailable"
+        )
+        missing_limit_down = (
+            component_sources.get("limit_down", "unavailable") == "unavailable"
+        )
+        if missing_limit_up or missing_limit_down:
+            computed_up, computed_down, computation_gap = (
+                _compute_limit_pools_from_spot(spot, primary.source_date)
+            )
+            gaps.append(computation_gap)
+            if "insufficient" not in computation_gap.reason:
+                if missing_limit_up:
+                    limit_up_symbols = frozenset(computed_up)
+                    component_sources["limit_up"] = "computed_from_spot"
+                if missing_limit_down:
+                    limit_down_symbols = frozenset(computed_down)
+                    component_sources["limit_down"] = "computed_from_spot"
+
         source_names = {
             value for value in component_sources.values() if value != "unavailable"
         }
@@ -265,8 +293,8 @@ class ComponentFallbackPostCloseProvider:
             retrieved_at=retrieved_at,
             spot_df=spot,
             benchmark_returns=benchmark_returns,
-            limit_up_symbols=primary.limit_up_symbols,
-            limit_down_symbols=primary.limit_down_symbols,
+            limit_up_symbols=limit_up_symbols,
+            limit_down_symbols=limit_down_symbols,
             sector_returns=primary.sector_returns,
             sector_memberships=primary.sector_memberships,
             symbol_metadata=metadata,
@@ -518,6 +546,57 @@ def _component_source(
 
 def _operation_failed(errors: list[UpstreamError], operation: str) -> bool:
     return any(error.operation == operation for error in errors)
+
+
+def _compute_limit_pools_from_spot(
+    frame: pd.DataFrame,
+    source_date: date,
+) -> tuple[set[str], set[str], ProviderDataGap]:
+    required = {"代码", "名称", "最新价", "昨收"}
+    missing = sorted(required.difference(frame.columns))
+    if frame.empty or missing:
+        details = ", ".join(missing) if missing else "spot rows"
+        return (
+            set(),
+            set(),
+            ProviderDataGap(
+                "limit_pools",
+                f"insufficient spot data for rule-based limit pools: {details}",
+                source_date,
+                source_date,
+            ),
+        )
+
+    limit_up: set[str] = set()
+    limit_down: set[str] = set()
+    skipped = 0
+    for _, row in frame.iterrows():
+        symbol = _normalize_a_share_code(row["代码"])
+        close = pd.to_numeric(pd.Series([row["最新价"]]), errors="coerce").iloc[0]
+        prev_close = pd.to_numeric(pd.Series([row["昨收"]]), errors="coerce").iloc[0]
+        if symbol is None or pd.isna(close) or pd.isna(prev_close) or prev_close <= 0:
+            skipped += 1
+            continue
+        name = "" if pd.isna(row["名称"]) else str(row["名称"])
+        rule = classify_limit_rule(symbol)
+        is_st = is_stock_st(name)
+        if is_limit_up(float(close), float(prev_close), rule, is_st=is_st):
+            limit_up.add(symbol)
+        if is_limit_down(float(close), float(prev_close), rule, is_st=is_st):
+            limit_down.add(symbol)
+
+    skipped_note = f"; skipped {skipped} incomplete rows" if skipped else ""
+    return (
+        limit_up,
+        limit_down,
+        ProviderDataGap(
+            "limit_pools",
+            "approximate rule-based pools computed from spot; not official pools"
+            f"{skipped_note}",
+            source_date,
+            source_date,
+        ),
+    )
 
 
 def _extract_symbols(frame: Any) -> set[str]:

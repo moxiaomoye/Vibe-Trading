@@ -9,7 +9,12 @@ from typing import Optional
 import pandas as pd
 
 from src.value_hunter.panic_classifier import RULE_VERSION
-from src.value_hunter.trading_rules import classify_limit_rule, is_limit_down
+from src.value_hunter.trading_rules import (
+    classify_limit_rule,
+    is_limit_down,
+    is_limit_up,
+    is_stock_st,
+)
 
 
 @dataclass
@@ -85,33 +90,41 @@ def build_snapshot_from_akshare(
     large_decline = int((df["涨跌幅"] <= -4).sum())
     median_daily_return = float(df["涨跌幅"].median()) / 100.0
 
-    # 若专用 pool 不可用则回退到涨跌幅判断
+    # 若专用 pool 不可用则逐行复用交易规则，不用固定涨跌幅阈值预筛。
     if ld == 0 and decline > 0:
         for _, row in df.iterrows():
-            if row["涨跌幅"] <= -9.5:
-                try:
-                    code = row["代码_str"]
-                    rule = classify_limit_rule(code)
-                    prev_close = row.get("昨收", None)
-                    close = row.get("最新价", None)
-                    if prev_close and close and is_limit_down(float(close), float(prev_close), rule):
-                        ld += 1
-                except (ValueError, TypeError):
-                    pass
+            try:
+                code = row["代码_str"]
+                name = str(row.get("名称", ""))
+                rule = classify_limit_rule(code)
+                prev_close = row.get("昨收", None)
+                close = row.get("最新价", None)
+                if is_limit_down(
+                    float(close),
+                    float(prev_close),
+                    rule,
+                    is_st=is_stock_st(name),
+                ):
+                    ld += 1
+            except (ValueError, TypeError):
+                pass
     if lu == 0 and advance > 0:
         for _, row in df.iterrows():
-            if row["涨跌幅"] >= 9.5:
-                try:
-                    code = row["代码_str"]
-                    rule = classify_limit_rule(code)
-                    prev_close = row.get("昨收", None)
-                    close = row.get("最新价", None)
-                    if prev_close and close:
-                        threshold = float(prev_close) * (1 + rule.value)
-                        if float(close) >= threshold - 0.01:
-                            lu += 1
-                except (ValueError, TypeError):
-                    pass
+            try:
+                code = row["代码_str"]
+                name = str(row.get("名称", ""))
+                rule = classify_limit_rule(code)
+                prev_close = row.get("昨收", None)
+                close = row.get("最新价", None)
+                if is_limit_up(
+                    float(close),
+                    float(prev_close),
+                    rule,
+                    is_st=is_stock_st(name),
+                ):
+                    lu += 1
+            except (ValueError, TypeError):
+                pass
 
     advance_ratio = round(advance / total, 4) if total > 0 else 0.0
     decline_ratio = round(decline / total, 4) if total > 0 else 0.0
