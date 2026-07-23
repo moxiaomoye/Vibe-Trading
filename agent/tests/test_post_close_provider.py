@@ -132,3 +132,45 @@ def test_provider_initialization_failure_is_structured(monkeypatch):
     assert result.errors[0].operation == "provider_initialization"
     assert result.errors[0].retryable is False
     assert result.data_gaps[0].field == "all_a_spot"
+
+
+def test_empty_limit_up_pool_produces_gap():
+    fake = FakeAkshare()
+    fake.stock_zt_pool_em = lambda *, date: pd.DataFrame({"代码": []})
+    result = _provider(fake).load(as_of=TODAY)
+    assert result.limit_up_symbols == frozenset()
+    assert any(
+        gap.field == "limit_up_pool" and "empty" in gap.reason
+        for gap in result.data_gaps
+    )
+
+
+def test_spot_without_code_column_skips_metadata():
+    fake = FakeAkshare()
+    fake.stock_zh_a_spot_em = lambda **_: pd.DataFrame({
+        "symbol": ["600522", "300308"],
+        "名称": ["fixture-a", "fixture-b"],
+        "最新价": [10.0, 20.0],
+        "涨跌幅": [-5.0, 2.0],
+        "昨收": [10.5, 19.6],
+    })
+    result = _provider(fake).load(as_of=TODAY)
+    assert result.symbol_metadata == ()
+    assert any(gap.field == "symbol_metadata" for gap in result.data_gaps)
+
+
+def test_permanently_failing_sector_endpoint_produces_error_and_gap():
+    fake = FakeAkshare()
+    fake.stock_board_industry_name_em = lambda **_: (_ for _ in ()).throw(
+        ConnectionError("upstream sector fixture dead"),
+    )
+    result = _provider(fake).load(as_of=TODAY)
+    assert result.sector_returns == {}
+    assert any(
+        err.operation == "sector_returns" and err.retryable is True
+        for err in result.errors
+    )
+    assert any(
+        gap.field == "sector_returns" and "unavailable" in gap.reason
+        for gap in result.data_gaps
+    )
