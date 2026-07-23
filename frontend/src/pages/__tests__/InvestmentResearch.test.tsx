@@ -10,6 +10,8 @@ const apiMock = vi.hoisted(() => ({
   listInvestmentResearchEvidenceInbox: vi.fn(),
   listInvestmentResearchEvidenceReadiness: vi.fn(),
   getInvestmentResearchDaily: vi.fn(),
+  getPanicShadowStatus: vi.fn(),
+  runPanicShadowReport: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({ api: apiMock }));
@@ -58,6 +60,7 @@ describe("InvestmentResearch page", () => {
       approval_review_id: null,
     }]);
     apiMock.getInvestmentResearchDaily.mockRejectedValue(new Error("not generated"));
+    apiMock.getPanicShadowStatus.mockResolvedValue({ enabled: true, mode: "shadow", read_only: true, explicit_input_only: true, persistent: false, scheduler_enabled: false, notification_enabled: false, trading_enabled: false, manual_review_required: true });
   });
 
   it("shows evidence initialization without inventing confidence", async () => {
