@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 
-from src.api.optional_routes import try_register_routes
+from src.api.optional_routes import DisabledStub, try_register_routes
 from src.config.accessor import get_env_config
 from src.config.paths import get_data_dir
 from src.investment_research.discovery.models import DiscoveryDisposition
@@ -162,6 +162,10 @@ def register_investment_research_routes(app: FastAPI, require_auth: AuthDep) -> 
         module_path="src.api.panic_shadow_report_routes",
         register_func_name="register_panic_shadow_report_routes",
         require_auth=require_auth,
+        disabled_stubs=[
+            DisabledStub("/investment-research/panic-shadow/status", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}),
+            DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}),
+        ],
     )
     dependencies = [Depends(require_auth)]
 

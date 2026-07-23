@@ -22,6 +22,9 @@ agent.yml
 .env
 agent/.env
 
+# Local market-data credentials (copy of .env.market-data.example)
+.env.market-data.local
+
 .claude/*
 !.claude/hooks.json
 CLAUDE.md

@@ -61,8 +61,10 @@ def test_shadow_routes_are_absent_by_default_and_module_is_lazy(monkeypatch) -> 
     app = FastAPI()
     register_investment_research_routes(app, lambda: None)
 
-    assert STATUS_PATH not in _paths(app)
-    assert API_PATH not in _paths(app)
+    client = TestClient(app)
+    assert STATUS_PATH in _paths(app)
+    assert API_PATH in _paths(app)
+    assert client.get(STATUS_PATH).json() == {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}
     assert "src.api.panic_shadow_report_routes" not in sys.modules
 
 
