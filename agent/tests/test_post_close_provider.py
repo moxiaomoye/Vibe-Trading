@@ -10,6 +10,7 @@ from src.value_hunter.post_close_provider import (
     ComponentFallbackPostCloseProvider,
     PostCloseData,
     ProviderDataGap,
+    SinaBenchmarkAdapter,
     SinaSpotAdapter,
     UpstreamError,
 )
@@ -80,6 +81,24 @@ class FakeSinaAkshare:
         )
 
 
+class FakeSinaBenchmarkAkshare:
+    def __init__(self, *, latest_date=TODAY, fail=False):
+        self.latest_date = latest_date
+        self.fail = fail
+        self.calls = []
+
+    def stock_zh_index_daily(self, *, symbol):
+        self.calls.append(symbol)
+        if self.fail:
+            raise ConnectionError("Sina index fixture unavailable")
+        return pd.DataFrame(
+            {
+                "date": [date(2026, 7, 21), self.latest_date],
+                "close": [100.0, 98.0],
+            }
+        )
+
+
 def _provider(fake=None):
     return AksharePostCloseProvider(
         ak_module=fake or FakeAkshare(),
@@ -91,6 +110,14 @@ def _provider(fake=None):
 def _sina_adapter(fake=None):
     return SinaSpotAdapter(
         ak_module=fake or FakeSinaAkshare(),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+
+def _sina_benchmark_adapter(fake=None):
+    return SinaBenchmarkAdapter(
+        ak_module=fake or FakeSinaBenchmarkAkshare(),
         today=lambda: TODAY,
         now=lambda: NOW,
     )
@@ -163,6 +190,38 @@ def test_sina_spot_attempts_paged_endpoint_only_once_on_failure():
     assert result.errors[0].operation == "all_a_spot_sina"
     assert result.errors[0].attempts == 1
     assert result.errors[0].retryable is True
+
+
+def test_sina_benchmark_uses_strict_target_date_and_daily_return():
+    fake = FakeSinaBenchmarkAkshare()
+    result = _sina_benchmark_adapter(fake).load(as_of=TODAY)
+
+    assert fake.calls == ["sh000300"]
+    assert result.benchmark_returns == {"000300.SH": -0.02}
+    assert result.component_sources["benchmark"] == "akshare_sina"
+    assert result.errors == ()
+    assert result.data_gaps == ()
+
+
+def test_sina_benchmark_does_not_relabel_latest_row_as_historical():
+    fake = FakeSinaBenchmarkAkshare(latest_date=date(2026, 7, 21))
+    result = _sina_benchmark_adapter(fake).load(as_of=TODAY)
+
+    assert result.benchmark_returns == {}
+    assert result.component_sources["benchmark"] == "unavailable"
+    assert result.data_gaps[0].field == "benchmark_return"
+    assert "date-misaligned" in result.data_gaps[0].reason
+
+
+def test_sina_benchmark_failure_is_structured():
+    result = _sina_benchmark_adapter(
+        FakeSinaBenchmarkAkshare(fail=True)
+    ).load(as_of=TODAY)
+
+    assert result.benchmark_returns == {}
+    assert result.errors[0].operation == "benchmark_daily_sina"
+    assert result.errors[0].attempts == 1
+    assert result.data_gaps[0].field == "benchmark_return"
 
 
 def test_component_fallback_does_not_call_sina_when_em_components_succeed():

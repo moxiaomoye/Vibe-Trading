@@ -202,6 +202,82 @@ class SinaSpotAdapter:
         return ak
 
 
+class SinaBenchmarkAdapter:
+    """Sina CSI300 daily adapter with strict target-date alignment."""
+
+    source = "akshare_sina"
+    benchmark = "000300.SH"
+
+    def __init__(
+        self,
+        *,
+        ak_module: Any | None = None,
+        today: Callable[[], date] = date.today,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._ak_module = ak_module
+        self._today = today
+        self._now = now or (lambda: datetime.now(timezone.utc))
+
+    def load(self, *, as_of: date | None = None) -> PostCloseData:
+        target_date = as_of or self._today()
+        retrieved_at = self._now()
+        errors: list[UpstreamError] = []
+        gaps: list[ProviderDataGap] = []
+        benchmark_returns: dict[str, float] = {}
+        try:
+            frame = self._ak().stock_zh_index_daily(symbol="sh000300")
+        except Exception as exc:
+            errors.append(
+                UpstreamError(
+                    operation="benchmark_daily_sina",
+                    error_type=type(exc).__name__,
+                    message=str(exc)[:200],
+                    attempts=1,
+                    retryable=not isinstance(exc, RuntimeError),
+                )
+            )
+            frame = None
+
+        benchmark_return = _last_daily_return(frame, target_date)
+        if benchmark_return is None:
+            gaps.append(
+                ProviderDataGap(
+                    "benchmark_return",
+                    "Sina benchmark is unavailable or date-misaligned",
+                    target_date,
+                    target_date,
+                )
+            )
+        else:
+            benchmark_returns[self.benchmark] = benchmark_return
+
+        return PostCloseData(
+            source=self.source,
+            source_date=target_date,
+            availability_date=target_date,
+            retrieved_at=retrieved_at,
+            spot_df=pd.DataFrame(),
+            benchmark_returns=benchmark_returns,
+            errors=tuple(errors),
+            data_gaps=tuple(gaps),
+            component_sources={
+                "benchmark": (
+                    self.source if benchmark_returns else "unavailable"
+                )
+            },
+        )
+
+    def _ak(self) -> Any:
+        if self._ak_module is not None:
+            return self._ak_module
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AKShare is unavailable") from exc
+        return ak
+
+
 class ComponentFallbackPostCloseProvider:
     """Merge independently sourced post-close components without all-or-nothing fallback."""
 

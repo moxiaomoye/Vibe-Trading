@@ -26,6 +26,7 @@ from src.value_hunter.post_close_provider import (
     ComponentFallbackPostCloseProvider,
     PostCloseProvider,
     ProviderDataGap,
+    SinaBenchmarkAdapter,
     UpstreamError,
 )
 from src.value_hunter.relative_strength import (
@@ -92,9 +93,12 @@ def run_panic_scan(
     errors: list[str] = []
 
     if panel_data is None:
-        normalized = (provider or ComponentFallbackPostCloseProvider()).load(
-            as_of=as_of
-        )
+        normalized = (
+            provider
+            or ComponentFallbackPostCloseProvider(
+                benchmark_fallback=SinaBenchmarkAdapter()
+            )
+        ).load(as_of=as_of)
         panel_data = normalized.to_panel_data()
     now = panel_data.get("now", datetime.now(timezone.utc))
 
