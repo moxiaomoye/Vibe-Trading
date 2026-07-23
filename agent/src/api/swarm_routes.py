@@ -57,7 +57,7 @@ def register_swarm_routes(
     """
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     if host is None:
         raise RuntimeError(
             "register_swarm_routes: api_server module not in sys.modules; "
@@ -70,11 +70,11 @@ def register_swarm_routes(
         require_event_stream_auth = host.require_event_stream_auth
 
     def _host_validate_path_param(value: str, kind: str) -> None:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         h._validate_path_param(value, kind)
 
     def _host_shell_tools_enabled_for_request(request: Request) -> bool:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._shell_tools_enabled_for_request(request)
 
     # --- Routes ---

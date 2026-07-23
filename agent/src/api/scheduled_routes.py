@@ -58,7 +58,7 @@ async def _dispatch_scheduled_research_job(job) -> None:
     does not wait for that agent run to reach a terminal status. The executor's
     ``COMPLETED`` state for this dispatch path means "successfully enqueued."
     """
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     svc = host._get_session_service()
     if not svc:
         raise RuntimeError("Session runtime not enabled")
@@ -156,7 +156,7 @@ def register_scheduled_routes(
     Resolves ``require_auth`` from the host ``api_server`` module via
     ``sys.modules`` when not passed explicitly.
     """
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
 
     if host is None:
         raise RuntimeError(
@@ -168,7 +168,7 @@ def register_scheduled_routes(
         require_auth = host.require_auth
 
     def _host_validate_path_param(value: str, kind: str) -> None:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         h._validate_path_param(value, kind)
 
     # --- Routes ---

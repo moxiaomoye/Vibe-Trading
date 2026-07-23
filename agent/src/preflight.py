@@ -301,17 +301,20 @@ def run_preflight(console: Optional[Console] = None) -> List[CheckResult]:
             detail = f"{r.message} ({r.impact})"
         table.add_row(icon, f"[{color}]{r.name}[/{color}]", f"[{color}]{detail}[/{color}]")
 
-    console.print()
-    console.print("[bold]Preflight Check[/bold]")
-    console.print(table)
+    try:
+        console.print()
+        console.print("[bold]Preflight Check[/bold]")
+        console.print(table)
 
-    has_critical = any(r.critical and r.status != "ready" for r in results)
-    if has_critical:
-        console.print("\n[bold red]Critical check failed - agent cannot start without a working LLM provider.[/bold red]")
-        console.print("[dim]  See: agent/.env.example for configuration reference[/dim]")
-    else:
-        ready_count = sum(1 for r in results if r.status == "ready")
-        console.print(f"\n[dim]{ready_count}/{len(results)} services ready[/dim]")
+        has_critical = any(r.critical and r.status != "ready" for r in results)
+        if has_critical:
+            console.print("\n[bold red]Critical check failed - agent cannot start without a working LLM provider.[/bold red]")
+            console.print("[dim]  See: agent/.env.example for configuration reference[/dim]")
+        else:
+            ready_count = sum(1 for r in results if r.status == "ready")
+            console.print(f"\n[dim]{ready_count}/{len(results)} services ready[/dim]")
 
-    console.print()
+        console.print()
+    except OSError:
+        pass  # ignore terminal rendering errors (e.g. redirected stderr on Windows)
     return results

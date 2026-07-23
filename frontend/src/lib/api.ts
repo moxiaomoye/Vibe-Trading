@@ -262,6 +262,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ broker }),
     }),
+  getPanicShadowStatus: () =>
+    request<PanicShadowStatusResponse>("/investment-research/panic-shadow/status"),
+  runPanicShadowReport: (body: PanicShadowRunRequestBody) =>
+    request<unknown>("/investment-research/panic-shadow/run", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 export interface ValueHunterIndexObservation {
@@ -1206,4 +1213,36 @@ export interface MessageItem {
   created_at: string;
   linked_attempt_id?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface PanicShadowStatusResponse {
+  enabled: boolean;
+  mode: string;
+  read_only: boolean;
+  explicit_input_only: boolean;
+  persistent: boolean;
+  scheduler_enabled: boolean;
+  notification_enabled: boolean;
+  trading_enabled: boolean;
+  manual_review_required: boolean;
+}
+
+export interface PanicShadowMarketRow {
+  symbol: string;
+  name: string;
+  close: number;
+  change_pct: number;
+  previous_close: number;
+}
+
+export interface PanicShadowRunRequestBody {
+  run_id: string;
+  data_date: string;
+  observed_at: string;
+  information_cutoff: string;
+  data_available_at: string;
+  market_return: number | null;
+  rows: PanicShadowMarketRow[];
+  limit_up_symbols: string[];
+  limit_down_symbols: string[];
 }
