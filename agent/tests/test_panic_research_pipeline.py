@@ -47,6 +47,7 @@ ASSET_ID = "asset-fixture"
 
 
 def _evidence(evidence_id, direction):
+    """Point-in-time evidence fixture with stable hash and timestamps."""
     return Evidence(
         evidence_id=evidence_id,
         provider="fixture",
@@ -61,7 +62,8 @@ def _evidence(evidence_id, direction):
     )
 
 
-def _inputs():
+def _pipeline_inputs():
+    """Complete set of point-in-time fixtures for a panic research pipeline run."""
     evidence = (
         _evidence("support", EvidenceDirection.SUPPORTING),
         _evidence("counter", EvidenceDirection.COUNTER),
@@ -243,7 +245,7 @@ def _inputs():
 
 
 def test_complete_case_builds_existing_opportunity_candidate_and_action_assessment():
-    result = PanicMispricingResearchPipeline().run(**_inputs())
+    result = PanicMispricingResearchPipeline().run(**_pipeline_inputs())
     assert result.candidate is not None
     assert result.assessment is not None
     assert result.assessment.action_level == ActionLevel.ACTION_CANDIDATE
@@ -254,7 +256,7 @@ def test_complete_case_builds_existing_opportunity_candidate_and_action_assessme
 
 
 def test_severe_quality_gap_caps_confidence_and_action_level():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     inputs["quality"] = CompanyQualityEngine().assess(
         asset_id=ASSET_ID,
         observations=(),
@@ -267,7 +269,7 @@ def test_severe_quality_gap_caps_confidence_and_action_level():
 
 
 def test_structural_company_issue_prevents_active_opportunity():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     inputs["permanence"] = PermanenceAssessment(
         "permanence-structural",
         EVIDENCE_SET_ID,
@@ -286,7 +288,7 @@ def test_structural_company_issue_prevents_active_opportunity():
 
 
 def test_rejected_discovery_lead_creates_no_candidate():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     inputs["discovery_lead"] = replace(
         inputs["discovery_lead"],
         disposition=DiscoveryDisposition.REJECTED,
@@ -298,7 +300,7 @@ def test_rejected_discovery_lead_creates_no_candidate():
 
 
 def test_weak_thesis_exposure_cannot_become_active_opportunity():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     inputs["exposure"] = replace(inputs["exposure"], exposure_strength=0.2)
     result = PanicMispricingResearchPipeline().run(**inputs)
     assert result.opportunity_version.status.value == "hypothesis"
@@ -307,7 +309,7 @@ def test_weak_thesis_exposure_cannot_become_active_opportunity():
 
 
 def test_future_evidence_is_rejected():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     future = replace(
         inputs["evidence"][0],
         available_at=NOW + timedelta(minutes=1),
@@ -319,7 +321,7 @@ def test_future_evidence_is_rejected():
 
 
 def test_pipeline_is_deterministic():
-    inputs = _inputs()
+    inputs = _pipeline_inputs()
     first = PanicMispricingResearchPipeline().run(**inputs)
     second = PanicMispricingResearchPipeline().run(**inputs)
     assert first == second

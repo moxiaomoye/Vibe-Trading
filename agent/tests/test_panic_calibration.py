@@ -52,7 +52,8 @@ def _panel(trade_date: date, decline_ratio: float = 0.6, close: float = 100.0):
     }
 
 
-def _outcomes(start: date, count: int = 60, start_price: float = 100.0):
+def _outcome_prices(start: date, count: int = 60, start_price: float = 100.0):
+    """Daily future-price map for calibration outcome windows."""
     return {
         start + timedelta(days=offset): {SYMBOL: start_price + offset}
         for offset in range(1, count + 1)
@@ -84,7 +85,7 @@ def test_multiple_versions_are_preserved_and_compared(tmp_path):
     d = date(2026, 1, 5)
     result = run_panic_calibration(
         generation_panels={d: _panel(d)},
-        outcome_prices=_outcomes(d),
+        outcome_prices=_outcome_prices(d),
         threshold_versions=_versions(),
         watchlist_path=_watchlist(tmp_path),
     )
@@ -99,7 +100,7 @@ def test_returns_use_exact_future_trading_windows(tmp_path):
     d = date(2026, 1, 5)
     result = run_panic_calibration(
         generation_panels={d: _panel(d)},
-        outcome_prices=_outcomes(d),
+        outcome_prices=_outcome_prices(d),
         threshold_versions=[_versions()[0]],
         watchlist_path=_watchlist(tmp_path),
     )
@@ -118,10 +119,10 @@ def test_future_outcomes_cannot_change_candidate_generation(tmp_path):
         "threshold_versions": [_versions()[0]],
         "watchlist_path": _watchlist(tmp_path),
     }
-    rising = run_panic_calibration(outcome_prices=_outcomes(d, start_price=100.0), **args)
+    rising = run_panic_calibration(outcome_prices=_outcome_prices(d, start_price=100.0), **args)
     falling_prices = {
         day: {SYMBOL: 50.0 - index}
-        for index, day in enumerate(_outcomes(d), start=1)
+        for index, day in enumerate(_outcome_prices(d), start=1)
     }
     falling = run_panic_calibration(outcome_prices=falling_prices, **args)
 
@@ -135,7 +136,7 @@ def test_unavailable_window_returns_none_and_data_gap(tmp_path):
     d = date(2026, 1, 5)
     result = run_panic_calibration(
         generation_panels={d: _panel(d)},
-        outcome_prices=_outcomes(d, count=5),
+        outcome_prices=_outcome_prices(d, count=5),
         threshold_versions=[_versions()[0]],
         watchlist_path=_watchlist(tmp_path),
     )
@@ -151,7 +152,7 @@ def test_summary_contains_frequency_distribution_and_coverage(tmp_path):
     d = date(2026, 1, 5)
     result = run_panic_calibration(
         generation_panels={d: _panel(d)},
-        outcome_prices=_outcomes(d, count=20),
+        outcome_prices=_outcome_prices(d, count=20),
         threshold_versions=[_versions()[0]],
         watchlist_path=_watchlist(tmp_path),
     )
@@ -167,7 +168,7 @@ def test_normal_day_has_no_calibration_candidates(tmp_path):
     d = date(2026, 1, 5)
     result = run_panic_calibration(
         generation_panels={d: _panel(d, decline_ratio=0.2)},
-        outcome_prices=_outcomes(d),
+        outcome_prices=_outcome_prices(d),
         threshold_versions=[_versions()[0]],
         watchlist_path=_watchlist(tmp_path),
     )
@@ -181,7 +182,7 @@ def test_repeated_execution_is_deterministic(tmp_path):
     d = date(2026, 1, 5)
     kwargs = {
         "generation_panels": {d: _panel(d)},
-        "outcome_prices": _outcomes(d),
+        "outcome_prices": _outcome_prices(d),
         "threshold_versions": _versions(),
         "watchlist_path": _watchlist(tmp_path),
     }
@@ -206,7 +207,7 @@ def test_invalid_horizons_rejected(tmp_path, horizons):
     with pytest.raises(ValueError):
         run_panic_calibration(
             generation_panels={d: _panel(d)},
-            outcome_prices=_outcomes(d),
+            outcome_prices=_outcome_prices(d),
             threshold_versions=[_versions()[0]],
             watchlist_path=_watchlist(tmp_path),
             horizons=horizons,
@@ -218,7 +219,7 @@ def test_duplicate_threshold_versions_rejected(tmp_path):
     with pytest.raises(ValueError, match="unique"):
         run_panic_calibration(
             generation_panels={d: _panel(d)},
-            outcome_prices=_outcomes(d),
+            outcome_prices=_outcome_prices(d),
             threshold_versions=[_versions()[0], _versions()[0]],
             watchlist_path=_watchlist(tmp_path),
         )
