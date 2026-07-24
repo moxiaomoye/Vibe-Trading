@@ -93,7 +93,7 @@ def check_tushare() -> ConnectivityStatus:
         # Redact anything that looks like a credential before exposing details
         import re as _re
         tb_redacted = _re.sub(r"([A-Za-z0-9+/=_-]{40,})", "<REDACTED>", tb)
-        tb_redacted = _re.sub(r"(sk-[A-Za-z0-9]{20,})", "<API-KEY-REDACTED>", tb_redacted)
+        tb_redacted = _re.sub(r"(sk-[A-Za-z0-9][A-Za-z0-9-]{19,})", "<API-KEY-REDACTED>", tb_redacted)
         status.details = tb_redacted[:200]
 
     except Exception as exc:
