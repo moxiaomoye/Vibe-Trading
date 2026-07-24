@@ -13,9 +13,9 @@
 | Check | Status |
 |-------|--------|
 | Branch | `agent/opencode-release-candidate` |
-| HEAD | `9b16498` |
-| Working tree | Clean |
-| Staging | Empty |
+| HEAD | `c9ddd0a` |
+| Working tree | Dirty (3 new scripts, ledger update) |
+| Staging | scripts/, docs/ |
 | Diff check | Clean |
 
 ## Docker
@@ -29,18 +29,18 @@
 
 ## Current Manual-Run Entry Point
 
-- `scripts/start_market_shadow.ps1` — starts shadow service (exists from Phase A)
-- `scripts/stop_market_shadow.ps1` — MISSING
-- `scripts/verify_market_shadow.ps1` — MISSING
-- `scripts/collect_shadow_diagnostics.ps1` — MISSING
+- `scripts/start_market_shadow.ps1` — starts shadow service on port 8899
+- `scripts/stop_market_shadow.ps1` — stops the shadow service (graceful + force)
+- `scripts/verify_market_shadow.ps1` — checks /live, optional routes, prints URLs & flags
+- `scripts/collect_shadow_diagnostics.ps1` — collects process/port/live/flags/env info
 
 ## Milestone Ledger
 
 | ID | Description | Status | Commit | Tests | Runtime | Blocker |
 |----|-------------|--------|--------|-------|---------|---------|
-| RC0 | Ledger & baseline | done | — | — | — | — |
-| RC1 | Executable acceptance flow | pending | — | — | — | — |
-| RC2 | One-command local release mode | pending | — | — | — | — |
+| RC0 | Ledger & baseline | done | adaaa97 | — | — | — |
+| RC1 | Executable acceptance flow | done | c9ddd0a | 24/24 | 0.8s | — |
+| RC2 | One-command local release mode | done | TBD | — | — | — |
 | RC3 | Complete current-market input modes | pending | — | — | — | — |
 | RC4 | End-to-end manual shadow run | pending | — | — | — | — |
 | RC5 | Local report storage | pending | — | — | — | — |
