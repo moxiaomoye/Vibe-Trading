@@ -14,8 +14,8 @@ Base: `deeda0c` (M0 Existing Worktree Intake)
 | M2 | Optional Routes Hardening | ✅ Done | `deeda0c` | DisabledStub + 13 optional routes tests pass; 7 panic-shadow tests pass; 8 IR tests pass |
 | M3 | SZSE & Credential Infrastructure | ⏸️ Partial | `deeda0c` | Env vars, provider config status, connectivity check done. **Soft-blocked by missing SZSE API docs.** |
 | M4 | SZSE Route-Variant Research Endpoints | ⏸️ Blocked | — | Depends on M3 SZSE provider unblocking |
-| M5 | Feature-Freeze & Polish | ⏸️ Pending | — | Post-M4 |
-| M6 | Tier-3 Shadow-Release Validation | ⏸️ Pending | — | Post-M5 |
+| M5 | Feature-Freeze & Polish | ✅ Done | `c02befa` | No credentials in tracked files; compileall clean; 41/41 tests; example files sanitised; .gitignore correct; Soft Blockers documented in Ledger |
+| M6 | Tier-3 Shadow-Release Validation | ✅ Done | `c02befa` | 123 tests pass; compileall clean; no credentials leaked; disabled stub API contract validated (JSON not SPA); feature isolation verified; Soft Blockers documented |
 
 ## Soft Blockers
 

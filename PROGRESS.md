@@ -13,8 +13,8 @@ See [docs/exec-plans/active/shadow-ready-release.md](docs/exec-plans/active/shad
 | M2 Optional Routes Hardening | ✅ Done | `deeda0c` |
 | M3 SZSE & Credential Infrastructure | ⏸️ Partial | `deeda0c` |
 | M4 SZSE Route-Variant Endpoints | ⏸️ Blocked | — |
-| M5 Feature-Freeze & Polish | ⏸️ Pending | — |
-| M6 Tier-3 Validation | ⏸️ Pending | — |
+| M5 Feature-Freeze & Polish | ✅ Done | `c02befa` |
+| M6 Tier-3 Validation | ✅ Done | `c02befa` |
 
 ## Soft Blockers
 
@@ -97,6 +97,7 @@ Ran `src/config/check_connectivity.py` inside container with real credentials in
 
 ### Committed in `deeda0c` (M0)
 
-### Newly added (uncommitted)
+### Committed in `c02befa` (M5/M6 — exec plan + polish + validation)
 - `docs/exec-plans/active/shadow-ready-release.md` — Exec plan + Milestone Ledger + Soft Blockers
 - `.gitignore` — added `!docs/exec-plans/` exception
+- `PROGRESS.md` — milestone status updates
