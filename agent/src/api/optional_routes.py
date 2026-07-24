@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
@@ -20,7 +19,7 @@ from fastapi import Depends
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
-from src.config.accessor import _parse_bool
+from src.config.accessor import get_env_bool
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ def try_register_routes(
         A ``LoadResult`` whose ``status`` is one of
         ``DISABLED`` / ``LOADED`` / ``FAILED``.
     """
-    if not _parse_bool(os.environ.get(env_var)):
+    if not get_env_bool(env_var):
         logger.debug("Optional feature %r disabled (%s not set)", feature_name, env_var)
         for stub in (disabled_stubs or []):
             _register_stub(app, stub, require_auth)

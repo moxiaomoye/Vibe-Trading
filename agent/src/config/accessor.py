@@ -22,7 +22,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.config.env_schema import EnvConfig
 
-__all__ = ["get_env_config", "reset_env_config", "_parse_bool", "get_env_or"]
+__all__ = [
+    "get_env_bool",
+    "get_env_config",
+    "get_env_or",
+    "get_env_value",
+    "reset_env_config",
+    "_parse_bool",
+]
 
 # ---------------------------------------------------------------------------
 # Module-level singleton state
@@ -105,6 +112,17 @@ def _parse_bool(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in _TRUTHY
+
+
+def get_env_value(name: str, default: str = "") -> str:
+    """Read one environment value through the centralized config boundary."""
+    return os.getenv(name, default)
+
+
+def get_env_bool(name: str, default: bool = False) -> bool:
+    """Read one boolean environment flag through the centralized config boundary."""
+    value = os.getenv(name)
+    return default if value is None else _parse_bool(value)
 
 
 def get_env_or(primary: str, fallback: str, default: str = "") -> str:

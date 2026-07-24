@@ -2,30 +2,27 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.config.accessor import get_env_bool, get_env_value
 from src.config.paths import get_runtime_root
 
 
 def _bool(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return get_env_bool(name, default)
 
 
 def _float(name: str, default: float) -> float:
     try:
-        return float(os.getenv(name, str(default)))
+        return float(get_env_value(name, str(default)))
     except ValueError:
         return default
 
 
 def _int(name: str, default: int) -> int:
     try:
-        return int(os.getenv(name, str(default)))
+        return int(get_env_value(name, str(default)))
     except ValueError:
         return default
 
@@ -53,24 +50,24 @@ class ValueHunterConfig:
     @classmethod
     def from_env(cls) -> "ValueHunterConfig":
         root = get_runtime_root() / "value-hunter"
-        db_value = os.getenv("VALUE_HUNTER_DB_PATH", "").strip()
-        watchlist = os.getenv("VALUE_HUNTER_WATCHLIST_PATH", "").strip()
+        db_value = get_env_value("VALUE_HUNTER_DB_PATH").strip()
+        watchlist = get_env_value("VALUE_HUNTER_WATCHLIST_PATH").strip()
         return cls(
             enabled=_bool("VALUE_HUNTER_ENABLED"),
-            provider=os.getenv("VALUE_HUNTER_PROVIDER", "akshare").strip().lower(),
-            schedule=os.getenv("VALUE_HUNTER_SCHEDULE", "18:10").strip(),
-            timezone=os.getenv("VALUE_HUNTER_TIMEZONE", "Asia/Shanghai").strip(),
+            provider=get_env_value("VALUE_HUNTER_PROVIDER", "akshare").strip().lower(),
+            schedule=get_env_value("VALUE_HUNTER_SCHEDULE", "18:10").strip(),
+            timezone=get_env_value("VALUE_HUNTER_TIMEZONE", "Asia/Shanghai").strip(),
             market_alert_score=_float("VALUE_HUNTER_MARKET_ALERT_SCORE", 70.0),
             candidate_alert_score=_float("VALUE_HUNTER_CANDIDATE_ALERT_SCORE", 75.0),
             max_candidates=max(1, _int("VALUE_HUNTER_MAX_CANDIDATES", 5)),
             database_path=Path(db_value) if db_value else root / "value_hunter.sqlite3",
             watchlist_path=Path(watchlist) if watchlist else None,
-            feishu_webhook_url=os.getenv("VALUE_HUNTER_FEISHU_WEBHOOK", "").strip(),
-            smtp_host=os.getenv("VALUE_HUNTER_SMTP_HOST", "").strip(),
+            feishu_webhook_url=get_env_value("VALUE_HUNTER_FEISHU_WEBHOOK").strip(),
+            smtp_host=get_env_value("VALUE_HUNTER_SMTP_HOST").strip(),
             smtp_port=_int("VALUE_HUNTER_SMTP_PORT", 465),
-            smtp_username=os.getenv("VALUE_HUNTER_SMTP_USERNAME", "").strip(),
-            smtp_password=os.getenv("VALUE_HUNTER_SMTP_PASSWORD", "").strip(),
-            smtp_from=os.getenv("VALUE_HUNTER_SMTP_FROM", "").strip(),
-            email_to=os.getenv("VALUE_HUNTER_EMAIL_TO", "").strip(),
+            smtp_username=get_env_value("VALUE_HUNTER_SMTP_USERNAME").strip(),
+            smtp_password=get_env_value("VALUE_HUNTER_SMTP_PASSWORD").strip(),
+            smtp_from=get_env_value("VALUE_HUNTER_SMTP_FROM").strip(),
+            email_to=get_env_value("VALUE_HUNTER_EMAIL_TO").strip(),
             notify_on_demo=_bool("VALUE_HUNTER_NOTIFY_ON_DEMO"),
         )

@@ -50,7 +50,6 @@ class TestAuthFailure:
     def test_disabled_endpoint_rejects_unauthenticated(self) -> None:
         app = FastAPI()
         app.get("/live")(lambda: {"status": "ok"})
-
         try_register_routes(
             app,
             feature_name="VH",
@@ -192,6 +191,7 @@ class TestSideEffectFreedom:
 
         app = FastAPI()
         app.get("/live")(lambda: {"status": "ok"})
+        before = {m for m in sys.modules if "trading.connector" in m}
 
         try_register_routes(
             app,
@@ -202,7 +202,7 @@ class TestSideEffectFreedom:
             require_auth=lambda: None,
         )
 
-        loaded = {m for m in sys.modules if "trading.connector" in m}
+        loaded = {m for m in sys.modules if "trading.connector" in m} - before
         assert loaded == set(), f"Unexpected trading modules loaded: {loaded}"
 
 

@@ -1,58 +1,23 @@
 <#
 .SYNOPSIS
-    Stop Market Shadow — stop the local shadow API server.
+    Stop the local Trial Release shadow service without deleting data.
 
 .DESCRIPTION
-    Stops the Python process running api_server.py on the configured port.
-    Only stops the shadow service — does not touch Docker or other processes.
-
-.PARAMETER Port
-    Port the shadow server is listening on (default 8899).
-
-.PARAMETER Force
-    Force-kill the process if graceful shutdown fails.
-
-.EXAMPLE
-    .\scripts\stop_market_shadow.ps1
-    .\scripts\stop_market_shadow.ps1 -Port 8898 -Force
+    Stops only the Compose vibe-trading service while preserving containers,
+    named volumes, images, reports, and user data.
 #>
 
-param(
-    [int]$Port = 8899,
-    [switch]$Force
-)
-
 $ErrorActionPreference = "Stop"
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$ComposeFile = Join-Path $ProjectRoot "docker-compose.yml"
 
-# Find python process listening on the given port
-$proc = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
-    Where-Object { $_.OwningProcess -gt 0 } |
-    Select-Object -First 1
-
-if (-not $proc) {
-    Write-Host "No process found listening on port $Port. Nothing to stop." -ForegroundColor Yellow
-    exit 0
-}
-
-$pid = $proc.OwningProcess
-$process = Get-Process -Id $pid -ErrorAction SilentlyContinue
-
-if (-not $process) {
-    Write-Host "Process $pid no longer exists." -ForegroundColor Yellow
-    exit 0
-}
-
-Write-Host "Stopping shadow server (PID $pid) on port $Port ..." -ForegroundColor Yellow
-
-if ($Force) {
-    $process.Kill()
-    Write-Host "Force-stopped." -ForegroundColor Green
-} else {
-    $process.CloseMainWindow() | Out-Null
-    $wait = $process.WaitForExit(5000)
-    if (-not $wait) {
-        Write-Host "Graceful shutdown timed out, force-stopping ..." -ForegroundColor Yellow
-        $process.Kill()
+Push-Location $ProjectRoot
+try {
+    & docker compose --project-directory $ProjectRoot -f $ComposeFile stop vibe-trading
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker Compose failed to stop the shadow service."
     }
-    Write-Host "Shadow server stopped." -ForegroundColor Green
+    Write-Host "Shadow service stopped. Containers, images, volumes, and reports were preserved." -ForegroundColor Green
+} finally {
+    Pop-Location
 }

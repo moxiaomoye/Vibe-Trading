@@ -71,8 +71,42 @@ def test_shadow_routes_are_absent_by_default_and_module_is_lazy(monkeypatch) -> 
     client = TestClient(app)
     assert STATUS_PATH in _paths(app)
     assert API_PATH in _paths(app)
+    assert CURRENT_PATH in _paths(app)
+    assert MANUAL_PATH in _paths(app)
+    assert LATEST_PATH in _paths(app)
     assert client.get(STATUS_PATH).json() == {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}
+    assert client.post(MANUAL_PATH, json={}).json() == {
+        "enabled": False,
+        "status": "disabled",
+        "feature": "panic_shadow",
+        "reason": "feature_not_enabled",
+    }
+    latest = client.get(LATEST_PATH)
+    assert latest.status_code == 404
+    assert latest.headers["content-type"].startswith("application/json")
+    assert latest.json()["status"] == "disabled"
     assert "src.api.panic_shadow_report_routes" not in sys.modules
+
+
+def test_top_level_disabled_routes_return_json_for_browser_endpoints(monkeypatch) -> None:
+    monkeypatch.delenv("INVESTMENT_RESEARCH_ROUTES_ENABLED", raising=False)
+    monkeypatch.delenv("PANIC_SHADOW_REPORT_API_ENABLED", raising=False)
+
+    from src.api.optional_feature_routes import register_optional_feature_routes
+
+    app = FastAPI()
+    register_optional_feature_routes(app, lambda: None)
+    client = TestClient(app)
+
+    manual = client.post(MANUAL_PATH, json={})
+    latest = client.get(LATEST_PATH)
+
+    assert manual.status_code == 404
+    assert manual.headers["content-type"].startswith("application/json")
+    assert manual.json()["status"] == "disabled"
+    assert latest.status_code == 404
+    assert latest.headers["content-type"].startswith("application/json")
+    assert latest.json()["status"] == "disabled"
 
 
 def test_shadow_routes_exist_only_when_child_feature_is_enabled(monkeypatch) -> None:

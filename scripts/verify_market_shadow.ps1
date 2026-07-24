@@ -48,7 +48,6 @@ try {
 # 2. Check optional route status
 Write-Host "[2/4] Checking optional routes ..." -ForegroundColor Yellow
 $optionalEndpoints = @(
-    "/value-hunter/status",
     "/investment-research/status",
     "/investment-research/panic-shadow/status"
 )
@@ -56,7 +55,7 @@ foreach ($ep in $optionalEndpoints) {
     try {
         $resp = Invoke-WebRequest -Uri "${base}${ep}" -TimeoutSec 5 -SkipHttpErrorCheck
         $body = $resp.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
-        $enabled = if ($body.enabled) { "enabled" } else { "disabled" }
+        $enabled = if ($resp.StatusCode -eq 401) { "authentication required" } elseif ($body.enabled) { "enabled" } else { "disabled" }
         $statusColor = if ($body.enabled) { "Green" } else { "DarkYellow" }
         Write-Host "  ${ep}: $enabled" -ForegroundColor $statusColor
     } catch {
@@ -73,9 +72,10 @@ Write-Host "  Health:   ${base}/live" -ForegroundColor Green
 # 4. Show configured booleans (no secrets)
 Write-Host "[4/4] Feature flags (safe booleans only) ..." -ForegroundColor Yellow
 $boolVars = @(
-    "VIBE_TRADING_VALUE_HUNTER_ENABLED",
-    "VIBE_TRADING_INVESTMENT_RESEARCH_ENABLED",
-    "VIBE_TRADING_PANIC_SHADOW_ENABLED"
+    "INVESTMENT_RESEARCH_ROUTES_ENABLED",
+    "PANIC_SHADOW_REPORT_API_ENABLED",
+    "VIBE_TRADING_ENABLE_SCHEDULER",
+    "VIBE_TRADING_CHANNELS_AUTO_START"
 )
 foreach ($var in $boolVars) {
     $val = [Environment]::GetEnvironmentVariable($var)

@@ -1,116 +1,107 @@
 <#
 .SYNOPSIS
-    Start Market Shadow — one-command launcher for the usable market shadow MVP.
+    Start the local Trial Release shadow environment with Docker Compose.
 
 .DESCRIPTION
-    1. Installs akshare (free, no-auth market data) if not present
-    2. Runs the market shadow report with real A-share data
-    3. Starts the API server + frontend on localhost
-    4. Opens the browser
+    Reuses the existing Compose image, temporarily enables only the authenticated
+    Investment Research and Panic Shadow HTTP routes, waits for container health,
+    and opens the browser UI. It does not install packages, build images, start
+    schedulers, send notifications, or enable trading.
 
-    No credentials required.  No notifications sent.  No trades executed.
+.PARAMETER NoBrowser
+    Start and verify the service without opening a browser.
 
-.EXAMPLE
-    .\scripts\start_market_shadow.ps1
-
-    # Run shadow report only (no server):
-    .\scripts\start_market_shadow.ps1 -ShadowOnly
+.PARAMETER WaitSeconds
+    Maximum number of seconds to wait for the container to become healthy.
 #>
 
 param(
-    [switch]$ShadowOnly,
-    [string]$Date = "",
-    [string]$OutputDir = ""
+    [switch]$NoBrowser,
+    [ValidateRange(10, 300)]
+    [int]$WaitSeconds = 120
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$AgentDir = Join-Path $ProjectRoot "agent"
+$ComposeFile = Join-Path $ProjectRoot "docker-compose.yml"
+$FrontendUrl = "http://127.0.0.1:8899/investment-research"
+$LiveUrl = "http://127.0.0.1:8899/live"
 
-Write-Host "=== Market Shadow MVP ===" -ForegroundColor Cyan
-Write-Host ""
-
-# Step 1: Ensure akshare is available
-Write-Host "[1/4] Checking market data dependencies ..." -ForegroundColor Yellow
-python -c "import akshare" 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  Installing akshare (free, no-auth market data library) ..."
-    pip install akshare -q
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to install akshare. Please run: pip install akshare"
-        exit 1
-    }
-    Write-Host "  akshare installed."
-} else {
-    Write-Host "  akshare is available."
-}
-
-# Step 2: Run shadow report
-Write-Host "[2/4] Running market shadow report ..." -ForegroundColor Yellow
-$dateArg = if ($Date) { "--date", $Date } else { @() }
-$outputArg = if ($OutputDir) { "--output-dir", $OutputDir } else { @() }
-
-$reportJson = $null
-$reportMd = $null
-Push-Location $AgentDir
+Push-Location $ProjectRoot
 try {
-    $env:PYTHONPATH = $AgentDir
-    $output = python -m scripts.run_market_shadow @dateArg @outputArg 2>&1
-    $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0) {
-        Write-Host $output -ForegroundColor Red
-        Write-Error "Shadow report failed (exit code: $exitCode)"
-        exit 1
+    & docker compose --project-directory $ProjectRoot -f $ComposeFile config --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker Compose configuration validation failed."
     }
-    Write-Host $output
-    # Extract the JSON and MD paths from output
-    foreach ($line in $output) {
-        if ($line -match "JSON report saved: (.+)") {
-            $reportJson = $Matches[1]
+
+    $imageId = & docker compose --project-directory $ProjectRoot -f $ComposeFile images -q vibe-trading
+    if ($LASTEXITCODE -ne 0 -or -not $imageId) {
+        throw "No existing vibe-trading Compose image was found. Build the reviewed image first with: docker compose build vibe-trading"
+    }
+
+    $overridePath = [System.IO.Path]::Combine(
+        [System.IO.Path]::GetTempPath(),
+        "vibe-trading-shadow-$([guid]::NewGuid().ToString('N')).yml"
+    )
+    @"
+services:
+  vibe-trading:
+    environment:
+      INVESTMENT_RESEARCH_ROUTES_ENABLED: "true"
+      PANIC_SHADOW_REPORT_API_ENABLED: "true"
+      VALUE_HUNTER_ROUTES_ENABLED: "false"
+      VALUE_HUNTER_ENABLED: "false"
+      VIBE_INVESTMENT_RESEARCH_ENABLED: "false"
+      VIBE_TRADING_ENABLE_SCHEDULER: "false"
+      VIBE_TRADING_CHANNELS_AUTO_START: "false"
+      VIBE_RESEARCH_DELIVERY_MODE: "disabled"
+"@ | Set-Content -LiteralPath $overridePath -Encoding utf8
+
+    try {
+        & docker compose --project-directory $ProjectRoot -f $ComposeFile -f $overridePath up -d --no-build vibe-trading
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker Compose failed to start the shadow service."
         }
-        if ($line -match "Markdown report saved: (.+)") {
-            $reportMd = $Matches[1]
+    } finally {
+        Remove-Item -LiteralPath $overridePath -Force -ErrorAction SilentlyContinue
+    }
+
+    $containerId = & docker compose --project-directory $ProjectRoot -f $ComposeFile ps -q vibe-trading
+    if ($LASTEXITCODE -ne 0 -or -not $containerId) {
+        throw "The shadow container was not created."
+    }
+
+    $deadline = (Get-Date).AddSeconds($WaitSeconds)
+    $health = ""
+    do {
+        $health = (& docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" $containerId).Trim()
+        if ($health -eq "healthy") {
+            break
         }
+        if ($health -in @("unhealthy", "exited", "dead")) {
+            throw "The shadow container entered state '$health'."
+        }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+
+    if ($health -ne "healthy") {
+        throw "Timed out waiting for the shadow container to become healthy."
+    }
+
+    $live = Invoke-RestMethod -Uri $LiveUrl -TimeoutSec 10
+    if ($live.status -ne "ok") {
+        throw "The /live endpoint returned an unexpected response."
+    }
+
+    Write-Host "Trial Release shadow environment is healthy." -ForegroundColor Green
+    Write-Host "UI:   $FrontendUrl"
+    Write-Host "Live: $LiveUrl"
+    Write-Host "Provider and Manual Import require the existing Server API key in Web Settings."
+    Write-Host "Scheduler, notification delivery, channel auto-start, and trading remain disabled."
+
+    if (-not $NoBrowser) {
+        Start-Process $FrontendUrl
     }
 } finally {
     Pop-Location
-}
-
-# Step 3: Start API server
-if (-not $ShadowOnly) {
-    Write-Host "[3/4] Starting API server ..." -ForegroundColor Yellow
-    $serverProcess = Start-Process -PassThru -NoNewWindow -FilePath "python" -ArgumentList @(
-        "$AgentDir/api_server.py", "--port", "8899"
-    )
-
-    Write-Host "  API server starting on http://127.0.0.1:8899" -ForegroundColor Green
-    Write-Host "  API docs: http://127.0.0.1:8899/docs" -ForegroundColor Green
-
-    # Step 4: Open report in browser
-    Write-Host "[4/4] Opening report ..." -ForegroundColor Yellow
-    if ($reportMd -and (Test-Path $reportMd)) {
-        Start-Process $reportMd
-    } elseif ($reportJson -and (Test-Path $reportJson)) {
-        Start-Process $reportJson
-    }
-
-    Write-Host ""
-    Write-Host "=== Market Shadow MVP is running ===" -ForegroundColor Green
-    Write-Host "  API:  http://127.0.0.1:8899" -ForegroundColor Green
-    if ($reportMd) { Write-Host "  Report: $reportMd" -ForegroundColor Green }
-    if ($reportJson) { Write-Host "  JSON:   $reportJson" -ForegroundColor Green }
-    Write-Host ""
-    Write-Host "  Endpoints:" -ForegroundColor Cyan
-    Write-Host "  GET  /investment-research/panic-shadow/status" -ForegroundColor Cyan
-    Write-Host "  POST /investment-research/panic-shadow/run    (explicit input only)" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Press Ctrl+C to stop the server." -ForegroundColor Yellow
-
-    $serverProcess.WaitForExit()
-} else {
-    Write-Host "[3-4/4] Skipped (ShadowOnly mode)." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "=== Shadow report complete ===" -ForegroundColor Green
-    if ($reportMd) { Write-Host "  Report: $reportMd" -ForegroundColor Green }
-    if ($reportJson) { Write-Host "  JSON:   $reportJson" -ForegroundColor Green }
 }

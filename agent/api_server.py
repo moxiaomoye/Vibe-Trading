@@ -302,47 +302,9 @@ from src.api.scheduled_routes import (  # noqa: E402, F401
 )
 
 # --- Optional feature routes (lazy-loaded, fault-tolerant) ---
-from src.api.optional_routes import DisabledStub, try_register_routes  # noqa: E402
+from src.api.optional_feature_routes import register_optional_feature_routes  # noqa: E402
 
-try_register_routes(
-    app,
-    feature_name="Value Hunter",
-    env_var="VALUE_HUNTER_ROUTES_ENABLED",
-    module_path="src.api.value_hunter_routes",
-    register_func_name="register_value_hunter_routes",
-    require_auth=require_auth,
-    disabled_stubs=[
-        DisabledStub("/value-hunter/status", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
-        DisabledStub("/value-hunter/history", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
-        DisabledStub("/value-hunter/run", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
-    ],
-)
-
-try_register_routes(
-    app,
-    feature_name="Investment Research",
-    env_var="INVESTMENT_RESEARCH_ROUTES_ENABLED",
-    module_path="src.api.investment_research_routes",
-    register_func_name="register_investment_research_routes",
-    require_auth=require_auth,
-    disabled_stubs=[
-        DisabledStub("/investment-research/status", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/theses", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/theses/{thesis_id}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/theses/{thesis_id}/versions", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/theses/{thesis_id}/initialization", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/evidence-inbox", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/evidence-associations", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/evidence-readiness", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/reviews", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/daily/{report_date}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/daily-research/{report_date}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/discovery-leads", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/panic-shadow/status", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
-        DisabledStub("/investment-research/panic-shadow/run-current", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
-    ],
-)
+register_optional_feature_routes(app, require_auth)
 
 
 # ============================================================================

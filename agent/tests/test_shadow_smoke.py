@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,17 +19,20 @@ from src.investment_research.operations.manual_import import parse_manual_import
 from src.value_hunter.watchlist_loader import DEFAULT_WATCHLIST_PATH
 
 
+SMOKE_DATE = date(2026, 7, 20)
+SMOKE_NOW = datetime(2026, 7, 20, 10, 30, tzinfo=timezone.utc)
+
+
 def _make_runner() -> PanicResearchShadowRunner:
     return PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
 
 
 def _make_request(data_date: date | None = None) -> OrchestrationRequest:
-    now = datetime.now(timezone.utc)
     return OrchestrationRequest(
         run_id="smoke-test",
-        now=now,
-        data_date=data_date or date.today(),
-        data_available_at=now,
+        now=SMOKE_NOW,
+        data_date=data_date or SMOKE_DATE,
+        data_available_at=SMOKE_NOW,
     )
 
 
@@ -37,7 +40,7 @@ def _make_inputs(panel_data: dict[str, Any]) -> ShadowRunInputs:
     return ShadowRunInputs(
         panel_data=panel_data,
         watchlist_path=str(DEFAULT_WATCHLIST_PATH),
-        information_cutoff=datetime.now(timezone.utc) + timedelta(hours=1),
+        information_cutoff=SMOKE_NOW,
         candidates=(),
     )
 
@@ -53,14 +56,15 @@ class TestFixtureSmoke:
             "最新价": [12.5, 8.0],
             "涨跌幅": [1.5, -2.3],
             "昨收": [12.3, 8.2],
+            "成交量": [1000.0, 2000.0],
         })
         panel_data = {
             "spot_df": spot_df,
             "limit_up_symbols": set(),
             "limit_down_symbols": set(),
-            "data_date": date.today(),
-            "availability_date": date.today(),
-            "now": datetime.now(timezone.utc),
+            "data_date": SMOKE_DATE,
+            "availability_date": SMOKE_DATE,
+            "now": SMOKE_NOW,
             "market_change_pct": None,
             "source": "fixture",
             "component_sources": {"spot": "fixture"},
@@ -85,8 +89,8 @@ class TestManualImportSmoke:
         return {
             "schema_version": "1.0",
             "source": "manual_import",
-            "source_date": date.today().isoformat(),
-            "availability_time": datetime.now(timezone.utc).isoformat(),
+            "source_date": SMOKE_DATE.isoformat(),
+            "availability_time": SMOKE_NOW.isoformat(),
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
                 {"symbol": "000002", "name": "万科A", "close": 8.0, "previous_close": 8.1, "change_percent": -1.23},
@@ -108,6 +112,7 @@ class TestManualImportSmoke:
                 "最新价": row.close,
                 "昨收": row.previous_close,
                 "涨跌幅": row.change_percent,
+                "成交量": row.volume or 0.0,
             })
         spot_df = pd.DataFrame(spot_rows)
 
