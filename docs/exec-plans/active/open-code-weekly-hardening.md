@@ -13,7 +13,7 @@
 | Check | Status |
 |-------|--------|
 | Branch | `agent/opencode-weekly-hardening` |
-| HEAD | `040fd4f` |
+| HEAD | `e61a397` |
 | Working tree | Clean |
 | Staging | Empty |
 | Diff check | Clean |
@@ -30,9 +30,9 @@
 | W5 | Provider failure/fallback matrix | done | `040fd4f` | 12 | Fake providers (successful/empty/slow/timeout); idempotence; invalid input rejection. Module-level SlowFakeProvider for multiprocessing pickle. | — |
 | W6 | Shadow report evidence completeness matrix | done | `040fd4f` | 9 | ResearchProviderAdapter with all provider states; mixed combinations; data_gap population | — |
 | W7 | Frontend state & usability hardening | skipped | — | — | No frontend tooling available; documented for GPT-5.6 | — |
-| W8 | Safe diagnostic & verification scripts | done | _pending_ | — | `scripts/diagnose_providers.py` — 8 provider scenarios, provenance/observation diagnostics, JSON output | — |
-| W9 | Report readability & human review quality | done | _pending_ | 10 | `render_text` no None/repr/traceback; disclaimer; empty-candidate msg; `render_verdict` pass/fail/warn structure | — |
-| W10 | Bounded performance measurement | done | _pending_ | — | `scripts/measure_provider_perf.py` — 6 scenarios, 3 trials each, wall-clock timing | — |
+| W8 | Safe diagnostic & verification scripts | done | `5ca60d3` | — | `scripts/diagnose_providers.py` — 8 provider scenarios, provenance/observation diagnostics, JSON output | — |
+| W9 | Report readability & human review quality | done | `5ca60d3` | 10 | `render_text` no None/repr/traceback; disclaimer; empty-candidate msg; `render_verdict` pass/fail/warn structure | — |
+| W10 | Bounded performance measurement | done | `5ca60d3` | — | `scripts/measure_provider_perf.py` — 6 scenarios, 3 trials each, wall-clock timing | — |
 | W11 | Documentation consistency audit | done | — | — | AGENTS.md missing; CONSTITUTION at docs/architecture/ (not docs/). README.md points to wiki/AI_INVESTMENT_RESEARCHER.md (summary) vs constitution (canonical). No docs/README.md. handoff/ absent (expected for W13). | — |
 | W12 | TODO/Stub/Risk inventory | done | — | — | 11 TODOs (heavy in live/runtime/), 94 bare pass stubs (67 files, esp trading/connectors/ and channels/), 27 Ellipsis (all abstract protocols — OK), 108 risk markers, 27 abstract interface stubs, 242 provider error taxonomies. No raise NotImplementedError. | — |
 | W13 | Release evidence pack & handoff | done | — | — | Handoff pack created at D:\AIStock\handoff\Vibe-Trading_Weekly_Hardening_Handoff.md; covers all 13 milestones, source fixes, W11+W12 inventory, known gaps | — |
