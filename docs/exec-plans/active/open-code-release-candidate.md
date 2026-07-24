@@ -42,8 +42,8 @@
 | RC1 | Executable acceptance flow | done | c9ddd0a | 24/24 | 0.8s | — |
 | RC2 | One-command local release mode | done | d8ce65d | — | — | — |
 | RC3 | Complete current-market input modes | done | 6441e3f | 14 tests | 0.2s | — |
-| RC4 | End-to-end manual shadow run | pending | — | — | — | — |
-| RC5 | Local report storage | pending | — | — | — | — |
+| RC4 | End-to-end manual shadow run | done | db1120e | — | — | — |
+| RC5 | Local report storage | done | da08e34 | 8 tests | 0.2s | — |
 | RC6 | Frontend completion | pending | — | — | — | — |
 | RC7 | Smoke validation | pending | — | — | — | — |
 | RC8 | Bounded feedback workflow | pending | — | — | — | — |
