@@ -61,6 +61,7 @@ data/backup/
 # Internal docs (plans, specs)
 docs/
 !docs/architecture/
+!docs/exec-plans/
 !docs/PROJECT_VISION.md
 !wiki/docs/
 !wiki/docs/**
