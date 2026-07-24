@@ -143,6 +143,97 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
             reasons=list(result.reasons),
         )
 
+    @app.post("/investment-research/panic-shadow/run-current", dependencies=dependencies)
+    def run_current_shadow_report():
+        import akshare as ak
+        from datetime import timedelta
+
+        observed_at = datetime.now()
+        trade_date = date.today()
+        information_cutoff = observed_at + timedelta(hours=1)
+
+        try:
+            spot = ak.stock_zh_a_spot()
+            source = "sina"
+        except Exception:
+            try:
+                spot = ak.stock_zh_a_spot_em()
+                source = "eastmoney"
+            except Exception:
+                return _error(503, "data_unavailable", "All spot sources unavailable")
+
+        if spot is None or spot.empty:
+            return _error(503, "data_unavailable", "Spot data is empty")
+
+        spot_df = spot.copy()
+        code_col = "代码"
+        if code_col in spot_df.columns:
+            raw = spot_df[code_col].astype(str).str.strip()
+            spot_df[code_col] = raw.str.replace(r"^sh(\d{6})$", r"\1.SH", regex=True)
+            spot_df[code_col] = spot_df[code_col].str.replace(r"^sz(\d{6})$", r"\1.SZ", regex=True)
+            spot_df[code_col] = spot_df[code_col].str.replace(r"^bj(\d{6})$", r"\1.BJ", regex=True)
+
+        limit_up: set[str] = set()
+        limit_down: set[str] = set()
+        if code_col in spot_df.columns and "涨跌幅" in spot_df.columns:
+            up_mask = spot_df["涨跌幅"].astype(float) >= 9.8
+            down_mask = spot_df["涨跌幅"].astype(float) <= -9.8
+            limit_up = set(spot_df.loc[up_mask, code_col].astype(str).str.strip())
+            limit_down = set(spot_df.loc[down_mask, code_col].astype(str).str.strip())
+
+        panel_data = {
+            "spot_df": spot_df,
+            "limit_up_symbols": limit_up,
+            "limit_down_symbols": limit_down,
+            "data_date": trade_date,
+            "availability_date": trade_date,
+            "now": information_cutoff,
+            "market_change_pct": None,
+            "source": source,
+            "component_sources": {"spot": source, "benchmark": "unavailable"},
+            "provider_errors": [],
+            "data_gaps": [],
+        }
+        from src.value_hunter.post_close_provider import _compute_limit_pools_from_spot
+        try:
+            pools = _compute_limit_pools_from_spot(spot_df, trade_date)
+            if pools and isinstance(pools, dict):
+                panel_data["limit_up_symbols"] = set(pools.get("limit_up_symbols", []))
+                panel_data["limit_down_symbols"] = set(pools.get("limit_down_symbols", []))
+                panel_data["market_change_pct"] = pools.get("market_change_pct")
+        except Exception:
+            pass
+
+        run_id = f"shadow-{trade_date.isoformat()}-current-{observed_at.strftime('%H%M%S')}"
+        inputs = ShadowRunInputs(
+            panel_data=panel_data,
+            watchlist_path=str(DEFAULT_WATCHLIST_PATH),
+            information_cutoff=information_cutoff,
+            candidates=(),
+        )
+        request = OrchestrationRequest(
+            run_id=run_id,
+            now=observed_at,
+            data_date=trade_date,
+            data_available_at=observed_at,
+        )
+        runner = PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
+        result = runner.run(request, inputs)
+
+        if result.status == OrchestrationStatus.SUCCEEDED and result.output is not None:
+            report = result.output.to_dict()
+            report["shadow_run"] = True
+            report["manual_review_required"] = True
+            report["data_source"] = source
+            report["input_mode"] = "provider"
+            return report
+        return _error(
+            500 if result.status == OrchestrationStatus.FAILED else 422,
+            f"shadow_run_{result.status.value}",
+            "shadow report execution failed; core application remains available",
+            reasons=list(result.reasons),
+        )
+
 
 def _execute(payload: ShadowReportRunRequest):
     panel_data = {

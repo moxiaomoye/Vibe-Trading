@@ -340,6 +340,7 @@ try_register_routes(
         DisabledStub("/investment-research/discovery-leads", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
         DisabledStub("/investment-research/panic-shadow/status", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}),
         DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
+        DisabledStub("/investment-research/panic-shadow/run-current", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
     ],
 )
 

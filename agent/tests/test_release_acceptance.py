@@ -83,6 +83,27 @@ class TestDefaultOffMode:
     def test_no_scheduler_imported(self) -> None:
         assert "scheduler" not in sys.modules or True
 
+    def test_run_current_disabled(self) -> None:
+        app = FastAPI()
+        try_register_routes(
+            app,
+            feature_name="PS",
+            env_var="VIBE_TRADING_PANIC_SHADOW_ENABLED",
+            module_path="src.api.panic_shadow_report_routes",
+            register_func_name="register_panic_shadow_report_routes",
+            require_auth=lambda: None,
+            disabled_stubs=[
+                DisabledStub("/investment-research/panic-shadow/run-current",
+                             {"enabled": False, "feature": "panic_shadow"},
+                             methods={"POST"}, status_code=404),
+            ],
+        )
+        client = TestClient(app)
+        resp = client.post("/investment-research/panic-shadow/run-current", json={})
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body.get("enabled") is False
+
 
 # ── Enabled shadow mode ─────────────────────────────────────────────────────
 
