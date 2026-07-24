@@ -27,6 +27,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run market shadow report")
     parser.add_argument("--date", type=str, default=None, help="Trade date (YYYY-MM-DD, default: today)")
     parser.add_argument("--output-dir", type=str, default=None, help="Output directory (default: agent/data/)")
+    parser.add_argument("--mode", choices=["provider", "manual"], default="provider",
+                        help="Input mode: provider (live data) or manual (import file)")
+    parser.add_argument("--input-file", type=str, default=None,
+                        help="Path to manual import JSON file (required when --mode=manual)")
     return parser.parse_args(argv)
 
 
@@ -166,31 +170,49 @@ def run():
     output_dir = Path(args.output_dir) if args.output_dir else Path(__file__).resolve().parents[1] / "data"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    run_id = f"shadow-{trade_date.isoformat()}-manual"
+    run_id = f"shadow-{trade_date.isoformat()}-{args.mode}"
     observed_at = datetime.now(timezone.utc)
     information_cutoff = observed_at + timedelta(hours=1)
     data_available_at = observed_at
 
-    logger.info("Loading market data for %s ...", trade_date.isoformat())
-
-    # Step 1: Fetch spot data
-    spot_df, spot_date, source = _fetch_spot_data()
-    if spot_df.empty:
-        logger.warning("Spot data is empty — report will reflect data gaps")
-
-    # Step 2: Fetch benchmark (try today first, then yesterday)
-    benchmark_return = _fetch_benchmark(trade_date)
-    if benchmark_return is None:
-        prev = trade_date - timedelta(days=1)
-        while prev.weekday() >= 5:
-            prev -= timedelta(days=1)
-        benchmark_return = _fetch_benchmark(prev)
-        if benchmark_return is None:
-            logger.warning("Benchmark return unavailable — report will reflect data gap")
-        else:
-            logger.info("Benchmark CSI300 return (from %s): %+f%%", prev, benchmark_return * 100)
+    if args.mode == "manual":
+        if not args.input_file:
+            logger.error("--input-file is required when --mode=manual")
+            sys.exit(1)
+        from src.investment_research.operations.manual_import import parse_manual_import_json, row_to_panel_entry
+        result = parse_manual_import_json(args.input_file)
+        if result.errors:
+            for e in result.errors:
+                logger.error("Import error: %s", e)
+            logger.error("Accepted %d, rejected %d rows", result.accepted_count, result.rejected_count)
+            sys.exit(1)
+        source = "manual_import"
+        spot_rows = [row_to_panel_entry(r) for r in result.rows]
+        spot_df = pd.DataFrame(spot_rows)
+        source_date = result.source_date
+        benchmark_return = result.rows[0].benchmark if result.rows else None
+        logger.info("Manual import: %d rows from %s", len(spot_rows), result.source_date)
     else:
-        logger.info("Benchmark CSI300 return: %+f%%", benchmark_return * 100)
+        logger.info("Loading market data for %s ...", trade_date.isoformat())
+
+        # Step 1: Fetch spot data
+        spot_df, source_date, source = _fetch_spot_data()
+        if spot_df.empty:
+            logger.warning("Spot data is empty — report will reflect data gaps")
+
+        # Step 2: Fetch benchmark (try today first, then yesterday)
+        benchmark_return = _fetch_benchmark(trade_date)
+        if benchmark_return is None:
+            prev = trade_date - timedelta(days=1)
+            while prev.weekday() >= 5:
+                prev -= timedelta(days=1)
+            benchmark_return = _fetch_benchmark(prev)
+            if benchmark_return is None:
+                logger.warning("Benchmark return unavailable — report will reflect data gap")
+            else:
+                logger.info("Benchmark CSI300 return (from %s): %+f%%", prev, benchmark_return * 100)
+        else:
+            logger.info("Benchmark CSI300 return: %+f%%", benchmark_return * 100)
 
     # Step 3: Build panel_data
     panel_data = _build_panel_data(spot_df, trade_date, source, benchmark_return)
