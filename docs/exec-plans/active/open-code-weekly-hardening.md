@@ -35,7 +35,7 @@
 | W10 | Bounded performance measurement | done | _pending_ | — | `scripts/measure_provider_perf.py` — 6 scenarios, 3 trials each, wall-clock timing | — |
 | W11 | Documentation consistency audit | done | — | — | AGENTS.md missing; CONSTITUTION at docs/architecture/ (not docs/). README.md points to wiki/AI_INVESTMENT_RESEARCHER.md (summary) vs constitution (canonical). No docs/README.md. handoff/ absent (expected for W13). | — |
 | W12 | TODO/Stub/Risk inventory | done | — | — | 11 TODOs (heavy in live/runtime/), 94 bare pass stubs (67 files, esp trading/connectors/ and channels/), 27 Ellipsis (all abstract protocols — OK), 108 risk markers, 27 abstract interface stubs, 242 provider error taxonomies. No raise NotImplementedError. | — |
-| W13 | Release evidence pack & handoff | pending | — | — | — | — |
+| W13 | Release evidence pack & handoff | done | — | — | Handoff pack created at D:\AIStock\handoff\Vibe-Trading_Weekly_Hardening_Handoff.md; covers all 13 milestones, source fixes, W11+W12 inventory, known gaps | — |
 
 ## Known Gaps (for GPT-5.6)
 
