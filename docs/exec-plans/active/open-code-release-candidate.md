@@ -44,11 +44,11 @@
 | RC3 | Complete current-market input modes | done | 6441e3f | 14 tests | 0.2s | — |
 | RC4 | End-to-end manual shadow run | done | db1120e | — | — | — |
 | RC5 | Local report storage | done | da08e34 | 8 tests | 0.2s | — |
-| RC6 | Frontend completion | pending | — | — | — | — |
-| RC7 | Smoke validation | pending | — | — | — | — |
-| RC8 | Bounded feedback workflow | pending | — | — | — | — |
-| RC9 | Final automated validation | pending | — | — | — | — |
-| RC10 | User guide | pending | — | — | — | — |
+| RC6 | Frontend completion | skipped | — | — | — | No frontend tooling (same as W7) |
+| RC7 | Smoke validation | done | b9583c1 | 2/3 smoke | 0.3s | 1 skipped (needs network) |
+| RC8 | Bounded feedback workflow | done | 0827b21 | 7 tests | 0.2s | — |
+| RC9 | Final automated validation | done | — | 109/110 | 2.9s | 1 skipped (provider needs network) |
+| RC10 | User guide | done | pending | — | — | — |
 | RC11 | Freeze and GPT-5.6 handoff | pending | — | — | — | — |
 
 ## Known Gaps (carried forward)
