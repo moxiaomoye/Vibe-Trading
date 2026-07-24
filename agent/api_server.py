@@ -314,7 +314,7 @@ try_register_routes(
     disabled_stubs=[
         DisabledStub("/value-hunter/status", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
         DisabledStub("/value-hunter/history", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
-        DisabledStub("/value-hunter/run", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}, methods={"POST"}),
+        DisabledStub("/value-hunter/run", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
     ],
 )
 
@@ -339,7 +339,7 @@ try_register_routes(
         DisabledStub("/investment-research/daily-research/{report_date}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
         DisabledStub("/investment-research/discovery-leads", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
         DisabledStub("/investment-research/panic-shadow/status", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}),
-        DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}),
+        DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
     ],
 )
 

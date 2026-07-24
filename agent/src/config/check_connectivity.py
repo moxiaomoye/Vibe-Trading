@@ -90,7 +90,11 @@ def check_tushare() -> ConnectivityStatus:
             status.permission_denied = True
         else:
             status.upstream_unavailable = True
-        status.details = tb[:200]
+        # Redact anything that looks like a credential before exposing details
+        import re as _re
+        tb_redacted = _re.sub(r"([A-Za-z0-9+/=_-]{40,})", "<REDACTED>", tb)
+        tb_redacted = _re.sub(r"(sk-[A-Za-z0-9]{20,})", "<API-KEY-REDACTED>", tb_redacted)
+        status.details = tb_redacted[:200]
 
     except Exception as exc:
         msg = str(exc)

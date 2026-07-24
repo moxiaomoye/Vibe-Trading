@@ -36,6 +36,7 @@ agent/.ui_runtime/
 agent/.tasks/
 agent/uploads/
 agent/tests/*_result.json
+agent/data/
 .ruff_cache/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
