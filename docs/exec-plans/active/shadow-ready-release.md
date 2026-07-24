@@ -2,8 +2,8 @@
 
 ## Status
 
-Branch: `agent/opencode-shadow-ready`
-Base: `deeda0c` (M0 Existing Worktree Intake)
+Phase A branch: `agent/opencode-shadow-ready` (43bc416)
+Phase B branch: `agent/opencode-phase-b-contracts` (d9ca57b)
 
 ## Milestone Ledger
 
@@ -17,6 +17,20 @@ Base: `deeda0c` (M0 Existing Worktree Intake)
 | M5 | Feature-Freeze & Polish | ✅ Done | `80f7425` | No credentials in tracked files; compileall clean; 41/41 tests; example files sanitised; .gitignore correct; Soft Blockers documented in Ledger |
 | M6 | Tier-3 Shadow-Release Validation | ✅ Done | `80f7425` | 123 tests pass; compileall clean; no credentials leaked; disabled stub API contract validated (JSON not SPA); feature isolation verified; Soft Blockers documented |
 
+## Phase B — Data Contracts & Historical Evaluation (post-A)
+
+Phase B branch: `agent/opencode-phase-b-contracts` (d9ca57b)
+
+| Milestone | Description | Status | Commit | Notes |
+|-----------|------------|--------|--------|-------|
+| B1 | Point-in-Time Financial Provider Contract | ✅ Done | `f6fc634` | `PointInTimeFinancialRecord`, `FinancialProviderProtocol`, `FixtureFinancialProvider`, 3 error-state providers, 16 tests |
+| B2 | Point-in-Time Event Provider Contract | ✅ Done | `14c0840` | `PointInTimeEventRecord` with occurrence/publication/availability separation, `EventProviderProtocol`, `FixtureEventProvider`, `FixtureRestatementEventProvider`, 18 tests |
+| B3 | Asset/Issuer/Security Identity Mapping | ✅ Done | `b00b3fe` | `Issuer` + `SecurityIdentity` with exchange/board/ST/listing, `IdentityProviderProtocol`, `FixtureIdentityProvider`, 24 tests |
+| B4 | Historical Sector Membership Contract | ✅ Done | `645f1ad` | `SectorMembershipRecord`, `SectorMembershipProviderProtocol`, `FixtureSectorMembershipProvider`, `CurrentMembershipBackfillGuardProvider`, 15 tests |
+| B5 | Low-Risk Provider Integration Adapter | ✅ Done | `e67b323` | `ResearchProviderAdapter` bridging B1-B4 into `ResearchProviderContext` with `Provenance` labels, 18 tests |
+| B6 | Bounded Historical Evaluation Input Format | ✅ Done | `d9ca57b` | `HistoricalInputValidator` with schema versioning, future/duplicate/malformed rejection, `HistoricalInputSet`/`HistoricalImportReport`, 8 tests |
+| B7 | Documentation & Ledger Update | ✅ Done | — | Exec plan ledger, PROGRESS.md, handoff docs |
+
 ## Phase A — Usable Market Shadow MVP
 
 | Milestone | Description | Status | Notes |
@@ -27,13 +41,14 @@ Base: `deeda0c` (M0 Existing Worktree Intake)
 | A3 | Manual shadow run → JSON/Markdown report | ✅ Done | Verified: panic scan (panic), watchlist (20/20 matched), reports saved to `agent/data/` |
 | A4 | Docker + browser auto-acceptance test | ⏸️ Deferred | Not required for MVP; manual `start_market_shadow.ps1` suffices |
 
-Known Phase A limitations (Phase B items):
+Known limitations (carried forward from Phase A):
 - `agent/data/` output directory added to `.gitignore`
 - 3 report-level data gaps (broad_index_drawdown, index_long_trend, turnover_stress) — need historical data
-- Per-symbol sector data gaps — need sector mapping
+- Per-symbol sector data gaps — need sector membership provider connected
 - Research candidates = 0 when regime != PANIC — expected scheduler gate behaviour
-
-Phase B (post-A): point-in-time financial provider contracts, announcement/event contracts, asset/issuer identity mapping, historical attribution, small-scale historical validation.
+- All B1-B4 providers are fixture-only; real financial/event/identity/sector providers not implemented (blocked by SZSE/Tushare API access)
+- SZSE Provider: soft-blocked by missing API documentation
+- Tushare: soft-blocked by permission_denied on probe endpoints
 
 ## Soft Blockers
 
@@ -78,4 +93,4 @@ Phase B (post-A): point-in-time financial provider contracts, announcement/event
 - M0 commit `deeda0c` merged all work into a single intake commit. No uncommitted changes to split.
 - All M1/M2 tests pass. Ledger marked done for those milestones.
 - M3 is partial — infrastructure done, provider implementation soft-blocked.
-- Continue with any pending Milestone whose dependencies are satisfied.
+- Phase B complete. Next: freeze workspace, generate GPT-5.6 handoff documents.

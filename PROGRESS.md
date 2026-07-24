@@ -15,6 +15,14 @@ See [docs/exec-plans/active/shadow-ready-release.md](docs/exec-plans/active/shad
 | M4 SZSE Route-Variant Endpoints | ⏸️ Blocked | — |
 | M5 Feature-Freeze & Polish | ✅ Done | `c02befa` |
 | M6 Tier-3 Validation | ✅ Done | `c02befa` |
+| Phase A — Usable Market Shadow MVP | ✅ Done | `43bc416` |
+| B1 — Financial Provider Contract | ✅ Done | `f6fc634` |
+| B2 — Event Provider Contract | ✅ Done | `14c0840` |
+| B3 — Asset Identity Mapping | ✅ Done | `b00b3fe` |
+| B4 — Sector Membership Contract | ✅ Done | `645f1ad` |
+| B5 — Provider Integration Adapter | ✅ Done | `e67b323` |
+| B6 — Historical Input Validator | ✅ Done | `d9ca57b` |
+| B7 — Documentation & Ledger Update | ✅ Done | — |
 
 ## Soft Blockers
 
