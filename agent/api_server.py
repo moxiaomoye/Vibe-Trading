@@ -151,10 +151,6 @@ from src.api.scheduled_routes import (  # noqa: E402
     _start_scheduled_research_executor,
     _stop_scheduled_research_executor,
 )
-from src.api.value_hunter_routes import (  # noqa: E402
-    start_value_hunter,
-    stop_value_hunter,
-)
 
 
 @app.on_event("startup")
@@ -164,7 +160,6 @@ async def _run_startup_preflight() -> None:
 
     run_preflight(console)
     _start_scheduled_research_executor()
-    start_value_hunter()
     from src.config.accessor import get_env_config
 
     if get_env_config().agent_tuning.vibe_trading_channels_auto_start:
@@ -175,7 +170,6 @@ async def _run_startup_preflight() -> None:
 async def _stop_scheduled_research_on_shutdown() -> None:
     """Stop the scheduled research executor on server shutdown."""
     await _stop_channel_runtime()
-    await stop_value_hunter()
     await _stop_scheduled_research_executor()
 
 
@@ -298,14 +292,6 @@ register_auth_routes(app)
 from src.api.scheduled_routes import register_scheduled_routes  # noqa: E402
 register_scheduled_routes(app)
 
-# --- Value Hunter: A-share panic and technology research candidates ---
-from src.api.value_hunter_routes import register_value_hunter_routes  # noqa: E402
-register_value_hunter_routes(app, require_auth)
-
-# --- AI Investment Researcher V2: read-only shadow research surface ---
-from src.api.investment_research_routes import register_investment_research_routes  # noqa: E402
-register_investment_research_routes(app, require_auth)
-
 from src.api.scheduled_routes import (  # noqa: E402, F401
     CreateScheduledRunRequest,
     ScheduledRunResponse,
@@ -313,6 +299,49 @@ from src.api.scheduled_routes import (  # noqa: E402, F401
     _get_scheduled_research_executor,
     _get_scheduled_research_store,
     _scheduled_research_scheduler_enabled,
+)
+
+# --- Optional feature routes (lazy-loaded, fault-tolerant) ---
+from src.api.optional_routes import DisabledStub, try_register_routes  # noqa: E402
+
+try_register_routes(
+    app,
+    feature_name="Value Hunter",
+    env_var="VALUE_HUNTER_ROUTES_ENABLED",
+    module_path="src.api.value_hunter_routes",
+    register_func_name="register_value_hunter_routes",
+    require_auth=require_auth,
+    disabled_stubs=[
+        DisabledStub("/value-hunter/status", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
+        DisabledStub("/value-hunter/history", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}),
+        DisabledStub("/value-hunter/run", {"enabled": False, "status": "disabled", "feature": "value_hunter", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
+    ],
+)
+
+try_register_routes(
+    app,
+    feature_name="Investment Research",
+    env_var="INVESTMENT_RESEARCH_ROUTES_ENABLED",
+    module_path="src.api.investment_research_routes",
+    register_func_name="register_investment_research_routes",
+    require_auth=require_auth,
+    disabled_stubs=[
+        DisabledStub("/investment-research/status", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/theses", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/theses/{thesis_id}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/theses/{thesis_id}/versions", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/theses/{thesis_id}/initialization", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/evidence-inbox", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/evidence-associations", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/evidence-readiness", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/reviews", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/daily/{report_date}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/daily-research/{report_date}", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/discovery-leads", {"enabled": False, "status": "disabled", "feature": "investment_research", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/panic-shadow/status", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}),
+        DisabledStub("/investment-research/panic-shadow/run", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
+        DisabledStub("/investment-research/panic-shadow/run-current", {"enabled": False, "status": "disabled", "feature": "panic_shadow", "reason": "feature_not_enabled"}, methods={"POST"}, status_code=404),
+    ],
 )
 
 

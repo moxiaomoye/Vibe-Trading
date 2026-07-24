@@ -17,10 +17,17 @@ Two independent concerns live here:
    Promoted from the swarm worker's private copies (#142) so
    the swarm worker, the live-action audit, the main agent loop, and the
    paper-trading surfaces all consume one shared implementation.
+
+3. ``_redact_string`` — pattern-based string-level credential redaction that
+   catches inline ``key=value`` patterns and ``sk-`` tokens inside free-text
+   error messages, detail fields, and other string values that the key-based
+   dict walk cannot reach.  Applied automatically by ``redact_payload`` to
+   every leaf string value.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import sysconfig
 from functools import cache
@@ -177,6 +184,44 @@ def is_sensitive_arg(name: str) -> bool:
     )
 
 
+#: Patterns for inline credential values inside free-text strings.
+#: Used by :func:`_redact_string` to catch ``key=value`` patterns and
+#: ``sk-`` prefixed tokens that the key-based dict walk cannot reach.
+_STRING_CREDENTIAL_RE = re.compile(
+    r"(?:"
+    r"((?:api_key|token|access_token|secret)\s*=\s*)\S+"
+    r"|"
+    r"(Authorization\s*:\s*Bearer\s+)\S+"
+    r"|"
+    r"(sk-[A-Za-z0-9][A-Za-z0-9-]{19,})"
+    r")",
+    re.IGNORECASE,
+)
+
+_REDACTED_STR = "<redacted>"
+
+
+def _redact_string(s: str) -> str:
+    """Replace inline credential patterns in a string with a sentinel.
+
+    Handles:
+    * ``api_key=...``, ``token=...``, ``access_token=...``, ``secret=...``
+      (preserves the key name and ``=`` so the error message stays readable)
+    * ``Authorization: Bearer ...`` (preserves the header prefix)
+    * ``sk-...`` prefixed API keys (replaces the whole token)
+
+    Non-credential text passes through unchanged.
+    """
+    def _replacer(m: re.Match) -> str:
+        if m.group(1):
+            return f"{m.group(1)}{_REDACTED_STR}"
+        if m.group(2):
+            return f"{m.group(2)}{_REDACTED_STR}"
+        return _REDACTED_STR
+
+    return _STRING_CREDENTIAL_RE.sub(_replacer, s)
+
+
 def redact_payload(obj: Any) -> Any:
     """Recursively redact sensitive keys in a structured payload.
 
@@ -206,4 +251,8 @@ def redact_payload(obj: Any) -> Any:
         }
     if isinstance(obj, list):
         return [redact_payload(item) for item in obj]
+    if isinstance(obj, str):
+        return _redact_string(obj)
+    if isinstance(obj, tuple):
+        return tuple(redact_payload(item) for item in obj)
     return obj

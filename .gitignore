@@ -14,8 +14,16 @@ node_modules/
 # Backtest output artifacts
 results/
 
+# Agent configuration (local credentials, never commit)
+agent.json
+agent.yaml
+agent.yml
+
 .env
 agent/.env
+
+# Local market-data credentials (copy of .env.market-data.example)
+.env.market-data.local
 
 .claude/*
 !.claude/hooks.json
@@ -28,6 +36,7 @@ agent/.ui_runtime/
 agent/.tasks/
 agent/uploads/
 agent/tests/*_result.json
+agent/data/
 .ruff_cache/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
@@ -53,6 +62,7 @@ data/backup/
 # Internal docs (plans, specs)
 docs/
 !docs/architecture/
+!docs/exec-plans/
 !docs/PROJECT_VISION.md
 !wiki/docs/
 !wiki/docs/**

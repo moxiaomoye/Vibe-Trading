@@ -66,6 +66,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+/** True when an optional-backend-route returned HTML instead of JSON (feature disabled). */
+export function isDisabledFeatureError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 200 && error.message.startsWith("Expected JSON from");
+}
+
 export interface UploadResult {
   status: string;
   file_path: string;
@@ -261,6 +266,24 @@ export const api = {
     request<LiveRunnerResponse>("/live/runner/stop", {
       method: "POST",
       body: JSON.stringify({ broker }),
+    }),
+  getPanicShadowStatus: () =>
+    request<PanicShadowStatusResponse>("/investment-research/panic-shadow/status"),
+  getLatestPanicShadowReport: () =>
+    request<unknown>("/investment-research/panic-shadow/latest"),
+  runCurrentPanicShadowReport: () =>
+    request<unknown>("/investment-research/panic-shadow/run-current", {
+      method: "POST",
+    }),
+  runManualPanicShadowReport: (manifest: unknown) =>
+    request<unknown>("/investment-research/panic-shadow/run-manual", {
+      method: "POST",
+      body: JSON.stringify(manifest),
+    }),
+  runPanicShadowReport: (body: PanicShadowRunRequestBody) =>
+    request<unknown>("/investment-research/panic-shadow/run", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 };
 
@@ -1206,4 +1229,39 @@ export interface MessageItem {
   created_at: string;
   linked_attempt_id?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface PanicShadowStatusResponse {
+  enabled: boolean;
+  mode: string;
+  read_only: boolean;
+  explicit_input_only: boolean;
+  explicit_input_supported?: boolean;
+  provider_run_supported?: boolean;
+  persistent: boolean;
+  persistence_scope?: string;
+  scheduler_enabled: boolean;
+  notification_enabled: boolean;
+  trading_enabled: boolean;
+  manual_review_required: boolean;
+}
+
+export interface PanicShadowMarketRow {
+  symbol: string;
+  name: string;
+  close: number;
+  change_pct: number;
+  previous_close: number;
+}
+
+export interface PanicShadowRunRequestBody {
+  run_id: string;
+  data_date: string;
+  observed_at: string;
+  information_cutoff: string;
+  data_available_at: string;
+  market_return: number | null;
+  rows: PanicShadowMarketRow[];
+  limit_up_symbols: string[];
+  limit_down_symbols: string[];
 }

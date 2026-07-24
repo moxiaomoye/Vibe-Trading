@@ -63,7 +63,7 @@ def register_uploads_routes(
     if require_auth is None:
         import sys as _sys
 
-        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         if host is None:  # pragma: no cover - only triggers on unusual import setups
             raise RuntimeError(
                 "register_uploads_routes: api_server module not in sys.modules; "
@@ -76,19 +76,19 @@ def register_uploads_routes(
     def _host_uploads_dir() -> Path:
         import sys as _sys
 
-        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return host.UPLOADS_DIR if host else UPLOADS_DIR
 
     def _host_max_upload_size() -> int:
         import sys as _sys
 
-        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return host.MAX_UPLOAD_SIZE if host else MAX_UPLOAD_SIZE
 
     def _host_chunk_size() -> int:
         import sys as _sys
 
-        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return host._UPLOAD_CHUNK_SIZE if host else _UPLOAD_CHUNK_SIZE
 
     @app.get("/shadow-reports/{shadow_id}", dependencies=[Depends(require_auth)])

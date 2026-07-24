@@ -814,10 +814,10 @@ class FeishuChannel(BaseChannel):
                 data = json.loads(response.raw.content)
                 bot = (data.get("data") or data).get("bot") or data.get("bot") or {}
                 return bot.get("open_id")
-            self.logger.warning("Failed to get bot info: code={}, msg={}", response.code, response.msg)
+            self.logger.warning("Failed to get bot info: code=%s, msg=%s", response.code, response.msg)
             return None
         except Exception as e:
-            self.logger.warning("Error fetching bot info: {}", e)
+            self.logger.warning("Error fetching bot info: %s", e)
             return None
 
     @staticmethod

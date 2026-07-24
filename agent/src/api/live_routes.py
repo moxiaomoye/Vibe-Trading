@@ -328,7 +328,7 @@ class LiveRunnerUnavailable(RuntimeError):
 
 def _host() -> Any:
     """Return the host ``api_server`` module for shared deps and monkeypatched symbols."""
-    return _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    return _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
 
 
 # ============================================================================

@@ -3,12 +3,19 @@ import { BookOpenCheck, CircleDashed, FileCheck2, FlaskConical, Search, ShieldCh
 
 import {
   api,
+  isDisabledFeatureError,
   type InvestmentResearchDailyReport,
   type InvestmentResearchEvidenceInboxItem,
   type InvestmentResearchEvidenceReadiness,
   type InvestmentResearchStatus,
   type InvestmentResearchThesis,
 } from "@/lib/api";
+import {
+  panicResearchDisabled,
+  panicResearchError,
+  panicResearchReady,
+  type PanicResearchViewState,
+} from "@/lib/panicResearchContract";
 
 
 const SCOPE_LABELS: Record<InvestmentResearchThesis["scope"], string> = {
@@ -187,6 +194,160 @@ function AcceptedEvidence({ items }: { items: InvestmentResearchEvidenceInboxIte
   );
 }
 
+function PanicShadowSection({ status, running, onRun, onManualImport }: {
+  status: PanicResearchViewState;
+  running: boolean;
+  onRun: () => void;
+  onManualImport: (file: File) => void;
+}) {
+  const runButton = (
+    <button
+      type="button"
+      onClick={onRun}
+      disabled={running}
+      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {running ? "正在生成…" : "生成今日盘后报告"}
+    </button>
+  );
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      {runButton}
+      <label className={`rounded-md border px-3 py-2 text-xs font-medium ${running ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+        导入当日 JSON
+        <input
+          type="file"
+          accept=".json,application/json"
+          disabled={running}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) onManualImport(file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+    </div>
+  );
+  if (status.kind === "disabled") {
+    return (
+      <section className="rounded-xl border border-dashed bg-card p-5">
+        <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+        <p className="mt-2 text-sm text-muted-foreground">影子报告功能未启用。该功能需要后端同时启用投资研究和影子报告 API。</p>
+      </section>
+    );
+  }
+  if (status.kind === "loading") {
+    return (
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+        <p className="mt-2 text-sm text-muted-foreground">正在读取影子报告状态…</p>
+      </section>
+    );
+  }
+  if (status.kind === "error") {
+    const label = status.errorKind === "authentication" ? "认证失败" :
+      status.errorKind === "not_found" ? "尚无盘后报告" :
+      status.errorKind === "invalid_contract" ? "响应异常" : "服务不可用";
+    const description = status.errorKind === "not_found"
+      ? "当前还没有已保存的可信报告，可以在收盘后手动生成。"
+      : status.errorKind === "authentication"
+        ? "请先在设置中填写正确的 Server API key。"
+        : status.errorKind === "invalid_contract"
+          ? "导入文件或后端报告不符合当前数据契约。"
+          : "盘后报告服务暂时没有返回可用结果。";
+    return (
+      <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+            <p className="mt-2 text-sm text-destructive">{label}：{description}</p>
+          </div>
+          {status.errorKind !== "authentication" && actions}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="rounded-xl border border-amber-500/30 bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+          <p className="mt-1 text-xs text-muted-foreground">影子模式 · 仅用于人工复核</p>
+        </div>
+        {actions}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-md bg-muted/60 p-2 text-xs">
+          <p className="text-muted-foreground">市场状态</p>
+          <p className="font-semibold">{status.report.market.regime}</p>
+        </div>
+        <div className="rounded-md bg-muted/60 p-2 text-xs">
+          <p className="text-muted-foreground">恐慌观测</p>
+          <p className="font-semibold">{status.report.market.panic_observation}</p>
+        </div>
+        <div className="rounded-md bg-muted/60 p-2 text-xs">
+          <p className="text-muted-foreground">上涨/下跌/跌停</p>
+          <p className="font-semibold">{status.report.market.advance}/{status.report.market.decline}/{status.report.market.limit_down}</p>
+        </div>
+        <div className="rounded-md bg-muted/60 p-2 text-xs">
+          <p className="text-muted-foreground">需人工复核</p>
+          <p className="font-semibold">{status.report.manual_review_required ? "是" : "否"}</p>
+        </div>
+      </div>
+      {status.report.data_gaps.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/5 p-2 text-xs text-amber-700">
+          <p className="font-medium">数据缺口</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {status.report.data_gaps.map((gap, i) => <li key={i}>{gap}</li>)}
+          </ul>
+        </div>
+      )}
+      {status.report.screened_watchlist.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">观察池扫描（{status.report.screened_watchlist.length} 只）</p>
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {status.report.screened_watchlist.map((item) => (
+              <div key={item.symbol} className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-xs">
+                <span className="font-mono">{item.symbol}</span>
+                <span>{item.change_pct !== null ? `${(item.change_pct * 100).toFixed(1)}%` : "无数据"}</span>
+                <span className="text-muted-foreground">{item.data_gap ?? "正常"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {status.candidates.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">研究候选（{status.candidates.length} 个）</p>
+          <div className="space-y-2">
+            {status.candidates.map((c) => (
+              <article key={c.candidate_id ?? c.symbol} className="rounded-md border p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-semibold">{c.symbol}</span>
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{c.action_level ?? "未评估"}</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">置信度 {c.confidence !== null ? `${(c.confidence * 100).toFixed(0)}%` : "未评估"} · 质量 {c.quality_status} · 估值 {c.valuation_status}</p>
+                {c.data_gaps.length > 0 && <p className="mt-0.5 text-amber-600">数据缺口：{c.data_gaps.join("；")}</p>}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+      {status.versions.length > 0 && (
+        <div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+          <p className="font-medium">版本</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {status.versions.map((v) => (
+              <li key={v.component}>{v.component}：{v.version}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function InvestmentResearch() {
   const [status, setStatus] = useState<InvestmentResearchStatus | null>(null);
   const [theses, setTheses] = useState<InvestmentResearchThesis[]>([]);
@@ -196,6 +357,8 @@ export function InvestmentResearch() {
   const [daily, setDaily] = useState<InvestmentResearchDailyReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [shadowStatus, setShadowStatus] = useState<PanicResearchViewState>({ kind: "loading" });
+  const [shadowRunning, setShadowRunning] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -214,9 +377,69 @@ export function InvestmentResearch() {
       setReadiness(nextReadiness);
       try { setDaily(await api.getInvestmentResearchDaily(shanghaiDate())); } catch { setDaily(null); }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "读取投资研究数据失败");
+      if (isDisabledFeatureError(reason)) {
+        setStatus({
+          enabled: false, shadow_mode: false, schema_version: 0,
+          schema_components: { research_core: 0, evidence_inbox: 0, evidence_association: 0, evidence_set_review: 0 },
+          thesis_count: 0, evidence_inbox: { pending: 0, accepted: 0, rejected: 0 },
+          positioning: "", output_contract: "",
+        });
+      } else {
+        setError(reason instanceof Error ? reason.message : "读取投资研究数据失败");
+      }
+    }
+    try {
+      const shadowRaw = await api.getPanicShadowStatus();
+      if (!shadowRaw.enabled) {
+        setShadowStatus(panicResearchDisabled("后端影子报告未启用"));
+      } else {
+        try {
+          setShadowStatus(panicResearchReady(await api.getLatestPanicShadowReport()));
+        } catch (reason) {
+          setShadowStatus(panicResearchError(reason));
+        }
+      }
+    } catch (reason) {
+      if (isDisabledFeatureError(reason)) {
+        setShadowStatus(panicResearchDisabled("影子报告后端功能未启用，需要设置 INVESTMENT_RESEARCH_ROUTES_ENABLED 和 PANIC_SHADOW_REPORT_API_ENABLED"));
+      } else {
+        setShadowStatus(panicResearchError(reason));
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const runCurrentShadow = useCallback(async () => {
+    setShadowRunning(true);
+    try {
+      setShadowStatus(panicResearchReady(await api.runCurrentPanicShadowReport()));
+    } catch (reason) {
+      setShadowStatus(panicResearchError(reason));
     } finally {
-      setLoading(false);
+      setShadowRunning(false);
+    }
+  }, []);
+
+  const importManualShadow = useCallback(async (file: File) => {
+    setShadowRunning(true);
+    try {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("manual import file exceeds 5 MiB");
+      }
+      const manifest = JSON.parse(await file.text()) as unknown;
+      setShadowStatus(panicResearchReady(await api.runManualPanicShadowReport(manifest)));
+    } catch (reason) {
+      if (reason instanceof SyntaxError || (reason instanceof Error && reason.message.includes("5 MiB"))) {
+        setShadowStatus({
+          kind: "error",
+          errorKind: "invalid_contract",
+          message: "Manual import is not valid JSON.",
+        });
+      } else {
+        setShadowStatus(panicResearchError(reason));
+      }
+    } finally {
+      setShadowRunning(false);
     }
   }, []);
 
@@ -235,6 +458,12 @@ export function InvestmentResearch() {
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">把有限研究时间集中到少数可能被错误定价的机会；输出研究候选与否定问题，不输出交易指令。</p>
       </header>
       {error && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
+      <PanicShadowSection
+        status={shadowStatus}
+        running={shadowRunning}
+        onRun={() => { void runCurrentShadow(); }}
+        onManualImport={(file) => { void importManualShadow(file); }}
+      />
       <section className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border bg-card p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><FlaskConical className="h-3.5 w-3.5" />运行模式</p><p className="mt-2 font-semibold">{status?.shadow_mode ? "Shadow Research" : "Research"}</p></div>
         <div className="rounded-xl border bg-card p-4"><p className="text-xs text-muted-foreground">Thesis 覆盖</p><p className="mt-2 font-semibold">{versionedCount} / {theses.length} 已建立证据版本</p></div>
