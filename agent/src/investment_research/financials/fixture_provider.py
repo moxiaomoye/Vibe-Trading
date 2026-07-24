@@ -46,7 +46,7 @@ class FixtureFinancialProvider(FinancialProviderProtocol):
                 gaps.append(f"future_period: {stmt_type.value}_{period_end.isoformat()}")
                 continue
             available = datetime(ann_date.year, ann_date.month, ann_date.day, 18, 0, tzinfo=timezone.utc)
-            if available > datetime.now(timezone.utc):
+            if available > datetime(as_of.year, as_of.month, as_of.day, 23, 59, tzinfo=timezone.utc):
                 continue
             records.append(
                 PointInTimeFinancialRecord(
