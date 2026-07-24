@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
+import pandas as pd
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import panic_shadow_report_routes as shadow_routes
 from src.api.security import require_auth
+from src.investment_research.operations.report_storage import ReportStorage
+from src.value_hunter.post_close_provider import PostCloseData, ProviderDataGap, UpstreamError
 
 
 TRADE_DATE = date(2026, 7, 22)
 OBSERVED_AT = datetime(2026, 7, 22, 10, 31, tzinfo=timezone.utc)
 API_PATH = "/investment-research/panic-shadow/run"
 STATUS_PATH = "/investment-research/panic-shadow/status"
+CURRENT_PATH = "/investment-research/panic-shadow/run-current"
+LATEST_PATH = "/investment-research/panic-shadow/latest"
+MANUAL_PATH = "/investment-research/panic-shadow/run-manual"
 
 
 def _payload() -> dict:
@@ -83,8 +90,11 @@ def test_shadow_routes_exist_only_when_child_feature_is_enabled(monkeypatch) -> 
         "enabled": True,
         "mode": "shadow",
         "read_only": True,
-        "explicit_input_only": True,
-        "persistent": False,
+        "explicit_input_only": False,
+        "explicit_input_supported": True,
+        "provider_run_supported": True,
+        "persistent": True,
+        "persistence_scope": "successful_provider_runs_only",
         "scheduler_enabled": False,
         "notification_enabled": False,
         "trading_enabled": False,
@@ -180,3 +190,183 @@ def test_dry_run_does_not_call_side_effect_boundaries(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["shadow_run"] is True
+
+
+class _FixturePostCloseProvider:
+    def load(self, *, as_of: date | None = None) -> PostCloseData:
+        assert as_of == TRADE_DATE
+        rows = [
+            {
+                "代码": f"{index + 1:06d}",
+                "名称": f"fixture-{index}",
+                "最新价": 9.4,
+                "昨收": 10.0,
+                "涨跌幅": -6.0,
+            }
+            for index in range(120)
+        ]
+        return PostCloseData(
+            source="fixture_provider",
+            source_date=TRADE_DATE,
+            availability_date=TRADE_DATE,
+            retrieved_at=OBSERVED_AT - timedelta(minutes=1),
+            spot_df=pd.DataFrame(rows),
+            benchmark_returns={"000300.SH": -0.06},
+            limit_down_symbols=frozenset(row["代码"] for row in rows[:80]),
+            component_sources={
+                "spot": "fixture_spot",
+                "benchmark": "fixture_benchmark",
+                "limit_down": "fixture_official",
+                "limit_up": "fixture_official",
+            },
+            data_gaps=(
+                ProviderDataGap(
+                    "sector_returns",
+                    "fixture sector returns are unavailable",
+                    TRADE_DATE,
+                    TRADE_DATE,
+                ),
+            ),
+            errors=(
+                UpstreamError(
+                    "spot_primary",
+                    "ConnectionError",
+                    "https://example.invalid/?credential-marker=must-not-leak",
+                    1,
+                    True,
+                ),
+            ),
+        )
+
+
+def test_run_current_uses_provider_persists_and_latest_is_json_safe(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(shadow_routes, "_current_provider", _FixturePostCloseProvider)
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: OBSERVED_AT)
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+    client = _direct_client(lambda: None)
+
+    current = client.post(CURRENT_PATH)
+    latest = client.get(LATEST_PATH)
+
+    assert current.status_code == 200
+    assert latest.status_code == 200
+    assert current.json() == latest.json()
+    report = current.json()
+    assert report["shadow_run"] is True
+    assert report["input_mode"] == "provider"
+    assert report["data_source"] == "fixture_provider"
+    assert report["provenance"]["component_sources"]["spot"] == "fixture_spot"
+    assert report["provenance"]["data_gaps"][0]["field"] == "sector_returns"
+    assert report["provenance"]["errors"][0]["message"] == "upstream request failed"
+    assert "must-not-leak" not in current.text
+    assert report["market"]["trade_date"] == TRADE_DATE.isoformat()
+    assert report["_fingerprint"]
+
+
+def test_latest_returns_structured_not_found_without_creating_a_report(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+
+    response = _direct_client(lambda: None).get(LATEST_PATH)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "shadow_report_not_found"
+
+
+def test_current_provider_failure_is_isolated_and_live_stays_available(monkeypatch) -> None:
+    class FailingProvider:
+        def load(self, *, as_of=None):
+            raise RuntimeError("upstream detail must stay private")
+
+    monkeypatch.setattr(shadow_routes, "_current_provider", FailingProvider)
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: OBSERVED_AT)
+    client = _direct_client(lambda: None)
+
+    failed = client.post(CURRENT_PATH)
+    live = client.get("/live")
+
+    assert failed.status_code == 500
+    assert failed.json()["error"]["code"] == "shadow_run_failed"
+    assert "upstream detail" not in failed.text
+    assert live.status_code == 200
+
+
+def test_manual_import_runs_through_same_pipeline_and_persists(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: OBSERVED_AT)
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+    rows = [
+        {
+            "symbol": f"{index + 1:06d}",
+            "name": f"manual-{index}",
+            "close": 9.4,
+            "previous_close": 10.0,
+            "change_percent": -6.0,
+            "benchmark": -6.0,
+        }
+        for index in range(120)
+    ]
+    payload = {
+        "schema_version": "1.0",
+        "source": "manual_import",
+        "source_date": TRADE_DATE.isoformat(),
+        "availability_time": "2026-07-22T18:30:00+08:00",
+        "rows": rows,
+    }
+    client = _direct_client(lambda: None)
+
+    response = client.post(MANUAL_PATH, json=payload)
+    latest = client.get(LATEST_PATH)
+
+    assert response.status_code == 200
+    assert latest.status_code == 200
+    report = response.json()
+    assert report["input_mode"] == "manual_import"
+    assert report["provenance"]["accepted_count"] == 120
+    assert report["provenance"]["component_sources"]["limit_down"] == "computed_from_spot"
+    assert any("imported universe only" in gap for gap in report["data_gaps"])
+    assert latest.json()["_fingerprint"] == report["_fingerprint"]
+
+
+def test_manual_import_rejects_untrusted_time_contract(monkeypatch) -> None:
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: OBSERVED_AT)
+    payload = {
+        "schema_version": "1.0",
+        "source": "manual_import",
+        "source_date": TRADE_DATE.isoformat(),
+        "availability_time": "2026-07-22T18:30:00",
+        "rows": [
+            {
+                "symbol": "000001",
+                "name": "manual",
+                "close": 9.4,
+                "previous_close": 10.0,
+                "change_percent": -6.0,
+            }
+        ],
+    }
+
+    response = _direct_client(lambda: None).post(MANUAL_PATH, json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_manual_import"
+    assert any("timezone offset" in reason for reason in response.json()["error"]["reasons"])

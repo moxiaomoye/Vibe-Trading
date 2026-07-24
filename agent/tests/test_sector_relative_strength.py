@@ -138,3 +138,33 @@ def test_replay_and_live_panel_paths_share_sector_semantics(tmp_path):
     assert replay.entries[0].result.watchlist[0].relative_to_sector == pytest.approx(-0.02)
     assert live.watchlist[0].data_gap.description == ""
     assert replay.entries[0].result.watchlist[0].data_gap.description == ""
+
+
+def test_live_panel_treats_sub_one_change_as_percentage_points(tmp_path):
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        'version: "test"\nwatchlist:\n  name: "fixture"\n  symbols:\n    - "600522.SH"\n',
+        encoding="utf-8",
+    )
+    panel = {
+        "spot_df": pd.DataFrame(
+            {
+                "代码": ["600522"],
+                "名称": ["fixture"],
+                "最新价": [99.5],
+                "涨跌幅": [-0.5],
+                "昨收": [100.0],
+            }
+        ),
+        "limit_up_symbols": [],
+        "limit_down_symbols": [],
+        "data_date": SCAN_DATE,
+        "availability_date": SCAN_DATE,
+        "now": datetime(2026, 7, 22, 18, 0, tzinfo=timezone.utc),
+        "market_change_pct": -0.002,
+    }
+
+    result = run_panic_scan(panel_data=panel, watchlist_path=str(watchlist))
+
+    assert result.watchlist[0].change_pct == pytest.approx(-0.005)
+    assert result.watchlist[0].relative_to_market == pytest.approx(-0.003)

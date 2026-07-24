@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import type { InvestmentResearchStatus, InvestmentResearchThesis } from "@/lib/api";
 import { InvestmentResearch } from "../InvestmentResearch";
@@ -11,6 +11,9 @@ const apiMock = vi.hoisted(() => ({
   listInvestmentResearchEvidenceReadiness: vi.fn(),
   getInvestmentResearchDaily: vi.fn(),
   getPanicShadowStatus: vi.fn(),
+  getLatestPanicShadowReport: vi.fn(),
+  runCurrentPanicShadowReport: vi.fn(),
+  runManualPanicShadowReport: vi.fn(),
   runPanicShadowReport: vi.fn(),
 }));
 
@@ -60,7 +63,21 @@ describe("InvestmentResearch page", () => {
       approval_review_id: null,
     }]);
     apiMock.getInvestmentResearchDaily.mockRejectedValue(new Error("not generated"));
-    apiMock.getPanicShadowStatus.mockResolvedValue({ enabled: true, mode: "shadow", read_only: true, explicit_input_only: true, persistent: false, scheduler_enabled: false, notification_enabled: false, trading_enabled: false, manual_review_required: true });
+    apiMock.getPanicShadowStatus.mockResolvedValue({
+      enabled: true,
+      mode: "shadow",
+      read_only: true,
+      explicit_input_only: false,
+      explicit_input_supported: true,
+      provider_run_supported: true,
+      persistent: true,
+      persistence_scope: "successful_provider_runs_only",
+      scheduler_enabled: false,
+      notification_enabled: false,
+      trading_enabled: false,
+      manual_review_required: true,
+    });
+    apiMock.getLatestPanicShadowReport.mockRejectedValue({ status: 404 });
   });
 
   it("shows evidence initialization without inventing confidence", async () => {
@@ -71,7 +88,7 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText(/What is the strongest evidence/)).toBeInTheDocument();
     expect(screen.getByText("等待证据初始化")).toBeInTheDocument();
     expect(screen.getByText(/未初始化节点不显示 Confidence/)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "生成今日盘后报告" })).toBeInTheDocument();
   });
 
   it("shows a truthful empty daily state and read-only boundary", async () => {
@@ -81,5 +98,79 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("Research Candidate，不是交易指令")).toBeInTheDocument();
     expect(screen.getByText("当前没有待审证据。")).toBeInTheDocument();
     expect(screen.getByText("当前没有已接受证据。")).toBeInTheDocument();
+  });
+
+  it("generates and renders the current post-close shadow report", async () => {
+    apiMock.runCurrentPanicShadowReport.mockResolvedValue({
+      shadow_run: true,
+      information_cutoff: "2026-07-24T10:30:00+00:00",
+      market: {
+        trade_date: "2026-07-24",
+        regime: "panic",
+        panic_observation: "panic",
+        advance: 420,
+        decline: 4300,
+        limit_down: 160,
+        median_daily_return: -0.047,
+      },
+      screened_watchlist: [],
+      research_candidates: [],
+      data_gaps: ["sector returns unavailable"],
+      versions: { panic_rule: "1.0.0", candidate_pipeline: "not_run" },
+      manual_review_required: true,
+    });
+    render(<InvestmentResearch />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "生成今日盘后报告" }));
+
+    await waitFor(() => expect(apiMock.runCurrentPanicShadowReport).toHaveBeenCalledTimes(1));
+    expect((await screen.findAllByText("panic")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("420/4300/160")).toBeInTheDocument();
+    expect(screen.getByText("sector returns unavailable")).toBeInTheDocument();
+  });
+
+  it("imports an explicit manual JSON manifest through the browser", async () => {
+    apiMock.runManualPanicShadowReport.mockResolvedValue({
+      shadow_run: true,
+      information_cutoff: "2026-07-24T10:30:00+00:00",
+      market: {
+        trade_date: "2026-07-24",
+        regime: "correction",
+        panic_observation: "caution",
+        advance: 900,
+        decline: 3600,
+        limit_down: 40,
+        median_daily_return: -0.025,
+      },
+      screened_watchlist: [],
+      research_candidates: [],
+      data_gaps: ["market breadth reflects the imported universe only"],
+      versions: { panic_rule: "1.0.0", candidate_pipeline: "not_run" },
+      manual_review_required: true,
+    });
+    const manifest = {
+      schema_version: "1.0",
+      source: "manual_import",
+      source_date: "2026-07-24",
+      availability_time: "2026-07-24T18:30:00+08:00",
+      rows: [],
+    };
+    render(<InvestmentResearch />);
+
+    fireEvent.change(await screen.findByLabelText("导入当日 JSON"), {
+      target: {
+        files: [
+          new File([JSON.stringify(manifest)], "post-close.json", {
+            type: "application/json",
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiMock.runManualPanicShadowReport).toHaveBeenCalledWith(manifest);
+    });
+    expect(await screen.findByText("correction")).toBeInTheDocument();
+    expect(screen.getByText(/imported universe only/)).toBeInTheDocument();
   });
 });

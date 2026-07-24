@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -18,7 +18,7 @@ class TestManualImportValid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
             ],
@@ -33,7 +33,7 @@ class TestManualImportValid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3,
                  "change_percent": 1.63, "volume": 1_000_000, "market": "SZ", "limit_status": "normal",
@@ -53,7 +53,7 @@ class TestManualImportValid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
                 {"symbol": "000002", "name": "万科A", "close": 8.0, "previous_close": 8.1, "change_percent": -1.23},
@@ -68,7 +68,7 @@ class TestManualImportValid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": date.today().isoformat(),
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
             ],
@@ -84,7 +84,7 @@ class TestManualImportInvalid:
         data = {
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [],
         }
         result = parse_manual_import_dict(data)
@@ -95,7 +95,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "eastmoney",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [],
         }
         result = parse_manual_import_dict(data)
@@ -106,7 +106,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2099-01-01",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [],
         }
         result = parse_manual_import_dict(data)
@@ -117,7 +117,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001"},
             ],
@@ -132,7 +132,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
                 {"symbol": "000001", "name": "平安银行", "close": 12.6, "previous_close": 12.3, "change_percent": 2.44},
@@ -148,7 +148,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": "not a list",
         }
         result = parse_manual_import_dict(data)
@@ -159,7 +159,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": ["string", 42],
         }
         result = parse_manual_import_dict(data)
@@ -170,7 +170,7 @@ class TestManualImportInvalid:
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [],
         }
         result = parse_manual_import_dict(data)
@@ -190,19 +190,94 @@ class TestManualImportPanelConversion:
             change_percent=1.63,
         )
         entry = row_to_panel_entry(row)
-        assert entry["symbol"] == "000001"
-        assert entry["close"] == 12.5
-        assert entry["change_percent"] == 1.63
+        assert entry["代码"] == "000001"
+        assert entry["最新价"] == 12.5
+        assert entry["涨跌幅"] == 1.63
 
     def test_numeric_non_numeric_close(self) -> None:
         data = {
             "schema_version": "1.0",
             "source": "manual_import",
             "source_date": "2026-07-24",
-            "availability_time": "2026-07-24T15:00:00",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": "not-a-number", "previous_close": 12.3, "change_percent": 1.63},
             ],
         }
         result = parse_manual_import_dict(data)
         assert result.rejected_count == 1
+
+    def test_rejects_naive_or_future_availability_time(self) -> None:
+        base = {
+            "schema_version": "1.0",
+            "source": "manual_import",
+            "source_date": date.today().isoformat(),
+            "rows": [
+                {
+                    "symbol": "000001.SZ",
+                    "name": "平安银行",
+                    "close": 12.5,
+                    "previous_close": 12.3,
+                    "change_percent": 1.63,
+                }
+            ],
+        }
+        naive = parse_manual_import_dict(
+            {**base, "availability_time": f"{date.today().isoformat()}T15:00:00"}
+        )
+        future = parse_manual_import_dict(
+            {
+                **base,
+                "availability_time": (
+                    datetime.now(timezone.utc) + timedelta(days=1)
+                ).isoformat(),
+            }
+        )
+
+        assert any("timezone offset" in error for error in naive.errors)
+        assert any("future" in error for error in future.errors)
+
+    def test_rejects_non_finite_or_inconsistent_prices(self) -> None:
+        data = {
+            "schema_version": "1.0",
+            "source": "manual_import",
+            "source_date": date.today().isoformat(),
+            "availability_time": datetime.now(timezone.utc).isoformat(),
+            "rows": [
+                {
+                    "symbol": "000001",
+                    "name": "平安银行",
+                    "close": float("nan"),
+                    "previous_close": 0,
+                    "change_percent": 5,
+                }
+            ],
+        }
+
+        result = parse_manual_import_dict(data)
+
+        assert result.rejected_count == 1
+        assert any("finite" in error for error in result.errors)
+        assert any("greater than zero" in error for error in result.errors)
+
+    def test_normalizes_supported_a_share_symbol_forms(self) -> None:
+        data = {
+            "schema_version": "1.0",
+            "source": "manual_import",
+            "source_date": date.today().isoformat(),
+            "availability_time": datetime.now(timezone.utc).isoformat(),
+            "rows": [
+                {
+                    "symbol": "sz000001",
+                    "name": "平安银行",
+                    "close": 12.5,
+                    "previous_close": 12.3,
+                    "change_percent": 1.63,
+                }
+            ],
+        }
+
+        result = parse_manual_import_dict(data)
+
+        assert result.accepted_count == 1
+        assert result.rows[0].symbol == "000001"

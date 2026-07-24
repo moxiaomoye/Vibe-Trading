@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import json
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Awaitable, Callable
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from fastapi import Depends, FastAPI
@@ -19,11 +22,19 @@ from src.investment_research.application.shadow_run import (
     ShadowRunConfig,
     ShadowRunInputs,
 )
+from src.investment_research.operations.report_storage import ReportStorage
+from src.investment_research.operations.manual_import import (
+    MAX_IMPORT_BYTES,
+    parse_manual_import_dict,
+    row_to_panel_entry,
+)
 from src.value_hunter.watchlist_loader import DEFAULT_WATCHLIST_PATH
 
 
 AuthDep = Callable[..., Awaitable[Any] | Any]
 MAX_MARKET_ROWS = 10_000
+REPORT_OUTPUT_DIR = Path.home() / ".vibe-trading" / "panic-shadow-reports"
+_report_storage: ReportStorage | None = None
 
 
 class ShadowMarketRow(BaseModel):
@@ -107,13 +118,23 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
             "enabled": True,
             "mode": "shadow",
             "read_only": True,
-            "explicit_input_only": True,
-            "persistent": False,
+            "explicit_input_only": False,
+            "explicit_input_supported": True,
+            "provider_run_supported": True,
+            "persistent": True,
+            "persistence_scope": "successful_provider_runs_only",
             "scheduler_enabled": False,
             "notification_enabled": False,
             "trading_enabled": False,
             "manual_review_required": True,
         }
+
+    @app.get("/investment-research/panic-shadow/latest", dependencies=dependencies)
+    def latest_panic_shadow_report():
+        report = _storage().load_latest()
+        if report is None:
+            return _error(404, "shadow_report_not_found", "no stored shadow report is available")
+        return report
 
     @app.post("/investment-research/panic-shadow/run", dependencies=dependencies)
     def run_panic_shadow_report(payload: ShadowReportRunRequest):
@@ -145,92 +166,73 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
 
     @app.post("/investment-research/panic-shadow/run-current", dependencies=dependencies)
     def run_current_shadow_report():
-        import akshare as ak
-        from datetime import timedelta
-
-        observed_at = datetime.now()
-        trade_date = date.today()
-        information_cutoff = observed_at + timedelta(hours=1)
-
         try:
-            spot = ak.stock_zh_a_spot()
-            source = "sina"
+            result, post_close = _execute_current()
+        except CurrentReportDataError as exc:
+            return _error(503, "data_unavailable", str(exc), reasons=list(exc.reasons))
         except Exception:
-            try:
-                spot = ak.stock_zh_a_spot_em()
-                source = "eastmoney"
-            except Exception:
-                return _error(503, "data_unavailable", "All spot sources unavailable")
-
-        if spot is None or spot.empty:
-            return _error(503, "data_unavailable", "Spot data is empty")
-
-        spot_df = spot.copy()
-        code_col = "代码"
-        if code_col in spot_df.columns:
-            raw = spot_df[code_col].astype(str).str.strip()
-            spot_df[code_col] = raw.str.replace(r"^sh(\d{6})$", r"\1.SH", regex=True)
-            spot_df[code_col] = spot_df[code_col].str.replace(r"^sz(\d{6})$", r"\1.SZ", regex=True)
-            spot_df[code_col] = spot_df[code_col].str.replace(r"^bj(\d{6})$", r"\1.BJ", regex=True)
-
-        limit_up: set[str] = set()
-        limit_down: set[str] = set()
-        if code_col in spot_df.columns and "涨跌幅" in spot_df.columns:
-            up_mask = spot_df["涨跌幅"].astype(float) >= 9.8
-            down_mask = spot_df["涨跌幅"].astype(float) <= -9.8
-            limit_up = set(spot_df.loc[up_mask, code_col].astype(str).str.strip())
-            limit_down = set(spot_df.loc[down_mask, code_col].astype(str).str.strip())
-
-        panel_data = {
-            "spot_df": spot_df,
-            "limit_up_symbols": limit_up,
-            "limit_down_symbols": limit_down,
-            "data_date": trade_date,
-            "availability_date": trade_date,
-            "now": information_cutoff,
-            "market_change_pct": None,
-            "source": source,
-            "component_sources": {"spot": source, "benchmark": "unavailable"},
-            "provider_errors": [],
-            "data_gaps": [],
-        }
-        from src.value_hunter.post_close_provider import _compute_limit_pools_from_spot
-        try:
-            pools = _compute_limit_pools_from_spot(spot_df, trade_date)
-            if pools and isinstance(pools, dict):
-                panel_data["limit_up_symbols"] = set(pools.get("limit_up_symbols", []))
-                panel_data["limit_down_symbols"] = set(pools.get("limit_down_symbols", []))
-                panel_data["market_change_pct"] = pools.get("market_change_pct")
-        except Exception:
-            pass
-
-        run_id = f"shadow-{trade_date.isoformat()}-current-{observed_at.strftime('%H%M%S')}"
-        inputs = ShadowRunInputs(
-            panel_data=panel_data,
-            watchlist_path=str(DEFAULT_WATCHLIST_PATH),
-            information_cutoff=information_cutoff,
-            candidates=(),
-        )
-        request = OrchestrationRequest(
-            run_id=run_id,
-            now=observed_at,
-            data_date=trade_date,
-            data_available_at=observed_at,
-        )
-        runner = PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
-        result = runner.run(request, inputs)
+            return _error(
+                500,
+                "shadow_run_failed",
+                "shadow report execution failed; core application remains available",
+            )
 
         if result.status == OrchestrationStatus.SUCCEEDED and result.output is not None:
             report = result.output.to_dict()
             report["shadow_run"] = True
             report["manual_review_required"] = True
-            report["data_source"] = source
+            report["data_source"] = post_close.source
             report["input_mode"] = "provider"
+            report["provenance"] = _provider_provenance(post_close)
+            try:
+                _storage().save_report(report, date_dir=post_close.source_date)
+            except OSError:
+                return _error(
+                    500,
+                    "shadow_report_storage_failed",
+                    "shadow report completed but could not be stored",
+                )
             return report
         return _error(
             500 if result.status == OrchestrationStatus.FAILED else 422,
             f"shadow_run_{result.status.value}",
             "shadow report execution failed; core application remains available",
+            reasons=list(result.reasons),
+        )
+
+    @app.post("/investment-research/panic-shadow/run-manual", dependencies=dependencies)
+    def run_manual_shadow_report(payload: dict[str, Any]):
+        try:
+            result, provenance = _execute_manual(payload)
+        except CurrentReportDataError as exc:
+            return _error(422, "invalid_manual_import", str(exc), reasons=list(exc.reasons))
+        except Exception:
+            return _error(
+                500,
+                "shadow_run_failed",
+                "manual shadow report execution failed; core application remains available",
+            )
+
+        if result.status == OrchestrationStatus.SUCCEEDED and result.output is not None:
+            report = result.output.to_dict()
+            report["shadow_run"] = True
+            report["manual_review_required"] = True
+            report["data_source"] = "manual_import"
+            report["input_mode"] = "manual_import"
+            report["provenance"] = provenance
+            try:
+                _storage().save_report(report, date_dir=date.fromisoformat(provenance["source_date"]))
+            except OSError:
+                return _error(
+                    500,
+                    "shadow_report_storage_failed",
+                    "manual shadow report completed but could not be stored",
+                )
+            return report
+        return _error(
+            500 if result.status == OrchestrationStatus.FAILED else 422,
+            f"shadow_run_{result.status.value}",
+            "manual shadow report did not execute",
             reasons=list(result.reasons),
         )
 
@@ -268,6 +270,222 @@ def _execute(payload: ShadowReportRunRequest):
     )
     runner = PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
     return runner.run(request, inputs)
+
+
+class CurrentReportDataError(ValueError):
+    def __init__(self, message: str, reasons: list[str] | tuple[str, ...] = ()) -> None:
+        super().__init__(message)
+        self.reasons = tuple(reasons)
+
+
+def _execute_current():
+    provider = _current_provider()
+    trade_date = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
+    post_close = provider.load(as_of=trade_date)
+    reasons = [gap.reason for gap in post_close.data_gaps]
+    if post_close.source_date != trade_date:
+        raise CurrentReportDataError(
+            "provider source date does not match the requested trading date",
+            reasons,
+        )
+    if post_close.availability_date > trade_date:
+        raise CurrentReportDataError(
+            "provider data was not available on the requested trading date",
+            reasons,
+        )
+    if post_close.spot_df.empty:
+        raise CurrentReportDataError("all spot sources are unavailable", reasons)
+
+    information_cutoff = post_close.retrieved_at.astimezone(timezone.utc)
+    observed_at = max(_now_utc(), information_cutoff)
+    panel_data = post_close.to_panel_data()
+    panel_data["now"] = information_cutoff
+    return _run_panel(
+        panel_data=panel_data,
+        information_cutoff=information_cutoff,
+        observed_at=observed_at,
+        data_date=post_close.source_date,
+        data_available_at=information_cutoff,
+        run_id=f"shadow-{trade_date.isoformat()}-{information_cutoff.strftime('%H%M%S%f')}",
+    ), post_close
+
+
+def _execute_manual(payload: dict[str, Any]):
+    if len(json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")) > MAX_IMPORT_BYTES:
+        raise CurrentReportDataError(
+            f"manual import payload exceeds {MAX_IMPORT_BYTES} bytes"
+        )
+    imported = parse_manual_import_dict(payload)
+    if imported.errors:
+        raise CurrentReportDataError("manual import validation failed", imported.errors)
+    if not imported.rows:
+        raise CurrentReportDataError("manual import contains no accepted market rows")
+
+    trade_date = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
+    if imported.source_date != trade_date:
+        raise CurrentReportDataError(
+            "browser manual import only accepts the current Shanghai trading date",
+            [f"source_date={imported.source_date.isoformat()}", f"expected={trade_date.isoformat()}"],
+        )
+    benchmarks = {row.benchmark for row in imported.rows if row.benchmark is not None}
+    if len(benchmarks) > 1:
+        raise CurrentReportDataError(
+            "manual import benchmark values must be consistent across rows"
+        )
+
+    from src.value_hunter.post_close_provider import (
+        ProviderDataGap,
+        _compute_limit_pools_from_spot,
+    )
+
+    spot_df = pd.DataFrame(row_to_panel_entry(row) for row in imported.rows)
+    limit_up, limit_down, limit_gap = _compute_limit_pools_from_spot(
+        spot_df,
+        imported.source_date,
+    )
+    scope_gap = ProviderDataGap(
+        "market_scope",
+        (
+            f"manual import contains {len(imported.rows)} rows; "
+            "market breadth reflects the imported universe only"
+        ),
+        imported.source_date,
+        imported.source_date,
+    )
+    information_cutoff = imported.availability_time.astimezone(timezone.utc)
+    observed_at = max(_now_utc(), information_cutoff)
+    panel_data = {
+        "spot_df": spot_df,
+        "limit_up_symbols": limit_up,
+        "limit_down_symbols": limit_down,
+        "data_date": imported.source_date,
+        "availability_date": imported.source_date,
+        "now": information_cutoff,
+        "market_change_pct": (
+            next(iter(benchmarks)) / 100.0 if benchmarks else None
+        ),
+        "sector_map": {},
+        "source": "manual_import",
+        "component_sources": {
+            "spot": "manual_import",
+            "benchmark": "manual_import" if benchmarks else "unavailable",
+            "limit_up": "computed_from_spot",
+            "limit_down": "computed_from_spot",
+            "sector_returns": "unavailable",
+        },
+        "provider_errors": [],
+        "data_gaps": [limit_gap, scope_gap],
+    }
+    result = _run_panel(
+        panel_data=panel_data,
+        information_cutoff=information_cutoff,
+        observed_at=observed_at,
+        data_date=imported.source_date,
+        data_available_at=information_cutoff,
+        run_id=(
+            f"shadow-{imported.source_date.isoformat()}-manual-"
+            f"{observed_at.strftime('%H%M%S%f')}"
+        ),
+    )
+    provenance = {
+        "source": "manual_import",
+        "source_date": imported.source_date.isoformat(),
+        "availability_time": imported.availability_time.isoformat(),
+        "accepted_count": imported.accepted_count,
+        "rejected_count": imported.rejected_count,
+        "component_sources": dict(panel_data["component_sources"]),
+        "data_gaps": [
+            {
+                "field": gap.field,
+                "reason": gap.reason,
+                "source_date": gap.source_date.isoformat() if gap.source_date else None,
+                "availability_date": (
+                    gap.availability_date.isoformat() if gap.availability_date else None
+                ),
+            }
+            for gap in panel_data["data_gaps"]
+        ],
+    }
+    return result, provenance
+
+
+def _run_panel(
+    *,
+    panel_data: dict[str, Any],
+    information_cutoff: datetime,
+    observed_at: datetime,
+    data_date: date,
+    data_available_at: datetime,
+    run_id: str,
+):
+    inputs = ShadowRunInputs(
+        panel_data=panel_data,
+        watchlist_path=str(DEFAULT_WATCHLIST_PATH),
+        information_cutoff=information_cutoff,
+        candidates=(),
+    )
+    request = OrchestrationRequest(
+        run_id=run_id,
+        now=observed_at,
+        data_date=data_date,
+        data_available_at=data_available_at,
+    )
+    runner = PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
+    return runner.run(request, inputs)
+
+
+def _current_provider():
+    from src.value_hunter.post_close_provider import (
+        ComponentFallbackPostCloseProvider,
+        SinaBenchmarkAdapter,
+    )
+
+    return ComponentFallbackPostCloseProvider(
+        benchmark_fallback=SinaBenchmarkAdapter(),
+    )
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _provider_provenance(post_close) -> dict[str, Any]:
+    def date_value(value: date | None) -> str | None:
+        return value.isoformat() if value is not None else None
+
+    return {
+        "source": post_close.source,
+        "source_date": post_close.source_date.isoformat(),
+        "availability_date": post_close.availability_date.isoformat(),
+        "retrieved_at": post_close.retrieved_at.isoformat(),
+        "component_sources": dict(post_close.component_sources),
+        "errors": [
+            {
+                "operation": error.operation,
+                "error_type": error.error_type,
+                "message": "upstream request failed",
+                "attempts": error.attempts,
+                "retryable": error.retryable,
+            }
+            for error in post_close.errors
+        ],
+        "data_gaps": [
+            {
+                "field": gap.field,
+                "reason": gap.reason,
+                "source_date": date_value(gap.source_date),
+                "availability_date": date_value(gap.availability_date),
+            }
+            for gap in post_close.data_gaps
+        ],
+    }
+
+
+def _storage() -> ReportStorage:
+    global _report_storage
+    if _report_storage is None:
+        _report_storage = ReportStorage(REPORT_OUTPUT_DIR)
+    return _report_storage
 
 
 def _error(

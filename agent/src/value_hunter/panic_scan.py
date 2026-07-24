@@ -219,7 +219,7 @@ def _scan_watchlist(
         if isinstance(change_pct, str):
             change_pct = float(change_pct) if change_pct else None
         if isinstance(change_pct, (int, float)):
-            change_pct_f = float(change_pct) / 100 if abs(float(change_pct)) > 1 else float(change_pct)
+            change_pct_f = float(change_pct) / 100
         else:
             change_pct_f = None
 

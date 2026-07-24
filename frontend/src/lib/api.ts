@@ -269,6 +269,17 @@ export const api = {
     }),
   getPanicShadowStatus: () =>
     request<PanicShadowStatusResponse>("/investment-research/panic-shadow/status"),
+  getLatestPanicShadowReport: () =>
+    request<unknown>("/investment-research/panic-shadow/latest"),
+  runCurrentPanicShadowReport: () =>
+    request<unknown>("/investment-research/panic-shadow/run-current", {
+      method: "POST",
+    }),
+  runManualPanicShadowReport: (manifest: unknown) =>
+    request<unknown>("/investment-research/panic-shadow/run-manual", {
+      method: "POST",
+      body: JSON.stringify(manifest),
+    }),
   runPanicShadowReport: (body: PanicShadowRunRequestBody) =>
     request<unknown>("/investment-research/panic-shadow/run", {
       method: "POST",
@@ -1225,7 +1236,10 @@ export interface PanicShadowStatusResponse {
   mode: string;
   read_only: boolean;
   explicit_input_only: boolean;
+  explicit_input_supported?: boolean;
+  provider_run_supported?: boolean;
   persistent: boolean;
+  persistence_scope?: string;
   scheduler_enabled: boolean;
   notification_enabled: boolean;
   trading_enabled: boolean;

@@ -11,9 +11,9 @@ import {
   type InvestmentResearchThesis,
 } from "@/lib/api";
 import {
-  panicResearchLoading,
   panicResearchDisabled,
   panicResearchError,
+  panicResearchReady,
   type PanicResearchViewState,
 } from "@/lib/panicResearchContract";
 
@@ -194,7 +194,41 @@ function AcceptedEvidence({ items }: { items: InvestmentResearchEvidenceInboxIte
   );
 }
 
-function PanicShadowSection({ status }: { status: PanicResearchViewState }) {
+function PanicShadowSection({ status, running, onRun, onManualImport }: {
+  status: PanicResearchViewState;
+  running: boolean;
+  onRun: () => void;
+  onManualImport: (file: File) => void;
+}) {
+  const runButton = (
+    <button
+      type="button"
+      onClick={onRun}
+      disabled={running}
+      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {running ? "正在生成…" : "生成今日盘后报告"}
+    </button>
+  );
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      {runButton}
+      <label className={`rounded-md border px-3 py-2 text-xs font-medium ${running ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+        导入当日 JSON
+        <input
+          type="file"
+          accept=".json,application/json"
+          disabled={running}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) onManualImport(file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+    </div>
+  );
   if (status.kind === "disabled") {
     return (
       <section className="rounded-xl border border-dashed bg-card p-5">
@@ -213,19 +247,36 @@ function PanicShadowSection({ status }: { status: PanicResearchViewState }) {
   }
   if (status.kind === "error") {
     const label = status.errorKind === "authentication" ? "认证失败" :
-      status.errorKind === "not_found" ? "接口不可用" :
+      status.errorKind === "not_found" ? "尚无盘后报告" :
       status.errorKind === "invalid_contract" ? "响应异常" : "服务不可用";
+    const description = status.errorKind === "not_found"
+      ? "当前还没有已保存的可信报告，可以在收盘后手动生成。"
+      : status.errorKind === "authentication"
+        ? "请先在设置中填写正确的 Server API key。"
+        : status.errorKind === "invalid_contract"
+          ? "导入文件或后端报告不符合当前数据契约。"
+          : "盘后报告服务暂时没有返回可用结果。";
     return (
       <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
-        <h2 className="font-semibold">A股盘后恐慌初筛</h2>
-        <p className="mt-2 text-sm text-destructive">{label}：{status.message}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+            <p className="mt-2 text-sm text-destructive">{label}：{description}</p>
+          </div>
+          {status.errorKind !== "authentication" && actions}
+        </div>
       </section>
     );
   }
   return (
     <section className="rounded-xl border border-amber-500/30 bg-card p-5">
-      <h2 className="font-semibold">A股盘后恐慌初筛</h2>
-      <p className="mt-1 text-xs text-muted-foreground">影子模式 · 仅用于人工复核</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">A股盘后恐慌初筛</h2>
+          <p className="mt-1 text-xs text-muted-foreground">影子模式 · 仅用于人工复核</p>
+        </div>
+        {actions}
+      </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-md bg-muted/60 p-2 text-xs">
           <p className="text-muted-foreground">市场状态</p>
@@ -307,6 +358,7 @@ export function InvestmentResearch() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [shadowStatus, setShadowStatus] = useState<PanicResearchViewState>({ kind: "loading" });
+  const [shadowRunning, setShadowRunning] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -341,7 +393,11 @@ export function InvestmentResearch() {
       if (!shadowRaw.enabled) {
         setShadowStatus(panicResearchDisabled("后端影子报告未启用"));
       } else {
-        setShadowStatus(panicResearchLoading());
+        try {
+          setShadowStatus(panicResearchReady(await api.getLatestPanicShadowReport()));
+        } catch (reason) {
+          setShadowStatus(panicResearchError(reason));
+        }
       }
     } catch (reason) {
       if (isDisabledFeatureError(reason)) {
@@ -351,6 +407,40 @@ export function InvestmentResearch() {
       }
     }
     setLoading(false);
+  }, []);
+
+  const runCurrentShadow = useCallback(async () => {
+    setShadowRunning(true);
+    try {
+      setShadowStatus(panicResearchReady(await api.runCurrentPanicShadowReport()));
+    } catch (reason) {
+      setShadowStatus(panicResearchError(reason));
+    } finally {
+      setShadowRunning(false);
+    }
+  }, []);
+
+  const importManualShadow = useCallback(async (file: File) => {
+    setShadowRunning(true);
+    try {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("manual import file exceeds 5 MiB");
+      }
+      const manifest = JSON.parse(await file.text()) as unknown;
+      setShadowStatus(panicResearchReady(await api.runManualPanicShadowReport(manifest)));
+    } catch (reason) {
+      if (reason instanceof SyntaxError || (reason instanceof Error && reason.message.includes("5 MiB"))) {
+        setShadowStatus({
+          kind: "error",
+          errorKind: "invalid_contract",
+          message: "Manual import is not valid JSON.",
+        });
+      } else {
+        setShadowStatus(panicResearchError(reason));
+      }
+    } finally {
+      setShadowRunning(false);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -368,7 +458,12 @@ export function InvestmentResearch() {
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">把有限研究时间集中到少数可能被错误定价的机会；输出研究候选与否定问题，不输出交易指令。</p>
       </header>
       {error && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
-      <PanicShadowSection status={shadowStatus} />
+      <PanicShadowSection
+        status={shadowStatus}
+        running={shadowRunning}
+        onRun={() => { void runCurrentShadow(); }}
+        onManualImport={(file) => { void importManualShadow(file); }}
+      />
       <section className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border bg-card p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><FlaskConical className="h-3.5 w-3.5" />运行模式</p><p className="mt-2 font-semibold">{status?.shadow_mode ? "Shadow Research" : "Research"}</p></div>
         <div className="rounded-xl border bg-card p-4"><p className="text-xs text-muted-foreground">Thesis 覆盖</p><p className="mt-2 font-semibold">{versionedCount} / {theses.length} 已建立证据版本</p></div>
