@@ -40,7 +40,7 @@
 |----|-------------|--------|--------|-------|---------|---------|
 | RC0 | Ledger & baseline | done | adaaa97 | — | — | — |
 | RC1 | Executable acceptance flow | done | c9ddd0a | 24/24 | 0.8s | — |
-| RC2 | One-command local release mode | done | TBD | — | — | — |
+| RC2 | One-command local release mode | done | d8ce65d | — | — | — |
 | RC3 | Complete current-market input modes | pending | — | — | — | — |
 | RC4 | End-to-end manual shadow run | pending | — | — | — | — |
 | RC5 | Local report storage | pending | — | — | — | — |
