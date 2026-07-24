@@ -219,30 +219,91 @@ class TestLogRedaction:
 
 
 class TestFrontendVisibleError:
-    """Error messages visible to frontend must not leak credentials.
-
-    NOTE: key-based redact_payload does NOT scrub inline credential values
-    embedded in free-text string fields (detail, message, error). This is a
-    known limitation documented for GPT-5.6 review — full string-pattern
-    redaction would risk over-redaction of benign text.
-    """
+    """Error messages visible to frontend must not leak credentials."""
 
     @pytest.mark.parametrize(
-        "error_payload,expected_cred_in_detail",
+        "error_payload",
         [
-            ({"error": "provider_error", "detail": f"api_key={FAKE_CREDENTIALS['api_key']}"}, True),
-            ({"error": "auth_failed", "detail": f"token={FAKE_CREDENTIALS['token']}"}, True),
+            {"error": "provider_error", "detail": f"api_key={FAKE_CREDENTIALS['api_key']}"},
+            {"error": "auth_failed", "detail": f"token={FAKE_CREDENTIALS['token']}"},
+            {"error": "upstream", "detail": f"Authorization: {FAKE_CREDENTIALS['bearer']}"},
         ],
     )
-    def test_frontend_error_redacted(self, error_payload: dict, expected_cred_in_detail: bool) -> None:
+    def test_frontend_error_redacted(self, error_payload: dict) -> None:
         out = redact_payload(error_payload)
-        # Sensitive keys are always redacted
+        flat = json.dumps(out)
+        for _, fake_val in FAKE_CREDENTIALS.items():
+            assert fake_val not in flat, f"Credential leaked in: {flat}"
         assert out["error"] == error_payload["error"]
-        # detail key is NOT in the sensitive keys set; inline credentials pass through
-        # This test documents the gap — not a code fix in this milestone
-        if expected_cred_in_detail:
-            credential_found = any(
-                fake_val in out["detail"]
-                for fake_val in FAKE_CREDENTIALS.values()
+
+
+class TestStringRedaction:
+    """redact_payload must redact inline credentials in free-text strings."""
+
+    def test_top_level_detail_string(self) -> None:
+        payload = {"detail": f"provider failed: api_key={FAKE_CREDENTIALS['api_key']}"}
+        out = redact_payload(payload)
+        assert FAKE_CREDENTIALS["api_key"] not in json.dumps(out)
+        assert "provider failed:" in json.dumps(out)
+
+    def test_nested_message(self) -> None:
+        payload = {"error": {"message": "HTTP 401", "details": {"text": f"token={FAKE_CREDENTIALS['token']}"}}}
+        out = redact_payload(payload)
+        assert FAKE_CREDENTIALS["token"] not in json.dumps(out)
+
+    def test_list_of_error_strings(self) -> None:
+        payload = {"errors": [
+            f"api_key={FAKE_CREDENTIALS['api_key']}",
+            f"token={FAKE_CREDENTIALS['token']}",
+        ]}
+        out = redact_payload(payload)
+        flat = json.dumps(out)
+        for _, fake_val in FAKE_CREDENTIALS.items():
+            assert fake_val not in flat
+
+    def test_url_query_token(self) -> None:
+        payload = {"url": f"https://api.example.com/data?token={FAKE_CREDENTIALS['token']}"}
+        out = redact_payload(payload)
+        assert FAKE_CREDENTIALS["token"] not in json.dumps(out)
+
+    def test_bearer_header_text(self) -> None:
+        payload = {"auth": f"Authorization: Bearer {FAKE_CREDENTIALS['token']}"}
+        out = redact_payload(payload)
+        assert FAKE_CREDENTIALS["token"] not in json.dumps(out)
+
+    def test_multiple_credentials(self) -> None:
+        payload = {
+            "detail": (
+                f"api_key={FAKE_CREDENTIALS['api_key']}, "
+                f"token={FAKE_CREDENTIALS['token']}, "
+                f"access_token={FAKE_CREDENTIALS['access_token']}"
             )
-            assert credential_found  # documented limitation
+        }
+        out = redact_payload(payload)
+        flat = json.dumps(out)
+        for _, fake_val in FAKE_CREDENTIALS.items():
+            assert fake_val not in flat
+
+    def test_benign_text_preserved(self) -> None:
+        payload = {"detail": "provider returned HTTP 503 upstream unavailable"}
+        out = redact_payload(payload)
+        assert out["detail"] == "provider returned HTTP 503 upstream unavailable"
+
+    def test_original_payload_not_mutated(self) -> None:
+        original = {"detail": f"token={FAKE_CREDENTIALS['token']}"}
+        original_copy = json.dumps(original)
+        redact_payload(original)
+        assert json.dumps(original) == original_copy
+
+    def test_report_no_fake_credentials(self) -> None:
+        out = redact_payload(FAKE_REPORT_JSON)
+        flat = json.dumps(out)
+        for _, fake_val in FAKE_CREDENTIALS.items():
+            assert fake_val not in flat
+
+    def test_frontend_api_error_no_fake_credentials(self) -> None:
+        payload = {"error": "api_error", "message": f"token={FAKE_CREDENTIALS['token']} rejected"}
+        out = redact_payload(payload)
+        flat = json.dumps(out)
+        for _, fake_val in FAKE_CREDENTIALS.items():
+            assert fake_val not in flat
