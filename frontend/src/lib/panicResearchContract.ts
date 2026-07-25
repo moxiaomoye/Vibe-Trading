@@ -1,5 +1,13 @@
 export type PanicMarketRegime = "normal" | "correction" | "systemic_stress" | "panic" | "unknown";
 export type PanicActionLevel = "watch" | "research" | "prepare" | "action_candidate";
+export type PanicDateMode = "auto" | "selected";
+export type PanicDateResolution =
+  | "current_completed_trading_day"
+  | "previous_completed_trading_day"
+  | "selected_trading_day"
+  | "selected_non_trading_day_adjusted"
+  | "historical_data_unavailable"
+  | "data_not_ready";
 export type NotificationDecisionStatus =
   | "ineligible"
   | "duplicate"
@@ -54,11 +62,33 @@ export interface PanicResearchCandidateContract {
 export interface PanicResearchShadowReportContract {
   shadow_run: true;
   information_cutoff: string;
+  requested_date: string | null;
+  effective_trade_date: string;
+  date_mode: PanicDateMode;
+  date_resolution: PanicDateResolution;
+  date_resolution_reason: string;
+  source_date: string;
+  availability_time: string;
+  input_mode: string;
+  data_source: string;
   market: PanicResearchMarketContract;
   screened_watchlist: PanicResearchScreenedAssetContract[];
   research_candidates: PanicResearchCandidateContract[];
   data_gaps: string[];
   versions: Record<string, string>;
+  outcome_evaluation: {
+    status: "pending" | "partially_evaluated" | "fully_evaluated";
+    windows: Array<{
+      horizon: number;
+      status: "pending" | "evaluated";
+      asset_return: number | null;
+      benchmark_return: number | null;
+      sector_return: number | null;
+      maximum_drawdown: number | null;
+      invalidation_triggered: boolean | null;
+      data_gap: string | null;
+    }>;
+  };
   manual_review_required: true;
 }
 
@@ -76,12 +106,25 @@ export interface CandidateDetailState {
   };
 }
 
-export type PanicResearchErrorKind = "authentication" | "not_found" | "unavailable" | "invalid_contract";
+export type PanicResearchErrorKind =
+  | "authentication"
+  | "not_found"
+  | "unavailable"
+  | "invalid_contract"
+  | "data_not_ready"
+  | "historical_data_unavailable"
+  | "provider_unavailable"
+  | "invalid_manual_import";
 
 export type PanicResearchViewState =
   | { kind: "disabled"; reason: string }
   | { kind: "loading" }
-  | { kind: "error"; errorKind: PanicResearchErrorKind; message: string }
+  | {
+      kind: "error";
+      errorKind: PanicResearchErrorKind;
+      message: string;
+      reasons: string[];
+    }
   | {
       kind: "ready";
       report: PanicResearchShadowReportContract;
@@ -106,17 +149,27 @@ export const panicResearchDisabled = (reason: string): PanicResearchViewState =>
 
 export function panicResearchError(error: unknown): PanicResearchViewState {
   const status = statusFrom(error);
+  const code = codeFrom(error);
   const errorKind: PanicResearchErrorKind = error instanceof PanicResearchContractError
     ? "invalid_contract"
     : status === 401 || status === 403
       ? "authentication"
-      : status === 404
-        ? "not_found"
-        : "unavailable";
+      : code === "data_not_ready"
+        ? "data_not_ready"
+        : code === "historical_data_unavailable"
+          ? "historical_data_unavailable"
+          : code === "provider_unavailable"
+            ? "provider_unavailable"
+            : code === "invalid_manual_import"
+              ? "invalid_manual_import"
+              : status === 404
+                ? "not_found"
+                : "unavailable";
   return {
     kind: "error",
     errorKind,
     message: error instanceof Error ? error.message : "Panic research data is unavailable.",
+    reasons: reasonsFrom(error),
   };
 }
 
@@ -132,15 +185,105 @@ export function parsePanicResearchShadowReport(payload: unknown): PanicResearchS
   const versions = Object.fromEntries(
     Object.entries(versionsRecord).map(([key, value]) => [key, text(value, `versions.${key}`)]),
   );
+  const informationCutoff = text(root.information_cutoff, "information_cutoff");
+  const dateMode = root.date_mode === undefined
+    ? "auto"
+    : text(root.date_mode, "date_mode");
+  if (!["auto", "selected"].includes(dateMode)) {
+    throw new PanicResearchContractError(`Unknown date mode: ${dateMode}`);
+  }
+  const dateResolution = root.date_resolution === undefined
+    ? "current_completed_trading_day"
+    : text(root.date_resolution, "date_resolution");
+  const dateResolutions = [
+    "current_completed_trading_day",
+    "previous_completed_trading_day",
+    "selected_trading_day",
+    "selected_non_trading_day_adjusted",
+    "historical_data_unavailable",
+    "data_not_ready",
+  ];
+  if (!dateResolutions.includes(dateResolution)) {
+    throw new PanicResearchContractError(`Unknown date resolution: ${dateResolution}`);
+  }
   return {
     shadow_run: true,
-    information_cutoff: text(root.information_cutoff, "information_cutoff"),
+    information_cutoff: informationCutoff,
+    requested_date: root.requested_date === undefined
+      ? null
+      : nullableText(root.requested_date, "requested_date"),
+    effective_trade_date: root.effective_trade_date === undefined
+      ? market.trade_date
+      : text(root.effective_trade_date, "effective_trade_date"),
+    date_mode: dateMode as PanicDateMode,
+    date_resolution: dateResolution as PanicDateResolution,
+    date_resolution_reason: root.date_resolution_reason === undefined
+      ? "legacy report date context"
+      : text(root.date_resolution_reason, "date_resolution_reason"),
+    source_date: root.source_date === undefined
+      ? market.trade_date
+      : text(root.source_date, "source_date"),
+    availability_time: root.availability_time === undefined
+      ? informationCutoff
+      : text(root.availability_time, "availability_time"),
+    input_mode: root.input_mode === undefined
+      ? "fixture"
+      : text(root.input_mode, "input_mode"),
+    data_source: root.data_source === undefined
+      ? "unknown"
+      : text(root.data_source, "data_source"),
     market,
     screened_watchlist: watchlist,
     research_candidates: candidates,
     data_gaps: stringArray(root.data_gaps, "data_gaps"),
     versions,
+    outcome_evaluation: parseOutcomeEvaluation(root.outcome_evaluation),
     manual_review_required: true,
+  };
+}
+
+function parseOutcomeEvaluation(
+  value: unknown,
+): PanicResearchShadowReportContract["outcome_evaluation"] {
+  if (value === undefined) {
+    return {
+      status: "pending",
+      windows: [5, 20, 60].map((horizon) => ({
+        horizon,
+        status: "pending",
+        asset_return: null,
+        benchmark_return: null,
+        sector_return: null,
+        maximum_drawdown: null,
+        invalidation_triggered: null,
+        data_gap: "outcome evaluation has not been loaded",
+      })),
+    };
+  }
+  const root = record(value, "outcome_evaluation");
+  const status = text(root.status, "outcome_evaluation.status");
+  if (!["pending", "partially_evaluated", "fully_evaluated"].includes(status)) {
+    throw new PanicResearchContractError(`Unknown outcome status: ${status}`);
+  }
+  return {
+    status: status as "pending" | "partially_evaluated" | "fully_evaluated",
+    windows: array(root.windows, "outcome_evaluation.windows").map((raw, index) => {
+      const item = record(raw, `outcome_evaluation.windows[${index}]`);
+      const windowStatus = text(item.status, `outcome_evaluation.windows[${index}].status`);
+      if (!["pending", "evaluated"].includes(windowStatus)) {
+        throw new PanicResearchContractError(`Unknown outcome window status: ${windowStatus}`);
+      }
+      return {
+        horizon: number(item.horizon, `outcome_evaluation.windows[${index}].horizon`),
+        status: windowStatus as "pending" | "evaluated",
+        asset_return: nullableNumber(item.asset_return, "asset_return"),
+        benchmark_return: nullableNumber(item.benchmark_return, "benchmark_return"),
+        sector_return: nullableNumber(item.sector_return, "sector_return"),
+        maximum_drawdown: nullableNumber(item.maximum_drawdown, "maximum_drawdown"),
+        invalidation_triggered: nullableBoolean(item.invalidation_triggered, "invalidation_triggered"),
+        data_gap: nullableText(item.data_gap, "data_gap"),
+      };
+    }),
   };
 }
 
@@ -260,6 +403,18 @@ function parseNotification(value: unknown): PanicResearchNotificationContract {
 function statusFrom(error: unknown): number | undefined {
   if (!error || typeof error !== "object" || !("status" in error)) return undefined;
   return typeof error.status === "number" ? error.status : undefined;
+}
+
+function codeFrom(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function reasonsFrom(error: unknown): string[] {
+  if (!error || typeof error !== "object" || !("reasons" in error)) return [];
+  return Array.isArray(error.reasons)
+    ? error.reasons.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function record(value: unknown, field: string): Record<string, unknown> {

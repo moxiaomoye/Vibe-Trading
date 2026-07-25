@@ -51,7 +51,11 @@ class ManualImportResult:
     rejected_count: int = 0
 
 
-def parse_manual_import_json(path: str | Path) -> ManualImportResult:
+def parse_manual_import_json(
+    path: str | Path,
+    *,
+    now: datetime | None = None,
+) -> ManualImportResult:
     source_path = Path(path)
     if source_path.suffix.lower() != ".json":
         raise ValueError("manual import file must use the .json extension")
@@ -65,16 +69,28 @@ def parse_manual_import_json(path: str | Path) -> ManualImportResult:
         raise ValueError("manual import file is not valid UTF-8 JSON") from exc
     if not isinstance(data, dict):
         raise ValueError("manual import root must be a JSON object")
-    return _validate_manifest(data)
+    return _validate_manifest(data, now=now)
 
 
-def parse_manual_import_dict(data: dict[str, Any]) -> ManualImportResult:
-    return _validate_manifest(data)
+def parse_manual_import_dict(
+    data: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> ManualImportResult:
+    return _validate_manifest(data, now=now)
 
 
-def _validate_manifest(data: dict[str, Any]) -> ManualImportResult:
+def _validate_manifest(
+    data: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> ManualImportResult:
     errors: list[str] = []
     rows: list[ManualImportRow] = []
+    validation_now = now or datetime.now(timezone.utc)
+    if validation_now.tzinfo is None or validation_now.utcoffset() is None:
+        raise ValueError("manual import validation time must be timezone-aware")
+    shanghai_today = validation_now.astimezone(ZoneInfo("Asia/Shanghai")).date()
 
     sv = data.get("schema_version")
     if sv != SCHEMA_VERSION:
@@ -86,11 +102,11 @@ def _validate_manifest(data: dict[str, Any]) -> ManualImportResult:
 
     try:
         source_date = date.fromisoformat(data.get("source_date", ""))
-        if source_date > date.today():
+        if source_date > shanghai_today:
             errors.append(f"source_date {source_date} is in the future")
     except (ValueError, TypeError):
         errors.append("invalid or missing source_date (expected YYYY-MM-DD)")
-        source_date = date.today()
+        source_date = shanghai_today
 
     try:
         avail = data.get("availability_time", "")
@@ -98,13 +114,13 @@ def _validate_manifest(data: dict[str, Any]) -> ManualImportResult:
         if availability_time.tzinfo is None or availability_time.utcoffset() is None:
             errors.append("availability_time must include a timezone offset")
             availability_time = availability_time.replace(tzinfo=timezone.utc)
-        if availability_time > datetime.now(timezone.utc) + FUTURE_CLOCK_SKEW:
+        if availability_time > validation_now + FUTURE_CLOCK_SKEW:
             errors.append("availability_time must not be in the future")
         if availability_time.astimezone(ZoneInfo("Asia/Shanghai")).date() < source_date:
             errors.append("availability_time must not precede source_date")
     except (ValueError, TypeError):
         errors.append("invalid availability_time (expected timezone-aware ISO 8601)")
-        availability_time = datetime.now(timezone.utc)
+        availability_time = validation_now
 
     raw_rows = data.get("rows", [])
     if not isinstance(raw_rows, list):

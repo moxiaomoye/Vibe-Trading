@@ -60,6 +60,27 @@ class TestReportStorage:
         tmp_storage.save_report(report, date_dir=date(2026, 7, 25))
         assert (tmp_storage.output_dir / "2026-07-25").exists()
 
+    def test_load_latest_for_date_ignores_other_dates_and_corrupt_files(
+        self,
+        tmp_storage: ReportStorage,
+    ) -> None:
+        selected = date(2026, 7, 24)
+        report = {"shadow_run": True, "market": {"trade_date": selected.isoformat()}}
+        tmp_storage.save_report(report, date_dir=selected)
+        (tmp_storage.output_dir / selected.isoformat() / "corrupt.json").write_text(
+            "{broken",
+            encoding="utf-8",
+        )
+        tmp_storage.save_report(
+            {"shadow_run": True, "market": {"trade_date": "2026-07-25"}},
+            date_dir=date(2026, 7, 25),
+        )
+
+        loaded = tmp_storage.load_latest_for_date(selected)
+
+        assert loaded is not None
+        assert loaded["market"]["trade_date"] == selected.isoformat()
+
     def test_markdown_written(self, tmp_storage: ReportStorage) -> None:
         report = {"shadow_run": True, "market": {"trade_date": "2026-07-24"}}
         tmp_storage.save_report(report, date_dir=date(2026, 7, 24))

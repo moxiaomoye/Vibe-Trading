@@ -59,6 +59,11 @@ class OutcomeWindow:
     target_date: date | None
     return_pct: float | None
     data_gap: DataGap | None = None
+    benchmark_return_pct: float | None = None
+    sector_return_pct: float | None = None
+    maximum_drawdown: float | None = None
+    invalidation_triggered: bool | None = None
+    evaluation_status: str = "pending"
 
 
 @dataclass(frozen=True)
@@ -68,6 +73,17 @@ class CandidateOutcome:
     symbol: str
     entry_close: float
     windows: tuple[OutcomeWindow, ...]
+
+    @property
+    def evaluation_status(self) -> str:
+        evaluated = sum(
+            window.evaluation_status == "evaluated" for window in self.windows
+        )
+        if evaluated == len(self.windows):
+            return "fully_evaluated"
+        if evaluated:
+            return "partially_evaluated"
+        return "pending"
 
 
 @dataclass(frozen=True)
@@ -120,6 +136,9 @@ def run_panic_calibration(
     watchlist_path: Path | None = None,
     horizons: Sequence[int] = DEFAULT_HORIZONS,
     candidate_levels: Collection[PanicLevel] = DEFAULT_CANDIDATE_LEVELS,
+    benchmark_prices: Mapping[date, float] | None = None,
+    sector_prices: Mapping[date, Mapping[str, float]] | None = None,
+    invalidation_events: Mapping[date, Collection[str]] | None = None,
 ) -> CalibrationResult:
     """Compare threshold versions and attach strictly ex-post return labels.
 
@@ -159,6 +178,9 @@ def run_panic_calibration(
             date_positions=date_positions,
             horizons=normalized_horizons,
             candidate_levels=eligible_levels,
+            benchmark_prices=benchmark_prices or {},
+            sector_prices=sector_prices or {},
+            invalidation_events=invalidation_events or {},
         )
         evaluations[threshold_version.version] = VersionEvaluation(
             threshold_version=threshold_version.version,
@@ -183,6 +205,9 @@ def _evaluate_outcomes(
     date_positions: Mapping[date, int],
     horizons: tuple[int, ...],
     candidate_levels: frozenset[PanicLevel],
+    benchmark_prices: Mapping[date, float],
+    sector_prices: Mapping[date, Mapping[str, float]],
+    invalidation_events: Mapping[date, Collection[str]],
 ) -> tuple[CandidateOutcome, ...]:
     outcomes: list[CandidateOutcome] = []
     for entry in replay.entries:
@@ -200,6 +225,9 @@ def _evaluate_outcomes(
                     outcome_prices=outcome_prices,
                     trading_dates=trading_dates,
                     date_positions=date_positions,
+                    benchmark_prices=benchmark_prices,
+                    sector_prices=sector_prices,
+                    invalidation_events=invalidation_events,
                 )
                 for horizon in horizons
             )
@@ -224,6 +252,9 @@ def _evaluate_window(
     outcome_prices: Mapping[date, Mapping[str, float]],
     trading_dates: tuple[date, ...],
     date_positions: Mapping[date, int],
+    benchmark_prices: Mapping[date, float],
+    sector_prices: Mapping[date, Mapping[str, float]],
+    invalidation_events: Mapping[date, Collection[str]],
 ) -> OutcomeWindow:
     start_position = date_positions.get(trade_date)
     target_position = None if start_position is None else start_position + horizon
@@ -233,6 +264,7 @@ def _evaluate_window(
             target_date=None,
             return_pct=None,
             data_gap=DataGap(description=f"缺少 {horizon} 个交易日后的结果窗口"),
+            evaluation_status="pending",
         )
 
     target_date = trading_dates[target_position]
@@ -247,13 +279,60 @@ def _evaluate_window(
                 last_trade_date=target_date,
                 description=f"{target_date} 缺少 {symbol} 收盘价",
             ),
+            evaluation_status="pending",
         )
 
+    window_dates = trading_dates[start_position + 1 : target_position + 1]
     return OutcomeWindow(
         horizon=horizon,
         target_date=target_date,
         return_pct=round(float(target_close) / entry_close - 1.0, 8),
+        benchmark_return_pct=_series_return(
+            benchmark_prices.get(trade_date),
+            benchmark_prices.get(target_date),
+        ),
+        sector_return_pct=_series_return(
+            _symbol_value(sector_prices.get(trade_date, {}), symbol),
+            _symbol_value(sector_prices.get(target_date, {}), symbol),
+        ),
+        maximum_drawdown=_maximum_drawdown(
+            entry_close,
+            [
+                _symbol_value(outcome_prices.get(day, {}), symbol)
+                for day in window_dates
+            ],
+        ),
+        invalidation_triggered=any(
+            symbol in invalidation_events.get(day, ())
+            or symbol.split(".")[0] in invalidation_events.get(day, ())
+            for day in window_dates
+        ),
+        evaluation_status="evaluated",
     )
+
+
+def _series_return(start: float | None, end: float | None) -> float | None:
+    try:
+        if start is None or end is None or float(start) <= 0 or float(end) <= 0:
+            return None
+        return round(float(end) / float(start) - 1.0, 8)
+    except (TypeError, ValueError):
+        return None
+
+
+def _maximum_drawdown(
+    entry_close: float,
+    values: Sequence[float | None],
+) -> float | None:
+    usable = [float(value) for value in values if value is not None and value > 0]
+    if not usable:
+        return None
+    peak = float(entry_close)
+    drawdown = 0.0
+    for value in usable:
+        peak = max(peak, value)
+        drawdown = min(drawdown, value / peak - 1.0)
+    return round(drawdown, 8)
 
 
 def _symbol_value(values: Mapping[str, float], symbol: str) -> float | None:

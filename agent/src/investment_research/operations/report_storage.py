@@ -7,7 +7,7 @@ import json
 import shutil
 import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ class ReportStorage:
 
     def save_report(self, report: dict[str, Any], date_dir: date | None = None) -> Path | None:
         report["_schema_version"] = REPORT_SCHEMA_VERSION
-        report["_stored_at"] = datetime.utcnow().isoformat()
+        report["_stored_at"] = datetime.now(timezone.utc).isoformat()
 
         fingerprint = _stable_fingerprint(report)
         report["_fingerprint"] = fingerprint
@@ -58,6 +58,23 @@ class ReportStorage:
             return json.loads(latest.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
+
+    def load_latest_for_date(self, trade_date: date) -> dict[str, Any] | None:
+        """Load the newest valid immutable report stored for one trade date."""
+        directory = self.output_dir / trade_date.isoformat()
+        if not directory.is_dir():
+            return None
+        reports: list[dict[str, Any]] = []
+        for path in directory.glob("*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(payload, dict):
+                reports.append(payload)
+        if not reports:
+            return None
+        return max(reports, key=lambda item: str(item.get("_stored_at", "")))
 
     def load_report(self, fingerprint: str, date_str: str | None = None) -> dict[str, Any] | None:
         if date_str:

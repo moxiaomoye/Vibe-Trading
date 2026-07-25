@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Literal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -23,6 +24,13 @@ from src.investment_research.application.shadow_run import (
     ShadowRunInputs,
 )
 from src.investment_research.operations.report_storage import ReportStorage
+from src.investment_research.operations.trade_date import (
+    DateMode,
+    DateResolution,
+    ResolvedTradeDate,
+    TradeDateResolutionError,
+    TradeDateResolver,
+)
 from src.investment_research.operations.manual_import import (
     MAX_IMPORT_BYTES,
     parse_manual_import_dict,
@@ -107,6 +115,21 @@ class ShadowReportRunRequest(BaseModel):
         return self
 
 
+class DateSelectionRequest(BaseModel):
+    """Date context shared by Provider and Manual Import runs."""
+
+    date_mode: Literal["auto", "selected"] = "auto"
+    requested_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> "DateSelectionRequest":
+        if self.date_mode == "selected" and self.requested_date is None:
+            raise ValueError("requested_date is required when date_mode is selected")
+        if self.date_mode == "auto" and self.requested_date is not None:
+            raise ValueError("requested_date must be null when date_mode is auto")
+        return self
+
+
 def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> None:
     """Register the isolated HTTP adapter; callers own the default-off gate."""
 
@@ -114,6 +137,7 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
 
     @app.get("/investment-research/panic-shadow/status", dependencies=dependencies)
     def panic_shadow_status() -> dict[str, Any]:
+        default_date = _resolve_date(DateSelectionRequest())
         return {
             "enabled": True,
             "mode": "shadow",
@@ -127,6 +151,7 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
             "notification_enabled": False,
             "trading_enabled": False,
             "manual_review_required": True,
+            "date_context": default_date.to_dict(),
         }
 
     @app.get("/investment-research/panic-shadow/latest", dependencies=dependencies)
@@ -165,11 +190,24 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
         )
 
     @app.post("/investment-research/panic-shadow/run-current", dependencies=dependencies)
-    def run_current_shadow_report():
+    def run_current_shadow_report(selection: DateSelectionRequest | None = None):
+        selection = selection or DateSelectionRequest()
         try:
-            result, post_close = _execute_current()
+            resolved = _resolve_date(selection)
+            archived = _archived_report(resolved)
+            if archived is not None:
+                return archived
+            result, post_close, panel_data = _execute_current(resolved)
         except CurrentReportDataError as exc:
-            return _error(503, "data_unavailable", str(exc), reasons=list(exc.reasons))
+            return _error(
+                exc.status_code,
+                exc.code,
+                str(exc),
+                reasons=list(exc.reasons),
+                date_context=exc.date_context,
+            )
+        except TradeDateResolutionError as exc:
+            return _error(422, exc.code, str(exc))
         except Exception:
             return _error(
                 500,
@@ -184,6 +222,16 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
             report["data_source"] = post_close.source
             report["input_mode"] = "provider"
             report["provenance"] = _provider_provenance(post_close)
+            _decorate_report(
+                report,
+                resolved=resolved,
+                source_date=post_close.source_date,
+                availability_time=post_close.retrieved_at,
+                input_mode="provider",
+                data_source=post_close.source,
+                output=result.output,
+                input_hash=_panel_input_hash(panel_data),
+            )
             try:
                 _storage().save_report(report, date_dir=post_close.source_date)
             except OSError:
@@ -203,9 +251,21 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
     @app.post("/investment-research/panic-shadow/run-manual", dependencies=dependencies)
     def run_manual_shadow_report(payload: dict[str, Any]):
         try:
-            result, provenance = _execute_manual(payload)
+            selection = _selection_from_payload(payload)
+            resolved = _resolve_date(selection)
+            result, provenance, panel_data = _execute_manual(payload, resolved)
         except CurrentReportDataError as exc:
-            return _error(422, "invalid_manual_import", str(exc), reasons=list(exc.reasons))
+            return _error(
+                exc.status_code,
+                exc.code,
+                str(exc),
+                reasons=list(exc.reasons),
+                date_context=exc.date_context,
+            )
+        except TradeDateResolutionError as exc:
+            return _error(422, exc.code, str(exc))
+        except (TypeError, ValueError) as exc:
+            return _error(422, "invalid_manual_import", str(exc))
         except Exception:
             return _error(
                 500,
@@ -220,6 +280,18 @@ def register_panic_shadow_report_routes(app: FastAPI, require_auth: AuthDep) -> 
             report["data_source"] = "manual_import"
             report["input_mode"] = "manual_import"
             report["provenance"] = provenance
+            _decorate_report(
+                report,
+                resolved=resolved,
+                source_date=date.fromisoformat(provenance["source_date"]),
+                availability_time=datetime.fromisoformat(
+                    provenance["availability_time"]
+                ),
+                input_mode="manual_import",
+                data_source="manual_import",
+                output=result.output,
+                input_hash=_panel_input_hash(panel_data),
+            )
             try:
                 _storage().save_report(report, date_dir=date.fromisoformat(provenance["source_date"]))
             except OSError:
@@ -273,28 +345,61 @@ def _execute(payload: ShadowReportRunRequest):
 
 
 class CurrentReportDataError(ValueError):
-    def __init__(self, message: str, reasons: list[str] | tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        message: str,
+        reasons: list[str] | tuple[str, ...] = (),
+        *,
+        code: str = "provider_unavailable",
+        status_code: int = 503,
+        date_context: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.reasons = tuple(reasons)
+        self.code = code
+        self.status_code = status_code
+        self.date_context = date_context
 
 
-def _execute_current():
+def _execute_current(resolved: ResolvedTradeDate):
+    trade_date = resolved.effective_trade_date
+    today = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
+    if trade_date != today:
+        raise CurrentReportDataError(
+            "no trusted historical Provider panel or archived report is available",
+            ["current spot endpoints are not permitted for historical replay"],
+            code=DateResolution.HISTORICAL_DATA_UNAVAILABLE.value,
+            status_code=404,
+            date_context=resolved.to_dict(),
+        )
     provider = _current_provider()
-    trade_date = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
-    post_close = provider.load(as_of=trade_date)
+    try:
+        post_close = provider.load(as_of=trade_date)
+    except Exception as exc:
+        raise CurrentReportDataError(
+            "the current post-close Provider request failed",
+            [f"provider_error_type={type(exc).__name__}"],
+            date_context=resolved.to_dict(),
+        ) from exc
     reasons = [gap.reason for gap in post_close.data_gaps]
     if post_close.source_date != trade_date:
         raise CurrentReportDataError(
             "provider source date does not match the requested trading date",
             reasons,
+            date_context=resolved.to_dict(),
         )
     if post_close.availability_date > trade_date:
         raise CurrentReportDataError(
             "provider data was not available on the requested trading date",
             reasons,
+            date_context=resolved.to_dict(),
         )
     if post_close.spot_df.empty:
-        raise CurrentReportDataError("all spot sources are unavailable", reasons)
+        raise CurrentReportDataError(
+            "all current spot sources are unavailable",
+            reasons,
+            date_context=resolved.to_dict(),
+        )
 
     information_cutoff = post_close.retrieved_at.astimezone(timezone.utc)
     observed_at = max(_now_utc(), information_cutoff)
@@ -307,30 +412,56 @@ def _execute_current():
         data_date=post_close.source_date,
         data_available_at=information_cutoff,
         run_id=f"shadow-{trade_date.isoformat()}-{information_cutoff.strftime('%H%M%S%f')}",
-    ), post_close
+    ), post_close, panel_data
 
 
-def _execute_manual(payload: dict[str, Any]):
+def _execute_manual(
+    payload: dict[str, Any],
+    resolved: ResolvedTradeDate,
+):
     if len(json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")) > MAX_IMPORT_BYTES:
         raise CurrentReportDataError(
-            f"manual import payload exceeds {MAX_IMPORT_BYTES} bytes"
+            f"manual import payload exceeds {MAX_IMPORT_BYTES} bytes",
+            code="invalid_manual_import",
+            status_code=422,
+            date_context=resolved.to_dict(),
         )
-    imported = parse_manual_import_dict(payload)
+    now = _now_utc()
+    imported = parse_manual_import_dict(payload, now=now)
     if imported.errors:
-        raise CurrentReportDataError("manual import validation failed", imported.errors)
-    if not imported.rows:
-        raise CurrentReportDataError("manual import contains no accepted market rows")
-
-    trade_date = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
-    if imported.source_date != trade_date:
         raise CurrentReportDataError(
-            "browser manual import only accepts the current Shanghai trading date",
-            [f"source_date={imported.source_date.isoformat()}", f"expected={trade_date.isoformat()}"],
+            "manual import validation failed",
+            imported.errors,
+            code="invalid_manual_import",
+            status_code=422,
+            date_context=resolved.to_dict(),
+        )
+    if not imported.rows:
+        raise CurrentReportDataError(
+            "manual import contains no accepted market rows",
+            code="invalid_manual_import",
+            status_code=422,
+            date_context=resolved.to_dict(),
+        )
+
+    if imported.source_date != resolved.effective_trade_date:
+        raise CurrentReportDataError(
+            "manual import source_date does not match the resolved trading date",
+            [
+                f"source_date={imported.source_date.isoformat()}",
+                f"effective_trade_date={resolved.effective_trade_date.isoformat()}",
+            ],
+            code="invalid_manual_import",
+            status_code=422,
+            date_context=resolved.to_dict(),
         )
     benchmarks = {row.benchmark for row in imported.rows if row.benchmark is not None}
     if len(benchmarks) > 1:
         raise CurrentReportDataError(
-            "manual import benchmark values must be consistent across rows"
+            "manual import benchmark values must be consistent across rows",
+            code="invalid_manual_import",
+            status_code=422,
+            date_context=resolved.to_dict(),
         )
 
     from src.value_hunter.post_close_provider import (
@@ -353,7 +484,7 @@ def _execute_manual(payload: dict[str, Any]):
         imported.source_date,
     )
     information_cutoff = imported.availability_time.astimezone(timezone.utc)
-    observed_at = max(_now_utc(), information_cutoff)
+    observed_at = max(now, information_cutoff)
     panel_data = {
         "spot_df": spot_df,
         "limit_up_symbols": limit_up,
@@ -406,7 +537,7 @@ def _execute_manual(payload: dict[str, Any]):
             for gap in panel_data["data_gaps"]
         ],
     }
-    return result, provenance
+    return result, provenance, panel_data
 
 
 def _run_panel(
@@ -429,9 +560,116 @@ def _run_panel(
         now=observed_at,
         data_date=data_date,
         data_available_at=data_available_at,
+        effective_trade_date=data_date,
     )
     runner = PanicResearchShadowRunner(ShadowRunConfig(enabled=True))
     return runner.run(request, inputs)
+
+
+def _selection_from_payload(payload: dict[str, Any]) -> DateSelectionRequest:
+    return DateSelectionRequest(
+        date_mode=payload.get("date_mode", "auto"),
+        requested_date=payload.get("requested_date"),
+    )
+
+
+def _resolve_date(selection: DateSelectionRequest) -> ResolvedTradeDate:
+    return TradeDateResolver().resolve(
+        now=_now_utc(),
+        date_mode=DateMode(selection.date_mode),
+        requested_date=selection.requested_date,
+    )
+
+
+def _archived_report(resolved: ResolvedTradeDate) -> dict[str, Any] | None:
+    today = _now_utc().astimezone(ZoneInfo("Asia/Shanghai")).date()
+    should_check = (
+        resolved.date_mode is DateMode.SELECTED
+        or resolved.effective_trade_date != today
+    )
+    if not should_check:
+        return None
+    stored = _storage().load_latest_for_date(resolved.effective_trade_date)
+    if stored is None:
+        return None
+    report = json.loads(json.dumps(stored, ensure_ascii=False, default=str))
+    report["original_input_mode"] = report.get("input_mode")
+    report["input_mode"] = "archive"
+    report.update(resolved.to_dict())
+    report["information_cutoff"] = str(
+        stored.get("information_cutoff", resolved.information_cutoff.isoformat())
+    )
+    report["source_date"] = str(
+        stored.get("source_date", resolved.effective_trade_date.isoformat())
+    )
+    report["availability_time"] = str(
+        stored.get("availability_time", report["information_cutoff"])
+    )
+    report["data_source"] = str(stored.get("data_source", "archive"))
+    return report
+
+
+def _decorate_report(
+    report: dict[str, Any],
+    *,
+    resolved: ResolvedTradeDate,
+    source_date: date,
+    availability_time: datetime,
+    input_mode: str,
+    data_source: str,
+    output,
+    input_hash: str,
+) -> None:
+    report.update(resolved.to_dict())
+    report["information_cutoff"] = output.information_cutoff.isoformat()
+    report["source_date"] = source_date.isoformat()
+    report["availability_time"] = availability_time.isoformat()
+    report["input_mode"] = input_mode
+    report["data_source"] = data_source
+    report["rule_version"] = output.scan.rule_version
+    report["policy_version"] = report.get("versions", {}).get(
+        "candidate_pipeline", "not_run"
+    )
+    report["watchlist_version"] = output.scan.watchlist_version
+    report["watchlist_hash"] = output.scan.watchlist_hash
+    report["input_hash"] = input_hash
+    report["outcome_evaluation"] = {
+        "status": "pending",
+        "windows": [
+            {
+                "horizon": horizon,
+                "status": "pending",
+                "asset_return": None,
+                "benchmark_return": None,
+                "sector_return": None,
+                "maximum_drawdown": None,
+                "invalidation_triggered": None,
+                "data_gap": "outcome data is evaluated separately after the horizon matures",
+            }
+            for horizon in (5, 20, 60)
+        ],
+    }
+
+
+def _panel_input_hash(panel_data: dict[str, Any]) -> str:
+    frame = panel_data.get("spot_df")
+    rows: list[dict[str, Any]] = []
+    if isinstance(frame, pd.DataFrame):
+        stable = frame.copy()
+        if "代码" in stable.columns:
+            stable = stable.sort_values("代码", kind="stable")
+        rows = stable.to_dict(orient="records")
+    payload = {
+        "data_date": str(panel_data.get("data_date")),
+        "availability_date": str(panel_data.get("availability_date")),
+        "source": str(panel_data.get("source")),
+        "component_sources": panel_data.get("component_sources", {}),
+        "limit_up_symbols": sorted(panel_data.get("limit_up_symbols", [])),
+        "limit_down_symbols": sorted(panel_data.get("limit_down_symbols", [])),
+        "rows": rows,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _current_provider():
@@ -494,15 +732,19 @@ def _error(
     message: str,
     *,
     reasons: list[str] | None = None,
+    date_context: dict[str, Any] | None = None,
 ) -> JSONResponse:
+    content: dict[str, Any] = {
+        "shadow_run": True,
+        "error": {
+            "code": code,
+            "message": message,
+            "reasons": reasons or [],
+        },
+    }
+    if date_context is not None:
+        content["date_context"] = date_context
     return JSONResponse(
         status_code=status_code,
-        content={
-            "shadow_run": True,
-            "error": {
-                "code": code,
-                "message": message,
-                "reasons": reasons or [],
-            },
-        },
+        content=content,
     )

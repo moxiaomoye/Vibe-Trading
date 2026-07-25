@@ -17,7 +17,10 @@ const apiMock = vi.hoisted(() => ({
   runPanicShadowReport: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({ api: apiMock }));
+vi.mock("@/lib/api", () => ({
+  api: apiMock,
+  isDisabledFeatureError: () => false,
+}));
 
 const status: InvestmentResearchStatus = {
   enabled: false,
@@ -76,6 +79,14 @@ describe("InvestmentResearch page", () => {
       notification_enabled: false,
       trading_enabled: false,
       manual_review_required: true,
+      date_context: {
+        date_mode: "auto",
+        requested_date: null,
+        effective_trade_date: "2026-07-24",
+        date_resolution: "previous_completed_trading_day",
+        information_cutoff: "2026-07-24T18:30:00+08:00",
+        date_resolution_reason: "latest completed trading day",
+      },
     });
     apiMock.getLatestPanicShadowReport.mockRejectedValue({ status: 404 });
   });
@@ -88,7 +99,7 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText(/What is the strongest evidence/)).toBeInTheDocument();
     expect(screen.getByText("等待证据初始化")).toBeInTheDocument();
     expect(screen.getByText(/未初始化节点不显示 Confidence/)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "生成今日盘后报告" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "生成最近交易日盘后报告" })).toBeInTheDocument();
   });
 
   it("shows a truthful empty daily state and read-only boundary", async () => {
@@ -121,9 +132,12 @@ describe("InvestmentResearch page", () => {
     });
     render(<InvestmentResearch />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "生成今日盘后报告" }));
+    fireEvent.click(await screen.findByRole("button", { name: "生成最近交易日盘后报告" }));
 
-    await waitFor(() => expect(apiMock.runCurrentPanicShadowReport).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.runCurrentPanicShadowReport).toHaveBeenCalledWith({
+      date_mode: "auto",
+      requested_date: null,
+    }));
     expect((await screen.findAllByText("panic")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("420/4300/160")).toBeInTheDocument();
     expect(screen.getByText("sector returns unavailable")).toBeInTheDocument();
@@ -157,7 +171,7 @@ describe("InvestmentResearch page", () => {
     };
     render(<InvestmentResearch />);
 
-    fireEvent.change(await screen.findByLabelText("导入当日 JSON"), {
+    fireEvent.change(await screen.findByLabelText("导入对应日期 JSON"), {
       target: {
         files: [
           new File([JSON.stringify(manifest)], "post-close.json", {
@@ -168,9 +182,78 @@ describe("InvestmentResearch page", () => {
     });
 
     await waitFor(() => {
-      expect(apiMock.runManualPanicShadowReport).toHaveBeenCalledWith(manifest);
+      expect(apiMock.runManualPanicShadowReport).toHaveBeenCalledWith(
+        manifest,
+        { date_mode: "auto", requested_date: null },
+      );
     });
     expect(await screen.findByText("correction")).toBeInTheDocument();
     expect(screen.getByText(/imported universe only/)).toBeInTheDocument();
+  });
+
+  it("runs a selected historical date and displays resolved provenance", async () => {
+    apiMock.runCurrentPanicShadowReport.mockResolvedValue({
+      shadow_run: true,
+      information_cutoff: "2026-07-23T10:30:00+00:00",
+      requested_date: "2026-07-23",
+      effective_trade_date: "2026-07-23",
+      date_mode: "selected",
+      date_resolution: "selected_trading_day",
+      date_resolution_reason: "the selected date is a completed trading day",
+      source_date: "2026-07-23",
+      availability_time: "2026-07-23T10:30:00+00:00",
+      input_mode: "archive",
+      data_source: "manual_import",
+      market: {
+        trade_date: "2026-07-23", regime: "normal", panic_observation: "normal",
+        advance: 2000, decline: 1800, limit_down: 3, median_daily_return: 0.001,
+      },
+      screened_watchlist: [], research_candidates: [], data_gaps: [],
+      versions: { panic_rule: "1.0.0" },
+      outcome_evaluation: {
+        status: "pending",
+        windows: [5, 20, 60].map((horizon) => ({
+          horizon, status: "pending", asset_return: null, benchmark_return: null,
+          sector_return: null, maximum_drawdown: null,
+          invalidation_triggered: null, data_gap: "pending",
+        })),
+      },
+      manual_review_required: true,
+    });
+    render(<InvestmentResearch />);
+
+    fireEvent.change(await screen.findByLabelText("日期模式"), {
+      target: { value: "selected" },
+    });
+    fireEvent.change(screen.getByLabelText("分析日期"), {
+      target: { value: "2026-07-23" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "回放所选日期" }));
+
+    await waitFor(() => expect(apiMock.runCurrentPanicShadowReport).toHaveBeenCalledWith({
+      date_mode: "selected",
+      requested_date: "2026-07-23",
+    }));
+    expect(await screen.findByText("archive / manual_import")).toBeInTheDocument();
+    expect(screen.getByText("selected_trading_day")).toBeInTheDocument();
+    expect(screen.getByText("5日：pending")).toBeInTheDocument();
+  });
+
+  it("keeps Manual Import available and shows structured provider reasons", async () => {
+    apiMock.runCurrentPanicShadowReport.mockRejectedValue(Object.assign(
+      new Error("all current spot sources are unavailable"),
+      {
+        status: 503,
+        code: "provider_unavailable",
+        reasons: ["spot upstream request failed"],
+      },
+    ));
+    render(<InvestmentResearch />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "生成最近交易日盘后报告" }));
+
+    expect(await screen.findByText(/all current spot sources are unavailable/)).toBeInTheDocument();
+    expect(screen.getByText("spot upstream request failed")).toBeInTheDocument();
+    expect(screen.getByLabelText("导入对应日期 JSON")).toBeEnabled();
   });
 });

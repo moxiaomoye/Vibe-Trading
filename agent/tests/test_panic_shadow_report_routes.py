@@ -120,7 +120,8 @@ def test_shadow_routes_exist_only_when_child_feature_is_enabled(monkeypatch) -> 
 
     assert STATUS_PATH in _paths(app)
     assert API_PATH in _paths(app)
-    assert client.get(STATUS_PATH).json() == {
+    status = client.get(STATUS_PATH).json()
+    assert status == {
         "enabled": True,
         "mode": "shadow",
         "read_only": True,
@@ -133,7 +134,10 @@ def test_shadow_routes_exist_only_when_child_feature_is_enabled(monkeypatch) -> 
         "notification_enabled": False,
         "trading_enabled": False,
         "manual_review_required": True,
+        "date_context": status["date_context"],
     }
+    assert status["date_context"]["date_mode"] == "auto"
+    assert status["date_context"]["effective_trade_date"]
 
 
 def test_shadow_routes_reuse_existing_bearer_auth(monkeypatch) -> None:
@@ -301,6 +305,25 @@ def test_run_current_uses_provider_persists_and_latest_is_json_safe(
     assert report["provenance"]["errors"][0]["message"] == "upstream request failed"
     assert "must-not-leak" not in current.text
     assert report["market"]["trade_date"] == TRADE_DATE.isoformat()
+    assert report["requested_date"] is None
+    assert report["effective_trade_date"] == TRADE_DATE.isoformat()
+    assert report["date_mode"] == "auto"
+    assert report["date_resolution"] == "current_completed_trading_day"
+    assert report["source_date"] == TRADE_DATE.isoformat()
+    assert report["availability_time"]
+    assert report["input_hash"]
+    assert report["watchlist_hash"]
+    assert [item["horizon"] for item in report["outcome_evaluation"]["windows"]] == [
+        5,
+        20,
+        60,
+    ]
+    assert all(
+        item["status"] == "pending"
+        and item["asset_return"] is None
+        and item["benchmark_return"] is None
+        for item in report["outcome_evaluation"]["windows"]
+    )
     assert report["_fingerprint"]
 
 
@@ -332,8 +355,9 @@ def test_current_provider_failure_is_isolated_and_live_stays_available(monkeypat
     failed = client.post(CURRENT_PATH)
     live = client.get("/live")
 
-    assert failed.status_code == 500
-    assert failed.json()["error"]["code"] == "shadow_run_failed"
+    assert failed.status_code == 503
+    assert failed.json()["error"]["code"] == "provider_unavailable"
+    assert failed.json()["error"]["reasons"] == ["provider_error_type=RuntimeError"]
     assert "upstream detail" not in failed.text
     assert live.status_code == 200
 
@@ -404,3 +428,145 @@ def test_manual_import_rejects_untrusted_time_contract(monkeypatch) -> None:
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_manual_import"
     assert any("timezone offset" in reason for reason in response.json()["error"]["reasons"])
+
+
+def _manual_payload(source_date: date, availability_time: str) -> dict:
+    return {
+        "schema_version": "1.0",
+        "source": "manual_import",
+        "source_date": source_date.isoformat(),
+        "availability_time": availability_time,
+        "rows": [
+            {
+                "symbol": "000001",
+                "name": "manual",
+                "close": 9.4,
+                "previous_close": 10.0,
+                "change_percent": -6.0,
+            }
+        ],
+    }
+
+
+def test_friday_manual_manifest_runs_on_saturday_and_freezes_date_context(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    saturday = datetime(2026, 7, 25, 10, 0, tzinfo=timezone.utc)
+    friday = date(2026, 7, 24)
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: saturday)
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+
+    response = _direct_client(lambda: None).post(
+        MANUAL_PATH,
+        json=_manual_payload(friday, "2026-07-25T17:30:00+08:00"),
+    )
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["effective_trade_date"] == friday.isoformat()
+    assert report["date_resolution"] == "previous_completed_trading_day"
+    assert report["source_date"] == friday.isoformat()
+    assert report["input_mode"] == "manual_import"
+    assert report["data_source"] == "manual_import"
+
+
+def test_selected_weekend_manual_manifest_resolves_to_friday(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    saturday = datetime(2026, 7, 25, 10, 0, tzinfo=timezone.utc)
+    friday = date(2026, 7, 24)
+    payload = _manual_payload(friday, "2026-07-25T17:30:00+08:00")
+    payload.update({"date_mode": "selected", "requested_date": "2026-07-25"})
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: saturday)
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+
+    response = _direct_client(lambda: None).post(MANUAL_PATH, json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["requested_date"] == "2026-07-25"
+    assert response.json()["effective_trade_date"] == friday.isoformat()
+    assert (
+        response.json()["date_resolution"]
+        == "selected_non_trading_day_adjusted"
+    )
+
+
+def test_historical_provider_request_never_calls_current_spot(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    saturday = datetime(2026, 7, 25, 10, 0, tzinfo=timezone.utc)
+
+    def forbidden():
+        raise AssertionError("current Provider must not be created for history")
+
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: saturday)
+    monkeypatch.setattr(shadow_routes, "_current_provider", forbidden)
+    monkeypatch.setattr(
+        shadow_routes,
+        "_report_storage",
+        ReportStorage(tmp_path / "reports"),
+    )
+
+    response = _direct_client(lambda: None).post(
+        CURRENT_PATH,
+        json={"date_mode": "selected", "requested_date": "2026-07-23"},
+    )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["error"]["code"] == "historical_data_unavailable"
+    assert body["date_context"]["effective_trade_date"] == "2026-07-23"
+    assert any("current spot" in item for item in body["error"]["reasons"])
+
+
+def test_selected_saved_report_opens_as_archive_without_recalculation(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    saturday = datetime(2026, 7, 25, 10, 0, tzinfo=timezone.utc)
+    friday = date(2026, 7, 24)
+    storage = ReportStorage(tmp_path / "reports")
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: saturday)
+    monkeypatch.setattr(shadow_routes, "_report_storage", storage)
+    client = _direct_client(lambda: None)
+    manual = _manual_payload(friday, "2026-07-25T17:30:00+08:00")
+    assert client.post(MANUAL_PATH, json=manual).status_code == 200
+
+    archived = client.post(
+        CURRENT_PATH,
+        json={"date_mode": "selected", "requested_date": friday.isoformat()},
+    )
+
+    assert archived.status_code == 200
+    assert archived.json()["input_mode"] == "archive"
+    assert archived.json()["original_input_mode"] == "manual_import"
+    assert archived.json()["market"]["trade_date"] == friday.isoformat()
+    assert archived.json()["rule_version"]
+    assert archived.json()["watchlist_hash"]
+
+
+def test_future_selected_date_is_structured_and_does_not_affect_live(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(shadow_routes, "_now_utc", lambda: OBSERVED_AT)
+    client = _direct_client(lambda: None)
+
+    failed = client.post(
+        CURRENT_PATH,
+        json={"date_mode": "selected", "requested_date": "2026-07-23"},
+    )
+
+    assert failed.status_code == 422
+    assert failed.json()["error"]["code"] == "invalid_date_selection"
+    assert client.get("/live").status_code == 200

@@ -9,6 +9,7 @@ import {
   type InvestmentResearchEvidenceReadiness,
   type InvestmentResearchStatus,
   type InvestmentResearchThesis,
+  type PanicShadowDateMode,
 } from "@/lib/api";
 import {
   panicResearchDisabled,
@@ -194,12 +195,28 @@ function AcceptedEvidence({ items }: { items: InvestmentResearchEvidenceInboxIte
   );
 }
 
-function PanicShadowSection({ status, running, onRun, onManualImport }: {
+function PanicShadowSection({
+  status,
+  running,
+  dateMode,
+  selectedDate,
+  onDateModeChange,
+  onSelectedDateChange,
+  onRun,
+  onManualImport,
+}: {
   status: PanicResearchViewState;
   running: boolean;
+  dateMode: PanicShadowDateMode;
+  selectedDate: string;
+  onDateModeChange: (value: PanicShadowDateMode) => void;
+  onSelectedDateChange: (value: string) => void;
   onRun: () => void;
   onManualImport: (file: File) => void;
 }) {
+  const actionLabel = dateMode === "auto"
+    ? "生成最近交易日盘后报告"
+    : "回放所选日期";
   const runButton = (
     <button
       type="button"
@@ -207,14 +224,14 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
       disabled={running}
       className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {running ? "正在生成…" : "生成今日盘后报告"}
+      {running ? "正在生成…" : actionLabel}
     </button>
   );
   const actions = (
     <div className="flex flex-wrap gap-2">
       {runButton}
       <label className={`rounded-md border px-3 py-2 text-xs font-medium ${running ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
-        导入当日 JSON
+        导入对应日期 JSON
         <input
           type="file"
           accept=".json,application/json"
@@ -225,6 +242,33 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
             if (file) onManualImport(file);
             event.currentTarget.value = "";
           }}
+        />
+      </label>
+    </div>
+  );
+  const dateControls = (
+    <div className="mb-3 grid gap-3 rounded-md border bg-muted/30 p-3 sm:grid-cols-2">
+      <label className="text-xs font-medium">
+        日期模式
+        <select
+          value={dateMode}
+          disabled={running}
+          onChange={(event) => onDateModeChange(event.target.value as PanicShadowDateMode)}
+          className="mt-1 w-full rounded-md border bg-background px-2 py-2"
+        >
+          <option value="auto">自动：最近完整交易日</option>
+          <option value="selected">指定日期</option>
+        </select>
+      </label>
+      <label className="text-xs font-medium">
+        分析日期
+        <input
+          type="date"
+          value={selectedDate}
+          max={shanghaiDate()}
+          disabled={running || dateMode !== "selected"}
+          onChange={(event) => onSelectedDateChange(event.target.value)}
+          className="mt-1 w-full rounded-md border bg-background px-2 py-2 disabled:opacity-60"
         />
       </label>
     </div>
@@ -246,9 +290,16 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
     );
   }
   if (status.kind === "error") {
-    const label = status.errorKind === "authentication" ? "认证失败" :
-      status.errorKind === "not_found" ? "尚无盘后报告" :
-      status.errorKind === "invalid_contract" ? "响应异常" : "服务不可用";
+    const label = {
+      authentication: "认证失败",
+      not_found: "尚无盘后报告",
+      invalid_contract: "响应异常",
+      data_not_ready: "盘后数据尚未完成",
+      historical_data_unavailable: "历史数据不可用",
+      provider_unavailable: "Provider不可用",
+      invalid_manual_import: "导入文件无效",
+      unavailable: "服务不可用",
+    }[status.errorKind];
     const description = status.errorKind === "not_found"
       ? "当前还没有已保存的可信报告，可以在收盘后手动生成。"
       : status.errorKind === "authentication"
@@ -258,10 +309,16 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
           : "盘后报告服务暂时没有返回可用结果。";
     return (
       <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
+        {dateControls}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold">A股盘后恐慌初筛</h2>
-            <p className="mt-2 text-sm text-destructive">{label}：{description}</p>
+            <p className="mt-2 text-sm text-destructive">{label}：{status.message || description}</p>
+            {status.reasons.length > 0 && (
+              <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-destructive">
+                {status.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            )}
           </div>
           {status.errorKind !== "authentication" && actions}
         </div>
@@ -270,6 +327,7 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
   }
   return (
     <section className="rounded-xl border border-amber-500/30 bg-card p-5">
+      {dateControls}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold">A股盘后恐慌初筛</h2>
@@ -294,6 +352,14 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
           <p className="text-muted-foreground">需人工复核</p>
           <p className="font-semibold">{status.report.manual_review_required ? "是" : "否"}</p>
         </div>
+      </div>
+      <div className="mt-3 grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <div><p className="text-muted-foreground">请求日期</p><p className="font-medium">{status.report.requested_date ?? "自动"}</p></div>
+        <div><p className="text-muted-foreground">实际交易日</p><p className="font-medium">{status.report.effective_trade_date}</p></div>
+        <div><p className="text-muted-foreground">日期解析</p><p className="font-medium">{status.report.date_resolution}</p></div>
+        <div><p className="text-muted-foreground">数据来源</p><p className="font-medium">{status.report.input_mode} / {status.report.data_source}</p></div>
+        <div className="sm:col-span-2"><p className="text-muted-foreground">解析原因</p><p>{status.report.date_resolution_reason}</p></div>
+        <div className="sm:col-span-2"><p className="text-muted-foreground">信息截止</p><p>{status.report.information_cutoff}</p></div>
       </div>
       {status.report.data_gaps.length > 0 && (
         <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/5 p-2 text-xs text-amber-700">
@@ -344,6 +410,16 @@ function PanicShadowSection({ status, running, onRun, onManualImport }: {
           </ul>
         </div>
       )}
+      <div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+        <p className="font-medium">历史结果：{status.report.outcome_evaluation.status}</p>
+        <p className="mt-1">
+          {status.report.outcome_evaluation.windows.map((item) => (
+            <span key={item.horizon} className="mr-3">
+              {item.horizon}日：{item.status}
+            </span>
+          ))}
+        </p>
+      </div>
     </section>
   );
 }
@@ -359,6 +435,8 @@ export function InvestmentResearch() {
   const [error, setError] = useState("");
   const [shadowStatus, setShadowStatus] = useState<PanicResearchViewState>({ kind: "loading" });
   const [shadowRunning, setShadowRunning] = useState(false);
+  const [dateMode, setDateMode] = useState<PanicShadowDateMode>("auto");
+  const [selectedDate, setSelectedDate] = useState(shanghaiDate());
 
   const load = useCallback(async () => {
     setError("");
@@ -390,6 +468,9 @@ export function InvestmentResearch() {
     }
     try {
       const shadowRaw = await api.getPanicShadowStatus();
+      if (shadowRaw.date_context?.effective_trade_date) {
+        setSelectedDate(shadowRaw.date_context.effective_trade_date);
+      }
       if (!shadowRaw.enabled) {
         setShadowStatus(panicResearchDisabled("后端影子报告未启用"));
       } else {
@@ -412,13 +493,16 @@ export function InvestmentResearch() {
   const runCurrentShadow = useCallback(async () => {
     setShadowRunning(true);
     try {
-      setShadowStatus(panicResearchReady(await api.runCurrentPanicShadowReport()));
+      setShadowStatus(panicResearchReady(await api.runCurrentPanicShadowReport({
+        date_mode: dateMode,
+        requested_date: dateMode === "selected" ? selectedDate : null,
+      })));
     } catch (reason) {
       setShadowStatus(panicResearchError(reason));
     } finally {
       setShadowRunning(false);
     }
-  }, []);
+  }, [dateMode, selectedDate]);
 
   const importManualShadow = useCallback(async (file: File) => {
     setShadowRunning(true);
@@ -427,13 +511,20 @@ export function InvestmentResearch() {
         throw new Error("manual import file exceeds 5 MiB");
       }
       const manifest = JSON.parse(await file.text()) as unknown;
-      setShadowStatus(panicResearchReady(await api.runManualPanicShadowReport(manifest)));
+      setShadowStatus(panicResearchReady(await api.runManualPanicShadowReport(
+        manifest,
+        {
+          date_mode: dateMode,
+          requested_date: dateMode === "selected" ? selectedDate : null,
+        },
+      )));
     } catch (reason) {
       if (reason instanceof SyntaxError || (reason instanceof Error && reason.message.includes("5 MiB"))) {
         setShadowStatus({
           kind: "error",
           errorKind: "invalid_contract",
           message: "Manual import is not valid JSON.",
+          reasons: [],
         });
       } else {
         setShadowStatus(panicResearchError(reason));
@@ -441,7 +532,7 @@ export function InvestmentResearch() {
     } finally {
       setShadowRunning(false);
     }
-  }, []);
+  }, [dateMode, selectedDate]);
 
   useEffect(() => { void load(); }, [load]);
   const versionedCount = useMemo(() => theses.filter((item) => item.research_state === "versioned").length, [theses]);
@@ -461,6 +552,10 @@ export function InvestmentResearch() {
       <PanicShadowSection
         status={shadowStatus}
         running={shadowRunning}
+        dateMode={dateMode}
+        selectedDate={selectedDate}
+        onDateModeChange={setDateMode}
+        onSelectedDateChange={setSelectedDate}
         onRun={() => { void runCurrentShadow(); }}
         onManualImport={(file) => { void importManualShadow(file); }}
       />

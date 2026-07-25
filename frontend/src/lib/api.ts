@@ -4,11 +4,25 @@ const BASE = "";
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
+  reasons: string[];
+  dateContext?: PanicShadowDateContext;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    options: {
+      code?: string;
+      reasons?: string[];
+      dateContext?: PanicShadowDateContext;
+    } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = options.code;
+    this.reasons = options.reasons ?? [];
+    this.dateContext = options.dateContext;
   }
 }
 
@@ -26,14 +40,28 @@ export interface CorrelationResponse {
 
 async function errorFromResponse(res: Response): Promise<ApiError> {
   let detail = `HTTP ${res.status}`;
+  let code: string | undefined;
+  let reasons: string[] = [];
+  let dateContext: PanicShadowDateContext | undefined;
   try {
-    const body = await res.json();
-    detail = body.detail || body.message || detail;
+    const body = await res.json() as Record<string, unknown>;
+    const error = isRecord(body.error) ? body.error : undefined;
+    const candidate = error?.message ?? body.detail ?? body.message;
+    if (typeof candidate === "string") detail = safeApiText(candidate, detail);
+    if (typeof error?.code === "string") code = error.code;
+    if (Array.isArray(error?.reasons)) {
+      reasons = error.reasons
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => safeApiText(item, "Additional provider detail is unavailable."));
+    }
+    if (isRecord(body.date_context)) {
+      dateContext = body.date_context as unknown as PanicShadowDateContext;
+    }
   } catch { /* ignore */ }
   if (res.status === 401 || res.status === 403) {
     detail = AUTH_REQUIRED_MESSAGE;
   }
-  return new ApiError(detail, res.status);
+  return new ApiError(detail, res.status, { code, reasons, dateContext });
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -56,14 +84,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   const contentType = res.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
-    const preview = text.slice(0, 80).replace(/\s+/g, " ");
     throw new ApiError(
-      `Expected JSON from ${path}, got ${contentType || "unknown content type"}: ${preview}`,
+      `Expected JSON from ${path}, got ${contentType || "unknown content type"}.`,
       res.status,
     );
   }
 
   return JSON.parse(text) as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function safeApiText(value: string, fallback: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (
+    !normalized
+    || normalized.length > 500
+    || /<\s*!?doctype|<\s*html|traceback|authorization\s*:|api[_-]?key\s*=|token\s*=/i.test(normalized)
+  ) {
+    return fallback;
+  }
+  return normalized;
 }
 
 /** True when an optional-backend-route returned HTML instead of JSON (feature disabled). */
@@ -271,14 +314,21 @@ export const api = {
     request<PanicShadowStatusResponse>("/investment-research/panic-shadow/status"),
   getLatestPanicShadowReport: () =>
     request<unknown>("/investment-research/panic-shadow/latest"),
-  runCurrentPanicShadowReport: () =>
+  runCurrentPanicShadowReport: (dateSelection: PanicShadowDateSelection) =>
     request<unknown>("/investment-research/panic-shadow/run-current", {
       method: "POST",
+      body: JSON.stringify(dateSelection),
     }),
-  runManualPanicShadowReport: (manifest: unknown) =>
+  runManualPanicShadowReport: (
+    manifest: unknown,
+    dateSelection: PanicShadowDateSelection,
+  ) =>
     request<unknown>("/investment-research/panic-shadow/run-manual", {
       method: "POST",
-      body: JSON.stringify(manifest),
+      body: JSON.stringify({
+        ...(isRecord(manifest) ? manifest : {}),
+        ...dateSelection,
+      }),
     }),
   runPanicShadowReport: (body: PanicShadowRunRequestBody) =>
     request<unknown>("/investment-research/panic-shadow/run", {
@@ -316,6 +366,7 @@ export interface ValueHunterStatus {
   enabled: boolean; provider: string; schedule: string; timezone: string;
   notification_channels: string[]; notification_ready: boolean;
   missing_notification_settings: string[]; latest: ValueHunterScan | null;
+  status?: string; feature?: string; reason?: string;
 }
 
 export interface InvestmentResearchStatus {
@@ -1244,6 +1295,21 @@ export interface PanicShadowStatusResponse {
   notification_enabled: boolean;
   trading_enabled: boolean;
   manual_review_required: boolean;
+  date_context?: PanicShadowDateContext;
+}
+
+export type PanicShadowDateMode = "auto" | "selected";
+
+export interface PanicShadowDateSelection {
+  date_mode: PanicShadowDateMode;
+  requested_date: string | null;
+}
+
+export interface PanicShadowDateContext extends PanicShadowDateSelection {
+  effective_trade_date: string;
+  date_resolution: string;
+  information_cutoff: string;
+  date_resolution_reason: string;
 }
 
 export interface PanicShadowMarketRow {

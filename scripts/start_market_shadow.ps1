@@ -89,7 +89,7 @@ services:
     }
 
     $live = Invoke-RestMethod -Uri $LiveUrl -TimeoutSec 10
-    if ($live.status -ne "ok") {
+    if ($live.status -notin @("healthy", "ok")) {
         throw "The /live endpoint returned an unexpected response."
     }
 

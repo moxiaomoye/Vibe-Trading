@@ -146,6 +146,37 @@ def test_unavailable_window_returns_none_and_data_gap(tmp_path):
     assert windows[20].data_gap is not None
     assert windows[60].return_pct is None
     assert windows[60].data_gap is not None
+    assert windows[20].evaluation_status == "pending"
+    assert result.versions["loose-v1"].outcomes[0].evaluation_status == "partially_evaluated"
+
+
+def test_outcomes_include_optional_benchmark_sector_drawdown_and_invalidation(tmp_path):
+    d = date(2026, 1, 5)
+    prices = _outcome_prices(d)
+    dates = sorted(prices)
+    benchmark = {d: 100.0, **{day: 100.0 + i for i, day in enumerate(dates, 1)}}
+    sector = {
+        d: {SYMBOL: 200.0},
+        **{day: {SYMBOL: 200.0 + i} for i, day in enumerate(dates, 1)},
+    }
+    prices[dates[1]][SYMBOL] = 90.0
+
+    result = run_panic_calibration(
+        generation_panels={d: _panel(d)},
+        outcome_prices=prices,
+        threshold_versions=[_versions()[0]],
+        watchlist_path=_watchlist(tmp_path),
+        benchmark_prices=benchmark,
+        sector_prices=sector,
+        invalidation_events={dates[3]: {SYMBOL}},
+    )
+
+    window = result.versions["loose-v1"].outcomes[0].windows[0]
+    assert window.evaluation_status == "evaluated"
+    assert window.benchmark_return_pct == pytest.approx(0.05)
+    assert window.sector_return_pct == pytest.approx(0.025)
+    assert window.maximum_drawdown == pytest.approx(-0.10891089)
+    assert window.invalidation_triggered is True
 
 
 def test_summary_contains_frequency_distribution_and_coverage(tmp_path):

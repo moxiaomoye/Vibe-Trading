@@ -65,10 +65,12 @@
 http://127.0.0.1:8899/investment-research
 ```
 
-页面提供三个盘后操作：
+页面提供日期模式和三个盘后操作：
 
-- **Generate current report**：调用 Provider 获取当日盘后数据；
-- **Import manual JSON**：导入明确的当日数据；
+- **自动：最近完整交易日**：收盘后使用当日，盘中、周末或休市日解析到最近完整交易日；
+- **指定日期**：选择历史日期；非交易日解析到不晚于所选日期的最近交易日；
+- **Generate report**：当前完整交易日调用 Provider；历史日期优先只读打开归档；
+- **Import manual JSON**：导入与页面解析结果一致的数据；
 - **Load latest report**：重新打开最近一次成功保存的报告。
 
 API 认证失败时，先到 Settings 保存 Server API key，不要把密钥写进导入文件或日志。
@@ -84,7 +86,9 @@ API 认证失败时，先到 Settings 保存 Server API key，不要把密钥写
 - 涨跌停：官方池优先；不可用时仅在输入足够时复用项目交易规则从 Spot 推算，并明确标记；
 - 行业收益：来源不可用时保留 data gap，不伪造成功。
 
-Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构化 `data_unavailable`，不会生成空成功报告。
+Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构化
+`provider_unavailable`，不会生成空成功报告。当前 Spot 不用于历史回放；
+选定日期没有可信归档时返回 `historical_data_unavailable`。
 
 ## Manual Import 模式
 
@@ -96,8 +100,8 @@ Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构�
 {
   "schema_version": "1.0",
   "source": "manual_import",
-  "source_date": "2026-07-25",
-  "availability_time": "2026-07-25T18:30:00+08:00",
+  "source_date": "2026-07-24",
+  "availability_time": "2026-07-25T17:30:00+08:00",
   "rows": [
     {
       "symbol": "000001",
@@ -114,7 +118,9 @@ Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构�
 
 规则：
 
-- `source_date` 必须是当前上海日期；
+- `source_date` 必须等于页面解析出的 `effective_trade_date`；
+- 周末可以导入最近完整交易日的数据，指定历史日期也可以导入对应历史 JSON；
+- `source_date` 不得来自未来；
 - `availability_time` 必须带时区，且不得来自未来；
 - `symbol`、`name`、`close`、`previous_close`、`change_percent` 为必填字段；
 - 价格必须为有限正数；
@@ -129,8 +135,8 @@ Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构�
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/investment-research/panic-shadow/status` | 查看只读功能状态 |
-| POST | `/investment-research/panic-shadow/run-current` | 使用当日 Provider 数据生成并保存报告 |
-| POST | `/investment-research/panic-shadow/run-manual` | 使用当日手工 JSON 生成并保存报告 |
+| POST | `/investment-research/panic-shadow/run-current` | 解析日期后使用当前 Provider 或只读历史归档 |
+| POST | `/investment-research/panic-shadow/run-manual` | 使用与有效交易日一致的手工 JSON 生成并保存报告 |
 | GET | `/investment-research/panic-shadow/latest` | 读取最近一份成功报告 |
 | POST | `/investment-research/panic-shadow/run` | 使用明确的底层 fixture/契约输入执行 dry-run |
 
@@ -174,10 +180,11 @@ Provider 依赖真实上游网络。全部 Spot 来源不可用时返回结构�
 
 ## 当前限制
 
-1. 仅接受当前上海日期的浏览器 Manual Import，不提供历史日期伪装；
+1. 当前 Spot Provider 不提供历史全市场面板；历史日期需要已有归档或 Manual Import；
 2. Provider 可受第三方接口、DNS、限流和交易日数据发布时间影响；
 3. 财务、公告和行业证据缺失时会保留 data gap，研究结论不会假装证据完整；
 4. 报告是 Research Candidate 研究材料，不是买卖建议；
 5. 本试用环境没有自动调度、真实通知或交易执行；
 6. 前端由 Docker 镜像内已构建的静态资源提供，不需要单独运行 Node 开发服务器；
 7. `8898` 仅用于隔离验收；日常一键试用使用 `127.0.0.1:8899`。
+8. 默认交易日判断复用项目日历接口；法定休市日需要由交易日历数据明确提供，不能依赖当前 Spot 猜测。

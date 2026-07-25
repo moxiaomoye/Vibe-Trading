@@ -25,6 +25,7 @@ def test_start_script_reuses_compose_image_and_keeps_side_effects_disabled() -> 
     assert 'VIBE_RESEARCH_DELIVERY_MODE: "disabled"' in source
     assert "http://127.0.0.1:8899/investment-research" in source
     assert ".State.Health" in source
+    assert '@("healthy", "ok")' in source
 
 
 def test_stop_script_preserves_containers_volumes_images_and_reports() -> None:

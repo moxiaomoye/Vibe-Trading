@@ -50,6 +50,7 @@ class OrchestrationRequest:
     data_available_at: datetime
     trigger: TriggerSource = TriggerSource.MANUAL
     mode: str = "shadow"
+    effective_trade_date: date | None = None
 
     def __post_init__(self) -> None:
         _aware(self.now, "now")
@@ -152,7 +153,10 @@ class PanicResearchOrchestrator:
         self.max_attempts = max_attempts
 
     def run(self, request: OrchestrationRequest, execute: Callable[[], T]) -> OrchestrationResult[T]:
-        trade_date = self.schedule.local_now(request.now).date()
+        trade_date = (
+            request.effective_trade_date
+            or self.schedule.local_now(request.now).date()
+        )
         key = f"{self.job_name}:{request.mode}:{trade_date.isoformat()}"
         gate = self._gate(request, trade_date)
         if gate is not None:
@@ -189,7 +193,7 @@ class PanicResearchOrchestrator:
             return OrchestrationStatus.DISABLED, "scheduler_disabled"
         if self.flags.notification_enabled:
             return OrchestrationStatus.DISABLED, "real_notifications_not_permitted"
-        if not self.schedule.is_due(request.now):
+        if request.effective_trade_date is None and not self.schedule.is_due(request.now):
             return OrchestrationStatus.NOT_DUE, "market_not_closed_or_not_trading_day"
         if request.data_date != trade_date:
             return OrchestrationStatus.STALE_DATA, "data_date_does_not_match_trade_date"

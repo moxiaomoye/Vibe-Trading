@@ -60,13 +60,25 @@ export function ValueHunter() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const trialDisabled = status?.status === "disabled"
+    && status.feature === "value_hunter";
 
   const load = useCallback(async () => {
     setError("");
     try {
       const value = await api.getValueHunterStatus();
-      setStatus(value);
-      setScan(value.latest);
+      const normalized: ValueHunterStatus = {
+        ...value,
+        provider: value.provider ?? "",
+        schedule: value.schedule ?? "",
+        timezone: value.timezone ?? "",
+        notification_channels: value.notification_channels ?? [],
+        notification_ready: value.notification_ready ?? false,
+        missing_notification_settings: value.missing_notification_settings ?? [],
+        latest: value.latest ?? null,
+      };
+      setStatus(normalized);
+      setScan(normalized.latest);
     } catch (err) {
       if (isDisabledFeatureError(err)) {
         setStatus({
@@ -106,12 +118,17 @@ export function ValueHunter() {
           <div className="flex items-center gap-2"><ShieldAlert className="h-6 w-6 text-primary" /><h1 className="text-2xl font-bold">Value Hunter</h1></div>
           <p className="mt-1 text-sm text-muted-foreground">A股科技恐慌监控与研究候选筛选，不执行交易。</p>
         </div>
-        <button onClick={run} disabled={running} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+        <button onClick={run} disabled={running || trialDisabled} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
           <RefreshCw className={cn("h-4 w-4", running && "animate-spin")} />{running ? "扫描中" : "立即扫描"}
         </button>
       </header>
 
       {error && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
+      {trialDisabled && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-700">
+          Value Hunter在当前Trial Shadow模式中未启用。
+        </div>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border bg-card p-4"><p className="text-xs text-muted-foreground">服务状态</p><p className="mt-2 flex items-center gap-2 font-semibold">{status?.enabled ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <AlertTriangle className="h-4 w-4 text-amber-500" />}{status?.enabled ? "自动运行" : "仅手动运行"}</p></div>
