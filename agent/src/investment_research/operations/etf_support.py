@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from ...investment_research.contracts import AssetType
 from ...investment_research.operations.outcome_loader import (
     HistoricalEvaluationOutcome,
     OutcomeLoader,
@@ -14,16 +13,6 @@ from ...investment_research.operations.review_labeling import (
     ReviewLabel,
     label_window,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class ETFEvaluation:
-    evaluation_date: date
-    tracking_error: float | None
-    nav_return: float | None
-    index_return: float | None
-    premium_discount: float | None
-    windows: tuple[WindowOutcome, ...] = ()
 
 
 class ETFOutcomeLoader(OutcomeLoader):

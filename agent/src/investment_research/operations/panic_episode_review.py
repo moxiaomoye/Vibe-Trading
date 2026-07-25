@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
-from typing import Any
+from datetime import date
 
+from ..models.historical_market_panel import HistoricalMarketPanel
 from ..operations.trading_calendar import TradingCalendar
-from .evaluation_metrics import EvaluationMetrics
+from .evaluation_metrics import EvaluationMetrics, MetricsCalculator
 from .outcome_loader import OutcomeLoader
 from .review_labeling import ReviewLabel, label_counts, label_outcome
 
@@ -53,8 +53,6 @@ class PanicEpisodeReviewWorkflow:
 
         for d in episode_dates:
             outcome = self.outcome_loader.load(d)
-            from ..models.historical_market_panel import HistoricalMarketPanel
-            from .evaluation_metrics import MetricsCalculator
 
             panel = HistoricalMarketPanel(
                 date=d, market_price=0.0, market_change_pct=0.0,
