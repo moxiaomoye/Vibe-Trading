@@ -22,7 +22,7 @@
 | M10 | Panic episode review workflow | completed | 6bd0236 | 112/112 pass | 4.44s | None |
 | M11 | Low-risk hardening | completed | 7741b2c | 112/112 pass | 4.39s | None |
 | M12 | Comprehensive validation | completed | c1274fe | 117/117 pass | 4.72s | None |
-| M13 | Docs & handoff | active | — | — | — | — |
+| M13 | Docs & handoff | completed | 2cd6fba | 117/117 pass | 6.56s | None |
 
 ## Known Gaps (carried forward)
 1. SZSE Provider: blocked_by_api_documentation
