@@ -9,7 +9,7 @@ import json
 import math
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -104,6 +104,10 @@ def _validate_manifest(
         source_date = date.fromisoformat(data.get("source_date", ""))
         if source_date > shanghai_today:
             errors.append(f"source_date {source_date} is in the future")
+        if source_date == shanghai_today:
+            shanghai_now = validation_now.astimezone(ZoneInfo("Asia/Shanghai"))
+            if shanghai_now.time().replace(tzinfo=None) < time(18, 30):
+                errors.append(f"source_date {source_date} is today but cutoff 18:30 Shanghai has not been reached")
     except (ValueError, TypeError):
         errors.append("invalid or missing source_date (expected YYYY-MM-DD)")
         source_date = shanghai_today

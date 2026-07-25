@@ -67,7 +67,7 @@ class TestManualImportValid:
         data = {
             "schema_version": "1.0",
             "source": "manual_import",
-            "source_date": date.today().isoformat(),
+            "source_date": "2026-07-24",
             "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {"symbol": "000001", "name": "平安银行", "close": 12.5, "previous_close": 12.3, "change_percent": 1.63},
@@ -211,7 +211,7 @@ class TestManualImportPanelConversion:
         base = {
             "schema_version": "1.0",
             "source": "manual_import",
-            "source_date": date.today().isoformat(),
+            "source_date": "2026-07-24",
             "rows": [
                 {
                     "symbol": "000001.SZ",
@@ -223,7 +223,7 @@ class TestManualImportPanelConversion:
             ],
         }
         naive = parse_manual_import_dict(
-            {**base, "availability_time": f"{date.today().isoformat()}T15:00:00"}
+            {**base, "availability_time": "2026-07-24T15:00:00"}
         )
         future = parse_manual_import_dict(
             {
@@ -241,8 +241,8 @@ class TestManualImportPanelConversion:
         data = {
             "schema_version": "1.0",
             "source": "manual_import",
-            "source_date": date.today().isoformat(),
-            "availability_time": datetime.now(timezone.utc).isoformat(),
+            "source_date": "2026-07-24",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {
                     "symbol": "000001",
@@ -264,8 +264,8 @@ class TestManualImportPanelConversion:
         data = {
             "schema_version": "1.0",
             "source": "manual_import",
-            "source_date": date.today().isoformat(),
-            "availability_time": datetime.now(timezone.utc).isoformat(),
+            "source_date": "2026-07-24",
+            "availability_time": "2026-07-24T15:00:00+08:00",
             "rows": [
                 {
                     "symbol": "sz000001",
