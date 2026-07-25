@@ -61,7 +61,7 @@ def _build_response_from_run_dir(
     """Build a run response from a persisted run directory."""
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     RunResponse = host.RunResponse
     BacktestMetrics = host.BacktestMetrics
     RAGSelection = host.RAGSelection
@@ -227,7 +227,7 @@ def register_runs_routes(
     """
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
     if host is None:
         raise RuntimeError(
             "register_runs_routes: api_server module not in sys.modules; "
@@ -239,11 +239,11 @@ def register_runs_routes(
 
     # Late-access closures for shared host symbols (monkeypatch-safe)
     def _host_validate_path_param(value: str, kind: str) -> None:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h._validate_path_param(value, kind)
 
     def _host_RUNS_DIR() -> Path:
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         return h.RUNS_DIR
 
     # Pydantic models for response_model (resolved at registration time)

@@ -174,7 +174,7 @@ def register_system_routes(
     # Resolve host dependencies via sys.modules fallback
     import sys as _sys
 
-    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+    host = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
 
     if host is None:
         raise RuntimeError(
@@ -189,7 +189,7 @@ def register_system_routes(
 
     def _get_terminate_process():
         """Late-access _terminate_current_process for test monkeypatch compat."""
-        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server")
+        h = _sys.modules.get("api_server") or _sys.modules.get("agent.api_server") or _sys.modules.get("__main__")
         if h is not None:
             fn = getattr(h, "_terminate_current_process", None)
             if fn is not None:

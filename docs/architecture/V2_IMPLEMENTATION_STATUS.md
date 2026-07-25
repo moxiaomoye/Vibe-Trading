@@ -1,6 +1,6 @@
 # AI Investment Researcher V2 — Implementation Status
 
-Date: 2026-07-21
+Date: 2026-07-23
 
 ## Outcome
 
@@ -53,13 +53,22 @@ Candidate; weaker observations remain Discovery Leads with explicit evidence gap
   and writes only pending, neutral Asset items to Evidence Inbox. It is opt-in, subscription-driven, idempotent,
   separately runnable, visible in the read-only status API, and never auto-attributes evidence or creates a
   Research Candidate.
+- A-share 盘后恐慌初筛 (post-close panic shadow report) with dedicated FastAPI routes:
+  `GET /investment-research/panic-shadow/status` and `POST /investment-research/panic-shadow/run`.
+- Frontend panic shadow section in the Investment Research page with disabled/loading/ready/error states,
+  market-state summary, data-gap warnings, watchlist scan, research candidates, and version listing.
+- Dry-run / explicit-input-only mode: the report only loads from developer-provided JSON fixtures when
+  `explicit_input_only` is enabled, preventing accidental runs against production market data.
+- `manual_review_required: true` contract enforced server-side and validated by the frontend contract parser.
+- A-share panic screening with limit-up/limit-down symbol filtering, market regime classification,
+  and candidate quality/valuation/attribution evaluation.
 
 ## Verification
 
 - V2 backend regression: 207 passed.
 - Investment Research domain coverage: 94%.
 - Static analysis: Ruff passed for the full V2 implementation and tests.
-- Frontend regression: 250 passed across 29 test files.
+- Frontend regression: 250 passed across 29 test files (InvestmentResearch page tests include panic shadow).
 - Frontend TypeScript/Vite production build: passed.
 - JSON initialization schema: valid JSON; strict manifest tests passed.
 - Full legacy backend suite: not executed in this lightweight verification environment because test collection

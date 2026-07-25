@@ -176,6 +176,9 @@ class DataConfig(_EnvBase):
     longbridge_app_key: str = Field(alias="LONGBRIDGE_APP_KEY", default="")
     longbridge_app_secret: str = Field(alias="LONGBRIDGE_APP_SECRET", default="")
     longbridge_access_token: str = Field(alias="LONGBRIDGE_ACCESS_TOKEN", default="")
+    szse_data_access_key: str = Field(alias="SZSE_DATA_ACCESS_KEY", default="")
+    szse_data_access_secret: str = Field(alias="SZSE_DATA_ACCESS_SECRET", default="")
+    szse_data_access_token: str = Field(alias="SZSE_DATA_ACCESS_TOKEN", default="")
 
 
 # ---------------------------------------------------------------------------
