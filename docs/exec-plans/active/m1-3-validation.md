@@ -16,7 +16,8 @@
 | R1 | done | 5536196 | 42/42 (validator + existing) | 1.10s | Fix: naive tz TypeError crash, CONFLICTING_VERSION row marking. 7 new robustness tests. | None |
 | R2 | done | 848e67c | 204 pass | 12.94s | Wire historical_evaluation_routes into real api_server via app.include_router. Integration test with source-code AST assertion + router-direct test. Note: endpoint uses FixtureOutcomeLoader({}) — contract-only. | None |
 | R3 | done | 7fa371c | ledger update | — | Capability matrix: real (stock prices, CSI300, frontend), manual (upload), fixture/contract-only (market panel, outcomes, ETF, max drawdown), unverified (Docker). Key finding: FixtureOutcomeLoader({}) hardcoded in production route. | None |
-| R4 | active | — | — | — | Defining outcome formulas, implementing PriceSeriesOutcomeLoader | None |
+| R4 | done | 06d02c5 | 215 pass | 10.80s | PriceSeriesOutcomeLoader with akshare_price_fetcher (qfq). Hand-calculable tests for T+5/20/60. No-lookahead guard for unmatured horizons. Replaced FixtureOutcomeLoader({}) in route. API currently blocked (network), falls back to data_gap. | Network: AKShare API unavailable in sandbox |
+| R5 | active | — | — | — | A-share trading calendar with holiday support | None |
 | V5 | pending | — | — | — | — | — |
 | V6 | pending | — | — | — | — | — |
 | V7 | pending | — | — | — | — | — |
