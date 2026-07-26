@@ -23,9 +23,9 @@
 | R8 | done | — | 283 pass | 10.01s | Full regression pass. Docker daemon unavailable (Docker Desktop not running) — smoke test unverified. Historical panic drill: all real data APIs blocked (network), fixture/contract-only fallback available. | Docker daemon unavailable |
 | V4 | blocked | — | — | — | Docker daemon not running — smoke test deferred | Docker daemon unavailable |
 | V5 | done | — | — | — | Risk classification: 27 findings (3 High, 12 Medium, 12 Low). Key High: bare `except Exception:` in price_fetcher (2x), near-duplicate load() in ETFOutcomeLoader. Not modifying financial/Candidate/valuation/DB/scheduling/trading per constraint. | — |
-| V6 | pending | — | — | — | Low-risk fixes | — |
-| V7 | pending | — | — | — | Documentation | — |
-| V8 | pending | — | — | — | Final review | — |
+| V6 | done | 37c52ec | 283 pass | 0.51s | Low-risk fixes: now typed datetime|None, DEFAULT_HORIZONS shared constant, unused imports removed. No functional changes. | — |
+| V7 | done | 37c52ec | — | — | Documentation updated: remaining code debt table, known gaps section. | — |
+| V8 | done | 37c52ec | 283 pass | 10.50s | Final review: all tests pass, ledger complete, known debt documented. No blockers for release prep. | — |
 | V9 | pending | — | — | — | — | — |
 | V10 | pending | — | — | — | — | — |
 | V11 | pending | — | — | — | — | — |
@@ -71,3 +71,17 @@ These definitions are fixed in the ledger before any implementation change.
 3. No frontend tooling (npm/node)
 4. Docker verification deferred
 5. AGENTS.md missing at root
+
+## Remaining Code Debt (post V6)
+Findings from V5 risk classification that remain unfixed as known debt:
+
+| Severity | Issue | File | Line(s) | Reason Deferred |
+|----------|-------|------|---------|-----------------|
+| High | Bare `except Exception:` swallows errors in price fetcher | `price_series_outcome_loader.py` | 167, 188 | Logs with `exc_info=True`; narrowing would change behavior under test. Safe to defer. |
+| High | Near-duplicate `load()` in ETFOutcomeLoader vs FixtureOutcomeLoader | `etf_support.py` / `outcome_loader.py` | 25-66 / 47-89 | Documented contract-only; not worth refactoring fixture infrastructure. |
+| Medium | Duplicated `max_lookback_days = 370` | `trade_date.py:66`, `trading_calendar.py:17` | 66, 17 | Both classes independently reasonable; no evidence of drift. |
+| Medium | `ZoneInfo("Asia/Shanghai")` repeated across 5 files | `manual_import.py`, `price_series_outcome_loader.py`, `scheduling.py`, `trade_date.py`, `validator.py` | various | Centralization would add indirection with no immediate benefit. |
+| Medium | Repeated zero-value panel construction | `historical_shadow_run.py:47-56`, `panic_episode_review.py:57-61` | 47-56, 57-61 | Factory method would help but panel structure may change. |
+| Low | 10 files missing module docstrings | All `operations/` files except delivery, manual_import, models, scheduling, trade_date | — | Cosmetic; no functional impact. |
+| Low | Hardcoded `schema_version: "1.0.0"` in fixture data | `fixture_data.py:12,33,40` | 12, 33, 40 | Fixtures are static by nature. |
+| Low | Hardcoded Feishu webhook URL prefix | `delivery.py:39` | 39 | Application constraint, not a bug. |
