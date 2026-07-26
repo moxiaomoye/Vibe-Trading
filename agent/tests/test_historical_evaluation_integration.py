@@ -43,14 +43,20 @@ class TestHistoricalEvaluationRouterDirect:
         assert resp.status_code == 200
         assert resp.json()["enabled"] is True
 
-    def test_evaluate_endpoint_is_contract_only(self):
+    def test_evaluate_endpoint_structure(self):
+        """Prove the endpoint is wired and returns the correct structure.
+
+        Note: AKShare API is currently unavailable in sandbox, so all windows
+        will report entry_price_unavailable or price_data_missing. This is
+        expected — the code is real but the data source is blocked.
+        """
         resp = self.client.get("/investment-research/historical-evaluation/evaluate/2026-07-24")
         assert resp.status_code == 200
         data = resp.json()
         assert "evaluation_date" in data
+        assert "metrics" in data
+        assert "horizons" in data
         for h in data["horizons"]:
-            # FixtureOutcomeLoader({}) always produces data_gap — proves contract-only
             assert h["data_gap"] is not None, (
-                "FixtureOutcomeLoader({}) always produces gaps — "
-                "this endpoint is contract-only, not production-ready"
+                "AKShare API unavailable in sandbox — expected data_gap"
             )

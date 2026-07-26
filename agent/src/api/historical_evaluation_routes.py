@@ -14,8 +14,11 @@ from src.investment_research.operations.evaluation_metrics import (
     HorizonMetrics,
 )
 from src.investment_research.operations.outcome_loader import (
-    FixtureOutcomeLoader,
     OutcomeLoader,
+)
+from src.investment_research.operations.price_series_outcome_loader import (
+    PriceSeriesOutcomeLoader,
+    akshare_price_fetcher,
 )
 from src.investment_research.operations.review_labeling import (
     ReviewLabel,
@@ -41,7 +44,8 @@ def evaluate_trade_date(trade_date: str) -> dict[str, Any]:
     except (ValueError, TypeError):
         return {"error": {"code": "invalid_date", "message": "trade_date must be ISO format (YYYY-MM-DD)"}}
 
-    loader: OutcomeLoader = FixtureOutcomeLoader({})
+    fetcher = akshare_price_fetcher()
+    loader: OutcomeLoader = PriceSeriesOutcomeLoader(price_fetcher=fetcher)
     outcome = loader.load(d)
     cal = MetricsCalculator()
     panel = HistoricalMarketPanel(

@@ -14,7 +14,9 @@
 | V2 | done | — | Frontend: 38/38 test files, 322/322 tests pass, tsc OK, build OK | 17.00s | InvestmentResearch page has historical date/manual import/shadow report/outcome features. Build succeeded. | None |
 | V3 | done | c2c5876 | 194 M1.3 tests pass; 4 new audit tests; 3 low-risk fixes | 4.71s | Fixed: (1) validator uses Shanghai date not UTC for future check, (2) conflicting_versions report bug, (3) manual import 18:30 cutoff. Tests added for timezone boundary, cutoff, fingerprint immutability, clock skew. | None |
 | R1 | done | 5536196 | 42/42 (validator + existing) | 1.10s | Fix: naive tz TypeError crash, CONFLICTING_VERSION row marking. 7 new robustness tests. | None |
-| R2 | pending | — | — | — | — | — |
+| R2 | done | 848e67c | 204 pass | 12.94s | Wire historical_evaluation_routes into real api_server via app.include_router. Integration test with source-code AST assertion + router-direct test. Note: endpoint uses FixtureOutcomeLoader({}) — contract-only. | None |
+| R3 | done | 7fa371c | ledger update | — | Capability matrix: real (stock prices, CSI300, frontend), manual (upload), fixture/contract-only (market panel, outcomes, ETF, max drawdown), unverified (Docker). Key finding: FixtureOutcomeLoader({}) hardcoded in production route. | None |
+| R4 | active | — | — | — | Defining outcome formulas, implementing PriceSeriesOutcomeLoader | None |
 | V5 | pending | — | — | — | — | — |
 | V6 | pending | — | — | — | — | — |
 | V7 | pending | — | — | — | — | — |
@@ -23,6 +25,25 @@
 | V10 | pending | — | — | — | — | — |
 | V11 | pending | — | — | — | — | — |
 | V12 | pending | — | — | — | — | — |
+
+## R4 — Outcome Formula Definitions
+
+These definitions are fixed in the ledger before any implementation change.
+
+| Field | Definition |
+|-------|-----------|
+| **Entry Price** | Close price of the evaluated stock on trading day T (evaluation_date). Uses **前复权** (forward-adjusted) price from `akshare.stock_zh_a_hist(adjust="qfq")`. |
+| **T+n horizon** | **A-share trading days** (not calendar days). T+5 = 5th trading day after T. Resolved via `TradingCalendar.nth_trading_day_forward(T, n)`. |
+| **Price adjustment** | **前复权 (forward-adjusted)** — all historical prices are adjusted backward so that the series reflects total return including dividends and corporate actions. This is the standard for A-share performance measurement. |
+| **Asset return (T+n)** | `(close_T+n / close_T) - 1` where `close_T+n` is the forward-adjusted close on the n-th trading day after T. |
+| **Benchmark return (T+n)** | `csi300_T+n / csi300_T - 1` where `csi300_T` is the CSI 300 index close on day T, and `csi300_T+n` is the CSI 300 close on the n-th trading day after T. CSI 300 dates are strictly aligned to the same A-share trading days as the asset. |
+| **Excess return (T+n)** | `asset_return_T+n - benchmark_return_T+n` |
+| **Maximum drawdown (T to T+n)** | `min((price_t / peak_to_t) - 1 for t in [T+1, ..., T+n])` where peak_to_t = `max(price_T, ..., price_t)`. Calculated using daily forward-adjusted close prices. |
+| **Suspension / missing price** | If `close_T+n` is NaN or zero for any reason (suspension, delisting, trading halt), the window is marked `data_gap="price_data_missing"`. Asset return, excess return, and max drawdown are None. Benchmark return is still computed if available. |
+| **Delisting before horizon** | If the stock is delisted before T+n, all subsequent windows return `data_gap="delisted"`. The last available price is used for partial windows up to the delisting date. |
+| **Not-yet-matured window** | If T+n > current trading day, the window returns `data_gap="not_yet_matured"` with all returns as None. |
+| **CSI 300 date alignment** | CSI 300 index values are fetched for the exact same trading days as the asset. If CSI 300 has a gap on a trading day, the previous available value is carried forward. |
+| **Entry price for panic scenario** | If the evaluation is for a panic shadow report, the entry price is the **trigger day's close** (the day the panic signal fired), not the evaluation_date's close. |
 
 ## Data Source Capability Matrix (R3)
 
