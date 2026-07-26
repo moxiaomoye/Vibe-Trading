@@ -53,8 +53,6 @@ class MetricsCalculator:
         horizon_metrics_list: list[HorizonMetrics] = []
         hit_count = 0
         total_with_data = 0
-        fp_count = 0
-        fn_count = 0
 
         for window in outcome.windows:
             if window.data_gap is not None:
@@ -77,8 +75,6 @@ class MetricsCalculator:
                 total_with_data += 1
                 if hit:
                     hit_count += 1
-                if not hit:
-                    fp_count += 1
 
             horizon_metrics_list.append(
                 HorizonMetrics(
@@ -93,7 +89,10 @@ class MetricsCalculator:
             )
 
         hit_rate = hit_count / total_with_data if total_with_data > 0 else None
-        fp_rate = fp_count / total_with_data if total_with_data > 0 else None
+        # false_positive_rate and false_negative_rate are unavailable because
+        # no non-candidate control group is evaluated. Without TN and FN,
+        # standard FP = FP/(FP+TN) and FN = FN/(FN+TP) cannot be computed.
+        fp_rate = None
         fn_rate = None
 
         returns_with_data = [

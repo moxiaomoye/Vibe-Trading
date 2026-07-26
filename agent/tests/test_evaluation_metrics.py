@@ -42,7 +42,8 @@ class TestMetricsCalculator:
         d = date(2026, 7, 15)
         metrics = MetricsCalculator().evaluate(self.panel(d), self.outcome(d))
         assert metrics.hit_rate == 2 / 3
-        assert metrics.false_positive_rate == 1 / 3
+        assert metrics.false_positive_rate is None, "unavailable without control group"
+        assert metrics.false_negative_rate is None, "unavailable without control group"
         assert metrics.avg_excess_return is not None
         assert metrics.avg_excess_return == pytest.approx(
             (0.01 + 0.02 + (-0.06)) / 3
@@ -60,7 +61,7 @@ class TestMetricsCalculator:
             self.panel(d), self.outcome(d, windows=windows)
         )
         assert metrics.hit_rate == 1.0
-        assert metrics.false_positive_rate == 0.0
+        assert metrics.false_positive_rate is None, "unavailable without control group"
 
     def test_hit_rate_none_when_all_gapped(self) -> None:
         d = date(2026, 7, 15)

@@ -92,7 +92,7 @@ class TestM12ComprehensiveValidation:
         cal = MetricsCalculator()
         metrics = cal.evaluate(shadow_result.panel, outcome)
         assert metrics.hit_rate == 2 / 3
-        assert metrics.false_positive_rate == 1 / 3
+        assert metrics.false_positive_rate is None, "unavailable without control group"
 
         labels = label_outcome(outcome)
         assert labels[5].value == "correct_call"
