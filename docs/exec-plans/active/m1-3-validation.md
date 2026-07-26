@@ -17,11 +17,15 @@
 | R2 | done | 848e67c | 204 pass | 12.94s | Wire historical_evaluation_routes into real api_server via app.include_router. Integration test with source-code AST assertion + router-direct test. Note: endpoint uses FixtureOutcomeLoader({}) — contract-only. | None |
 | R3 | done | 7fa371c | ledger update | — | Capability matrix: real (stock prices, CSI300, frontend), manual (upload), fixture/contract-only (market panel, outcomes, ETF, max drawdown), unverified (Docker). Key finding: FixtureOutcomeLoader({}) hardcoded in production route. | None |
 | R4 | done | 06d02c5 | 215 pass | 10.80s | PriceSeriesOutcomeLoader with akshare_price_fetcher (qfq). Hand-calculable tests for T+5/20/60. No-lookahead guard for unmatured horizons. Replaced FixtureOutcomeLoader({}) in route. API currently blocked (network), falls back to data_gap. | Network: AKShare API unavailable in sandbox |
-| R5 | active | — | — | — | A-share trading calendar with holiday support | None |
-| V5 | pending | — | — | — | — | — |
-| V6 | pending | — | — | — | — | — |
-| V7 | pending | — | — | — | — | — |
-| V8 | pending | — | — | — | — | — |
+| R5 | done | a038305 | 68 (incl. calendar) | 0.95s | A-share holiday calendar test coverage (2025/2026 known holidays). Calendar infrastructure verified; data completeness is contract-only. | None |
+| R6 | done | 4fc9e25 | 280 pass | 11.57s | FP/FN set to None (unavailable without control group). Hit rate remains horizon-level. tracking_error_threshold documented as unused. | None |
+| R7 | done | 20f5332 | 283 pass | 10.01s | ETF isolation: no financial field access, tracking_error_threshold dead param, ETFOutcomeLoader is FixtureOutcomeLoader copy. | None |
+| R8 | done | — | 283 pass | 10.01s | Full regression pass. Docker daemon unavailable (Docker Desktop not running) — smoke test unverified. Historical panic drill: all real data APIs blocked (network), fixture/contract-only fallback available. | Docker daemon unavailable |
+| V4 | blocked | — | — | — | Docker daemon not running — smoke test deferred | Docker daemon unavailable |
+| V5 | done | — | — | — | Risk classification: 27 findings (3 High, 12 Medium, 12 Low). Key High: bare `except Exception:` in price_fetcher (2x), near-duplicate load() in ETFOutcomeLoader. Not modifying financial/Candidate/valuation/DB/scheduling/trading per constraint. | — |
+| V6 | pending | — | — | — | Low-risk fixes | — |
+| V7 | pending | — | — | — | Documentation | — |
+| V8 | pending | — | — | — | Final review | — |
 | V9 | pending | — | — | — | — | — |
 | V10 | pending | — | — | — | — | — |
 | V11 | pending | — | — | — | — | — |

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
-from typing import Any
+from datetime import date, datetime
 
 from ...investment_research.operations.outcome_loader import (
+    DEFAULT_HORIZONS,
     HistoricalEvaluationOutcome,
     OutcomeLoader,
     WindowOutcome,
@@ -26,7 +25,7 @@ class ETFOutcomeLoader(OutcomeLoader):
         self,
         evaluation_date: date,
         *,
-        now: Any = None,
+        now: datetime | None = None,
     ) -> HistoricalEvaluationOutcome:
         outcomes = self.fixture_outcomes.get(evaluation_date)
         if outcomes is None:
@@ -42,7 +41,7 @@ class ETFOutcomeLoader(OutcomeLoader):
                         maximum_drawdown=None,
                         data_gap="not_yet_tracked",
                     )
-                    for h in (5, 20, 60)
+                    for h in DEFAULT_HORIZONS
                 ),
             )
         entry_price = outcomes.get("_entry_price", 0.0)
@@ -56,7 +55,7 @@ class ETFOutcomeLoader(OutcomeLoader):
                 invalidation_triggered=outcomes[h].get("invalidation_triggered", False),
                 data_gap=outcomes[h].get("data_gap"),
             )
-            for h in (5, 20, 60)
+            for h in DEFAULT_HORIZONS
             if h in outcomes
         )
         return HistoricalEvaluationOutcome(
