@@ -63,7 +63,7 @@ class TestValidatorNoLookahead:
         assert result.rows[0].row_status == InputRowStatus.ACCEPTED
 
     def test_conflicting_versions_reported(self):
-        """conflicting_versions=1 when schema versions differ across rows."""
+        """conflicting_versions counts rows with CONFLICTING_VERSION when versions differ."""
         v = HistoricalInputValidator()
         now = datetime.now(timezone.utc)
         rows = [
@@ -75,7 +75,7 @@ class TestValidatorNoLookahead:
         result = v.validate(rows, import_time=now)
         report = v.report(result)
 
-        assert report.conflicting_versions == 1
+        assert report.conflicting_versions == 2
         assert any("conflicting schema" in e for e in result.import_errors)
 
     def test_single_version_no_conflict(self):

@@ -93,6 +93,7 @@ class HistoricalInputValidator:
 
             if availability_time.tzinfo is None:
                 row_errors.append(f"row {i}: availability_time must be timezone-aware")
+                availability_time = now
 
             # Future data check (use exchange-local date, not UTC)
             exchange_date = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
@@ -141,6 +142,17 @@ class HistoricalInputValidator:
 
         if len(seen_versions) > 1:
             import_errors.append(f"conflicting schema versions: {seen_versions}")
+            validated = [
+                r if r.row_status != InputRowStatus.ACCEPTED
+                else HistoricalInputRow(
+                    data_date=r.data_date, source=r.source,
+                    availability_time=r.availability_time,
+                    panel_data=r.panel_data,
+                    row_status=InputRowStatus.CONFLICTING_VERSION,
+                    errors=tuple(list(r.errors) + ["conflicting schema version"]),
+                )
+                for r in validated
+            ]
 
         accepted = sum(1 for r in validated if r.row_status == InputRowStatus.ACCEPTED)
         future = sum(1 for r in validated if r.row_status == InputRowStatus.FUTURE_DATA)
@@ -155,12 +167,13 @@ class HistoricalInputValidator:
         )
 
     def report(self, result: HistoricalInputSet) -> HistoricalImportReport:
+        cv_count = sum(1 for r in result.rows if r.row_status == InputRowStatus.CONFLICTING_VERSION)
         return HistoricalImportReport(
             total_rows=len(result.rows),
             accepted=sum(1 for r in result.rows if r.row_status == InputRowStatus.ACCEPTED),
             future_data_rejected=sum(1 for r in result.rows if r.row_status == InputRowStatus.FUTURE_DATA),
             malformed=sum(1 for r in result.rows if r.row_status == InputRowStatus.MALFORMED),
             duplicates=sum(1 for r in result.rows if r.row_status == InputRowStatus.DUPLICATE),
-            conflicting_versions=1 if any("conflicting schema" in e for e in result.import_errors) else 0,
+            conflicting_versions=cv_count,
             errors=result.import_errors,
         )
