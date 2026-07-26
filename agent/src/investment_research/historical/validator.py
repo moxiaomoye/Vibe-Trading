@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Any, Sequence
+from zoneinfo import ZoneInfo
 
 from .models import (
     HistoricalImportReport,
@@ -93,8 +94,9 @@ class HistoricalInputValidator:
             if availability_time.tzinfo is None:
                 row_errors.append(f"row {i}: availability_time must be timezone-aware")
 
-            # Future data check
-            if data_date > now.date():
+            # Future data check (use exchange-local date, not UTC)
+            exchange_date = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+            if data_date > exchange_date:
                 validated.append(HistoricalInputRow(
                     data_date=data_date, source=source,
                     availability_time=availability_time,
@@ -159,6 +161,6 @@ class HistoricalInputValidator:
             future_data_rejected=sum(1 for r in result.rows if r.row_status == InputRowStatus.FUTURE_DATA),
             malformed=sum(1 for r in result.rows if r.row_status == InputRowStatus.MALFORMED),
             duplicates=sum(1 for r in result.rows if r.row_status == InputRowStatus.DUPLICATE),
-            conflicting_versions=1 if len(set(r.row_status for r in result.rows)) > 0 else 0,
+            conflicting_versions=1 if any("conflicting schema" in e for e in result.import_errors) else 0,
             errors=result.import_errors,
         )
