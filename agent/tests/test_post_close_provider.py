@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import json
 
 import pandas as pd
+import pytest
 
 from src.value_hunter.panic_scan import run_panic_scan
 from src.value_hunter.post_close_provider import (
@@ -13,6 +15,7 @@ from src.value_hunter.post_close_provider import (
     SinaBenchmarkAdapter,
     SinaSpotAdapter,
     UpstreamError,
+    _load_sina_spot_single_pass,
 )
 
 
@@ -190,6 +193,75 @@ def test_sina_spot_attempts_paged_endpoint_only_once_on_failure():
     assert result.errors[0].operation == "all_a_spot_sina"
     assert result.errors[0].attempts == 1
     assert result.errors[0].retryable is True
+
+
+def test_sina_direct_single_pass_keeps_high_coverage_partial_pages():
+    calls: list[str] = []
+
+    class Response:
+        def __init__(self, text: str, *, fail: bool = False):
+            self.text = text
+            self._fail = fail
+
+        def raise_for_status(self):
+            if self._fail:
+                raise ConnectionError("fixture page failed")
+
+    records = [
+        {
+            "code": f"{index:06d}",
+            "name": f"fixture-{index}",
+            "trade": "10.0",
+            "changepercent": "1.0",
+            "settlement": "9.9",
+            "volume": "1000",
+        }
+        for index in range(100)
+    ]
+
+    def get(url, **kwargs):
+        if "StockCount" in url:
+            return Response("101")
+        page = kwargs["params"]["page"]
+        calls.append(page)
+        if page == "2":
+            return Response("", fail=True)
+        return Response(json.dumps(records))
+
+    frame, gaps = _load_sina_spot_single_pass(
+        source_date=TODAY,
+        get=get,
+    )
+
+    assert calls == ["1", "2"]
+    assert len(frame) == 100
+    assert frame.iloc[0]["代码"] == "000000"
+    assert len(gaps) == 1
+    assert "missing pages: 2" in gaps[0].reason
+
+
+def test_sina_direct_single_pass_stops_after_total_deadline(monkeypatch):
+    clock = iter([0.0, 0.0, 31.0])
+    monkeypatch.setattr(
+        "src.value_hunter.post_close_provider.time.monotonic",
+        lambda: next(clock),
+    )
+
+    class Response:
+        text = "200"
+
+        def raise_for_status(self):
+            return None
+
+    def get(*_args, **_kwargs):
+        return Response()
+
+    with pytest.raises(RuntimeError, match="coverage is below 95%"):
+        _load_sina_spot_single_pass(
+            source_date=TODAY,
+            get=get,
+            max_elapsed_seconds=30,
+        )
 
 
 def test_sina_benchmark_uses_strict_target_date_and_daily_return():

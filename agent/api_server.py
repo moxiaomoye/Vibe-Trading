@@ -231,10 +231,6 @@ register_channels_routes(app)
 from src.api.qveris_routes import qveris_router  # noqa: E402  # QVERIS-INTEGRATION
 app.include_router(qveris_router)  # QVERIS-INTEGRATION
 
-# --- M1.3 Historical Evaluation ---
-from src.api.historical_evaluation_routes import router as historical_evaluation_router  # noqa: E402
-app.include_router(historical_evaluation_router)
-
 from src.api.channels_routes import (  # noqa: F401, E402
     ChannelPairingCommandRequest,
 )

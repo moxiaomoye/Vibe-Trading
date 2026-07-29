@@ -62,6 +62,7 @@ export function ValueHunter() {
   const [error, setError] = useState("");
   const trialDisabled = status?.status === "disabled"
     && status.feature === "value_hunter";
+  const scanRunning = running || Boolean(status?.running);
 
   const load = useCallback(async () => {
     setError("");
@@ -95,6 +96,11 @@ export function ValueHunter() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!status?.running) return;
+    const timer = window.setTimeout(() => { void load(); }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [load, status?.running]);
 
   const run = async () => {
     setRunning(true); setError("");
@@ -118,8 +124,8 @@ export function ValueHunter() {
           <div className="flex items-center gap-2"><ShieldAlert className="h-6 w-6 text-primary" /><h1 className="text-2xl font-bold">Value Hunter</h1></div>
           <p className="mt-1 text-sm text-muted-foreground">A股科技恐慌监控与研究候选筛选，不执行交易。</p>
         </div>
-        <button onClick={run} disabled={running || trialDisabled} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-          <RefreshCw className={cn("h-4 w-4", running && "animate-spin")} />{running ? "扫描中" : "立即扫描"}
+        <button onClick={run} disabled={scanRunning || trialDisabled} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+          <RefreshCw className={cn("h-4 w-4", scanRunning && "animate-spin")} />{scanRunning ? "扫描中" : "立即扫描"}
         </button>
       </header>
 

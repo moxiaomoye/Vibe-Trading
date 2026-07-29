@@ -51,3 +51,22 @@ def test_history_limit_is_validated(tmp_path, monkeypatch):
     value_hunter_routes.register_value_hunter_routes(app, lambda: None)
     response = TestClient(app).get("/value-hunter/history?limit=0")
     assert response.status_code == 422
+
+
+def test_running_scan_returns_conflict_and_status_exposes_state(tmp_path, monkeypatch):
+    service = _service(tmp_path)
+    assert service._lock.acquire(blocking=False)
+    monkeypatch.setattr(value_hunter_routes, "_service", service)
+    app = FastAPI()
+    value_hunter_routes.register_value_hunter_routes(app, lambda: None)
+    client = TestClient(app)
+    try:
+        status = client.get("/value-hunter/status")
+        response = client.post("/value-hunter/run?notify=false")
+    finally:
+        service._lock.release()
+
+    assert status.status_code == 200
+    assert status.json()["running"] is True
+    assert response.status_code == 409
+    assert "正在运行" in response.json()["detail"]

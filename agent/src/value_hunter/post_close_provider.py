@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+import json
+import math
 import re
+import time
 from typing import Any, Callable, Mapping, Protocol
 
 import pandas as pd
+import requests
 
 from src.value_hunter.trading_rules import (
     classify_limit_rule,
@@ -100,7 +104,7 @@ class PostCloseProvider(Protocol):
 
 
 class SinaSpotAdapter:
-    """Current-day Sina A-share spot adapter with one bounded upstream call."""
+    """Current-day Sina A-share spot adapter with one bounded pagination pass."""
 
     source = "akshare_sina"
 
@@ -136,19 +140,16 @@ class SinaSpotAdapter:
                 ),
             )
 
+        source = self.source if self._ak_module is not None else "sina_direct"
+        pagination_gaps: tuple[ProviderDataGap, ...] = ()
         try:
-            ak = self._ak()
-        except Exception as exc:
-            return _failed_sina_spot(
-                target_date,
-                retrieved_at,
-                "provider_initialization",
-                exc,
-                retryable=False,
-            )
-
-        try:
-            raw = ak.stock_zh_a_spot()
+            if self._ak_module is not None:
+                raw = self._ak_module.stock_zh_a_spot()
+            else:
+                raw, pagination_gaps = _load_sina_spot_single_pass(
+                    source_date=target_date,
+                    get=requests.get,
+                )
         except Exception as exc:
             return _failed_sina_spot(
                 target_date,
@@ -156,10 +157,11 @@ class SinaSpotAdapter:
                 "all_a_spot_sina",
                 exc,
                 retryable=True,
+                source=source,
             )
 
         spot, normalization_gaps = _normalize_sina_spot(raw, target_date)
-        gaps = list(normalization_gaps)
+        gaps = [*pagination_gaps, *normalization_gaps]
         if spot.empty:
             gaps.append(
                 ProviderDataGap(
@@ -180,7 +182,7 @@ class SinaSpotAdapter:
                 )
             )
         return PostCloseData(
-            source=self.source,
+            source=source,
             source_date=target_date,
             availability_date=target_date,
             retrieved_at=retrieved_at,
@@ -188,7 +190,7 @@ class SinaSpotAdapter:
             symbol_metadata=metadata,
             data_gaps=tuple(gaps),
             component_sources={
-                "spot": self.source if not spot.empty else "unavailable",
+                "spot": source if not spot.empty else "unavailable",
             },
         )
 
@@ -718,9 +720,10 @@ def _failed_sina_spot(
     exc: Exception,
     *,
     retryable: bool,
+    source: str = SinaSpotAdapter.source,
 ) -> PostCloseData:
     return PostCloseData(
-        source=SinaSpotAdapter.source,
+        source=source,
         source_date=target_date,
         availability_date=target_date,
         retrieved_at=retrieved_at,
@@ -744,6 +747,109 @@ def _failed_sina_spot(
         ),
         component_sources={"spot": "unavailable"},
     )
+
+
+def _load_sina_spot_single_pass(
+    *,
+    source_date: date,
+    get: Callable[..., Any],
+    max_elapsed_seconds: float = 30.0,
+) -> tuple[pd.DataFrame, tuple[ProviderDataGap, ...]]:
+    """Fetch every Sina page once and retain a high-coverage partial result."""
+
+    if max_elapsed_seconds <= 0:
+        raise ValueError("max_elapsed_seconds must be positive")
+    started_at = time.monotonic()
+    count_url = (
+        "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        "Market_Center.getHQNodeStockCount?node=hs_a"
+    )
+    data_url = (
+        "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        "Market_Center.getHQNodeData"
+    )
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 Chrome/124 Safari/537.36"
+        )
+    }
+    count_response = get(count_url, headers=headers, timeout=15)
+    count_response.raise_for_status()
+    count_match = re.search(r"\d+", count_response.text)
+    if count_match is None:
+        raise ValueError("Sina spot count response is invalid")
+    expected_count = int(count_match.group())
+    page_size = 100
+    page_count = math.ceil(expected_count / page_size)
+    records: list[dict[str, Any]] = []
+    failed_pages: list[int] = []
+    payload = {
+        "num": str(page_size),
+        "sort": "symbol",
+        "asc": "1",
+        "node": "hs_a",
+        "symbol": "",
+        "_s_r_a": "page",
+    }
+    for page in range(1, page_count + 1):
+        if time.monotonic() - started_at >= max_elapsed_seconds:
+            failed_pages.extend(range(page, page_count + 1))
+            break
+        try:
+            response = get(
+                data_url,
+                params={**payload, "page": str(page)},
+                headers=headers,
+                timeout=15,
+            )
+            response.raise_for_status()
+            page_records = json.loads(response.text)
+            if not isinstance(page_records, list):
+                raise ValueError("Sina spot page is not a list")
+            records.extend(
+                row for row in page_records if isinstance(row, dict)
+            )
+        except Exception:
+            failed_pages.append(page)
+
+    coverage = len(records) / expected_count if expected_count else 0.0
+    if not records or coverage < 0.95:
+        raise RuntimeError(
+            "Sina spot pagination coverage is below 95% "
+            f"({len(records)}/{expected_count})"
+        )
+
+    frame = pd.DataFrame.from_records(records).rename(
+        columns={
+            "code": "代码",
+            "name": "名称",
+            "trade": "最新价",
+            "pricechange": "涨跌额",
+            "changepercent": "涨跌幅",
+            "buy": "买入",
+            "sell": "卖出",
+            "settlement": "昨收",
+            "open": "今开",
+            "high": "最高",
+            "low": "最低",
+            "volume": "成交量",
+            "amount": "成交额",
+            "ticktime": "时间戳",
+        }
+    )
+    gaps: tuple[ProviderDataGap, ...] = ()
+    if failed_pages:
+        gaps = (
+            ProviderDataGap(
+                "all_a_spot",
+                "Sina spot returned partial high-coverage data; missing pages: "
+                + ",".join(str(page) for page in failed_pages),
+                source_date,
+                source_date,
+            ),
+        )
+    return frame, gaps
 
 
 def _normalize_sina_spot(

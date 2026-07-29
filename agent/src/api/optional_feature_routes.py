@@ -98,6 +98,22 @@ def _investment_research_stubs() -> list[DisabledStub]:
                 "panic_shadow",
                 status_code=404,
             ),
+            _stub(
+                "/investment-research/historical-evaluation/status",
+                "historical_evaluation",
+            ),
+            _stub(
+                "/investment-research/historical-evaluation/evaluate-auto",
+                "historical_evaluation",
+                methods={"POST"},
+                status_code=404,
+            ),
+            _stub(
+                "/investment-research/historical-evaluation/evaluate-manual",
+                "historical_evaluation",
+                methods={"POST"},
+                status_code=404,
+            ),
         ]
     )
     return stubs

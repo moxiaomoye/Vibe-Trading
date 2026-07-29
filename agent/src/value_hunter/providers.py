@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import json
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -138,6 +138,7 @@ def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
 
 class AkshareProvider(ValueHunterProvider):
     name = "akshare"
+    _ANNOUNCEMENT_TIMEOUT_SECONDS = 30.0
 
     _INDEX_MAP = {
         "sh000300": "沪深300", "sh000905": "中证500", "sh000852": "中证1000",
@@ -289,16 +290,29 @@ class AkshareProvider(ValueHunterProvider):
         days = [(date.today() - timedelta(days=offset)).strftime("%Y%m%d") for offset in range(7)]
         frames: list[Any] = []
         errors: list[str] = []
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="value-hunter-notices") as pool:
+        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="value-hunter-notices")
+        try:
             futures = {
                 pool.submit(ak.stock_notice_report, symbol="全部", date=day): day
                 for day in days
             }
-            for future in as_completed(futures):
+            done, pending = wait(futures, timeout=self._ANNOUNCEMENT_TIMEOUT_SECONDS)
+            for future in done:
                 try:
                     frames.append(future.result())
                 except Exception as exc:
                     errors.append(f"{futures[future]}:{type(exc).__name__}")
+            if pending:
+                for future in pending:
+                    future.cancel()
+                errors.append(
+                    f"timeout:{len(pending)} announcement request(s) exceeded "
+                    f"{self._ANNOUNCEMENT_TIMEOUT_SECONDS:g}s"
+                )
+        finally:
+            # Upstream HTTP calls do not consistently expose a timeout. Do not
+            # hold the scan response open indefinitely when an endpoint stalls.
+            pool.shutdown(wait=False, cancel_futures=True)
         for frame in frames:
             if "代码" not in frame or "公告标题" not in frame:
                 continue

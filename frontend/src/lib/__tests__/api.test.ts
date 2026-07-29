@@ -93,4 +93,32 @@ describe("api request helper", () => {
       }),
     );
   });
+
+  it("bounds the current panic shadow request in the browser", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => (
+      new Promise<Response>((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      })
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { api } = await loadApiModule();
+    const request = api.runCurrentPanicShadowReport({
+      date_mode: "auto",
+      requested_date: null,
+    });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "ApiError",
+      status: 504,
+      code: "provider_timeout",
+      message: "Request timed out after 55 seconds.",
+    } satisfies Partial<ApiError>);
+    await vi.advanceTimersByTimeAsync(55_000);
+
+    await rejection;
+    vi.useRealTimers();
+  });
 });

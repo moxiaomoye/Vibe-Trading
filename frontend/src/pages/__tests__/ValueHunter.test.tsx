@@ -60,6 +60,21 @@ describe("ValueHunter page", () => {
     expect(apiMock.runValueHunter).toHaveBeenCalledWith(false);
   });
 
+  it("disables duplicate scans while the backend reports a running scan", async () => {
+    apiMock.getValueHunterStatus.mockResolvedValue({
+      ...status,
+      running: true,
+      latest: null,
+    });
+
+    render(<ValueHunter />);
+
+    const button = await screen.findByRole("button");
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(apiMock.runValueHunter).not.toHaveBeenCalled();
+  });
+
   it("renders the incomplete disabled stub without crashing", async () => {
     apiMock.getValueHunterStatus.mockResolvedValue({
       enabled: false,

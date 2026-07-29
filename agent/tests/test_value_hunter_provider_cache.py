@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
 from src.value_hunter.providers import AkshareProvider
 
@@ -45,3 +47,21 @@ def test_announcement_classifier_marks_severe_and_soft_risks():
     assert classify("关于公司股票被实施退市风险警示的公告") == "delisting"
     assert classify("持股5%以上股东减持计划预披露公告") == "shareholder_reduction"
     assert classify("日常经营合同公告") is None
+
+
+def test_stalled_announcement_requests_do_not_block_scan():
+    class SlowAkshare:
+        @staticmethod
+        def stock_notice_report(**_kwargs):
+            time.sleep(0.05)
+            return []
+
+    provider = AkshareProvider()
+    provider._ANNOUNCEMENT_TIMEOUT_SECONDS = 0.01
+    candidate = CandidateObservation("688981", "中芯国际", "半导体", "国产芯片")
+
+    started = time.monotonic()
+    provider._enrich_announcements(SlowAkshare(), [candidate])
+
+    assert time.monotonic() - started < 0.04
+    assert any("timeout:" in warning for warning in candidate.warnings)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
@@ -43,6 +45,13 @@ AuthDep = Callable[..., Awaitable[Any] | Any]
 MAX_MARKET_ROWS = 10_000
 REPORT_OUTPUT_DIR = Path.home() / ".vibe-trading" / "panic-shadow-reports"
 _report_storage: ReportStorage | None = None
+CURRENT_PROVIDER_TIMEOUT_SECONDS = 45.0
+_current_provider_executor = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="panic-current-provider",
+)
+_current_provider_lock = threading.Lock()
+_current_provider_future: Future[Any] | None = None
 
 
 class ShadowMarketRow(BaseModel):
@@ -372,9 +381,10 @@ def _execute_current(resolved: ResolvedTradeDate):
             status_code=404,
             date_context=resolved.to_dict(),
         )
-    provider = _current_provider()
     try:
-        post_close = provider.load(as_of=trade_date)
+        post_close = _load_current_post_close(trade_date)
+    except CurrentReportDataError:
+        raise
     except Exception as exc:
         raise CurrentReportDataError(
             "the current post-close Provider request failed",
@@ -413,6 +423,47 @@ def _execute_current(resolved: ResolvedTradeDate):
         data_available_at=information_cutoff,
         run_id=f"shadow-{trade_date.isoformat()}-{information_cutoff.strftime('%H%M%S%f')}",
     ), post_close, panel_data
+
+
+def _load_current_post_close(trade_date: date):
+    """Bound one live Provider request and reject duplicate in-flight work."""
+
+    global _current_provider_future
+    with _current_provider_lock:
+        if (
+            _current_provider_future is not None
+            and not _current_provider_future.done()
+        ):
+            raise CurrentReportDataError(
+                "a current post-close Provider request is already running",
+                ["wait for the existing Provider request to finish before retrying"],
+                code="provider_busy",
+                status_code=409,
+            )
+        provider = _current_provider()
+        future = _current_provider_executor.submit(
+            provider.load,
+            as_of=trade_date,
+        )
+        _current_provider_future = future
+
+    try:
+        return future.result(timeout=CURRENT_PROVIDER_TIMEOUT_SECONDS)
+    except FutureTimeoutError as exc:
+        raise CurrentReportDataError(
+            "the current post-close Provider exceeded its time limit",
+            [
+                f"provider_timeout_seconds={CURRENT_PROVIDER_TIMEOUT_SECONDS:g}",
+                "the upstream DNS or market-data endpoint did not finish in time",
+            ],
+            code="provider_timeout",
+            status_code=504,
+        ) from exc
+    finally:
+        if future.done():
+            with _current_provider_lock:
+                if _current_provider_future is future:
+                    _current_provider_future = None
 
 
 def _execute_manual(
@@ -675,12 +726,15 @@ def _panel_input_hash(panel_data: dict[str, Any]) -> str:
 def _current_provider():
     from src.value_hunter.post_close_provider import (
         ComponentFallbackPostCloseProvider,
-        SinaBenchmarkAdapter,
+        SinaSpotAdapter,
     )
 
-    return ComponentFallbackPostCloseProvider(
-        benchmark_fallback=SinaBenchmarkAdapter(),
-    )
+    # The interactive Trial flow must have a bounded first hop.  Eastmoney's
+    # AKShare functions do not consistently expose request timeouts, so a
+    # stalled primary call can prevent component fallback from ever running.
+    # SinaSpotAdapter uses explicit per-request timeouts; missing official
+    # pools and sector data remain visible gaps instead of blocking the report.
+    return ComponentFallbackPostCloseProvider(primary=SinaSpotAdapter())
 
 
 def _now_utc() -> datetime:

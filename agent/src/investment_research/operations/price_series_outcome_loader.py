@@ -160,8 +160,8 @@ def akshare_price_fetcher(
             stock_df = ak.stock_zh_a_hist(
                 symbol=symbol,
                 period="daily",
-                start_date=target_date.isoformat(),
-                end_date=target_date.isoformat(),
+                start_date=target_date.strftime("%Y%m%d"),
+                end_date=target_date.strftime("%Y%m%d"),
                 adjust="qfq",
             )
         except Exception:
@@ -179,15 +179,16 @@ def akshare_price_fetcher(
 
         try:
             index_df = ak.stock_zh_index_daily_em(symbol=f"sh{index_symbol}")
-            index_df = index_df[index_df["date"] == target_date.isoformat()]
+            index_dates = pd.to_datetime(index_df["date"], errors="coerce").dt.date
+            index_df = index_df[index_dates == target_date]
             if index_df.empty:
                 logger.warning("CSI 300 data missing for %s", target_date)
-                csi300_close = close
+                return None
             else:
                 csi300_close = float(index_df["close"].iloc[-1])
         except Exception:
             logger.warning("akshare CSI 300 fetch failed for %s", target_date, exc_info=True)
-            csi300_close = close
+            return None
 
         snap = PriceSnapshot(close=close, csi300_close=csi300_close)
         _cache[target_date] = snap

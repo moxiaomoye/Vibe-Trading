@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import sys
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import pytest
 
 from src.investment_research.operations.outcome_loader import DEFAULT_HORIZONS
 from src.investment_research.operations.price_series_outcome_loader import (
     PriceSeriesOutcomeLoader,
     PriceSnapshot,
+    akshare_price_fetcher,
 )
 
 TRADING_DAYS: list[date] = [
@@ -284,6 +288,42 @@ class TestNoLookahead:
             )
             assert w.asset_return is None
             assert w.excess_return is None
+
+
+def test_akshare_fetcher_uses_provider_date_format(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def stock_hist(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame({"收盘": [10.0]})
+
+    fake = SimpleNamespace(
+        stock_zh_a_hist=stock_hist,
+        stock_zh_index_daily_em=lambda **_: pd.DataFrame(
+            {"date": ["2025-07-21"], "close": [4000.0]}
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "akshare", fake)
+
+    snapshot = akshare_price_fetcher()(date(2025, 7, 21))
+
+    assert snapshot == PriceSnapshot(close=10.0, csi300_close=4000.0)
+    assert captured["start_date"] == "20250721"
+    assert captured["end_date"] == "20250721"
+
+
+def test_akshare_fetcher_does_not_substitute_stock_price_for_missing_benchmark(
+    monkeypatch,
+) -> None:
+    fake = SimpleNamespace(
+        stock_zh_a_hist=lambda **_: pd.DataFrame({"收盘": [10.0]}),
+        stock_zh_index_daily_em=lambda **_: pd.DataFrame(
+            {"date": ["2025-07-22"], "close": [4000.0]}
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "akshare", fake)
+
+    assert akshare_price_fetcher()(date(2025, 7, 21)) is None
 
 
 def _noop_calendar():

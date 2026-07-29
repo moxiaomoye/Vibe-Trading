@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, CircleDashed, FileCheck2, FlaskConical, Search, ShieldCheck } from "lucide-react";
 
 import {
+  ApiError,
   api,
   isDisabledFeatureError,
   type InvestmentResearchDailyReport,
   type InvestmentResearchEvidenceInboxItem,
   type InvestmentResearchEvidenceReadiness,
+  type HistoricalEvaluationReport,
   type InvestmentResearchStatus,
   type InvestmentResearchThesis,
   type PanicShadowDateMode,
@@ -48,6 +50,17 @@ function shanghaiDate(): string {
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function latestPossibleT20Date(): string {
+  const date = new Date(`${shanghaiDate()}T00:00:00Z`);
+  let weekdays = 0;
+  while (weekdays < 20) {
+    date.setUTCDate(date.getUTCDate() - 1);
+    const day = date.getUTCDay();
+    if (day !== 0 && day !== 6) weekdays += 1;
+  }
+  return date.toISOString().slice(0, 10);
 }
 
 function ThesisCard({ thesis, readiness }: {
@@ -195,6 +208,149 @@ function AcceptedEvidence({ items }: { items: InvestmentResearchEvidenceInboxIte
   );
 }
 
+function formatPercent(value: number | null): string {
+  return value === null ? "无数据" : `${(value * 100).toFixed(2)}%`;
+}
+
+function HistoricalOutcomeSection({
+  report,
+  running,
+  error,
+  onAutomatic,
+  onImport,
+}: {
+  report: HistoricalEvaluationReport | null;
+  running: boolean;
+  error: string;
+  onAutomatic: (stockCode: string, evaluationDate: string) => void;
+  onImport: (file: File) => void;
+}) {
+  const [stockCode, setStockCode] = useState("000001");
+  const [evaluationDate, setEvaluationDate] = useState("");
+  const latestEvaluationDate = latestPossibleT20Date();
+  const t20 = report?.horizons.find((item) => item.horizon === 20) ?? null;
+  const automaticReady = /^\d{6}$/.test(stockCode)
+    && Boolean(evaluationDate)
+    && evaluationDate <= latestEvaluationDate;
+  return (
+    <section className="rounded-xl border bg-card p-5">
+      <div>
+        <div>
+          <h2 className="font-semibold">历史 T+20 结果评测</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            输入股票代码和历史评估日期，系统自动获取个股前复权行情与沪深300同期行情。
+          </p>
+        </div>
+        <div className="mt-3 grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-3">
+          <label className="text-xs font-medium">
+            股票代码
+            <input
+              aria-label="历史评测股票代码"
+              value={stockCode}
+              inputMode="numeric"
+              maxLength={6}
+              disabled={running}
+              onChange={(event) => setStockCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="mt-1 w-full rounded-md border bg-background px-2 py-2"
+              placeholder="例如 000001"
+            />
+          </label>
+          <label className="text-xs font-medium">
+            历史评估日期
+            <input
+              aria-label="历史评估日期"
+              type="date"
+              value={evaluationDate}
+              max={latestEvaluationDate}
+              disabled={running}
+              onChange={(event) => setEvaluationDate(event.target.value)}
+              className="mt-1 w-full rounded-md border bg-background px-2 py-2"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              disabled={running || !automaticReady}
+              onClick={() => onAutomatic(stockCode, evaluationDate)}
+              className="w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {running ? "正在自动获取…" : "自动获取并评测 T+20"}
+            </button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          最晚可选 {latestEvaluationDate}（按20个工作日估算）；遇交易所休市时可能需要选择更早日期。
+        </p>
+        <details className="mt-3 rounded-md border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">
+            自动获取失败 / 高级选项：手工 JSON 导入
+          </summary>
+          <p className="mt-2 text-muted-foreground">
+            仅在数据源权限、网络、限频或日期覆盖不足时使用。手工数据仍通过同一套校验和收益计算逻辑。
+          </p>
+          <label className={`mt-2 inline-block rounded-md border px-3 py-2 font-medium ${running ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+            导入历史价格 JSON
+            <input
+              type="file"
+              accept=".json,application/json"
+              disabled={running}
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) onImport(file);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </details>
+      </div>
+      {error && (
+        <p className="mt-3 whitespace-pre-line rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {!report && !error && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          请选择已经走完 T+20 交易日的历史日期。系统不会用样例数据代替真实获取结果。
+        </p>
+      )}
+      {report && (
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-2 rounded-md border p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <div><p className="text-muted-foreground">标的</p><p className="font-medium">{report.stock_code}</p></div>
+            <div>
+              <p className="text-muted-foreground">请求日 → 实际评估交易日 / 入场价</p>
+              <p className="font-medium">
+                {report.requested_evaluation_date ?? report.evaluation_date}
+                {" → "}
+                {report.effective_evaluation_date ?? report.evaluation_date}
+                {" / "}
+                {report.entry_price}
+              </p>
+            </div>
+            <div><p className="text-muted-foreground">数据范围</p><p className="font-medium">{report.coverage ? `${report.coverage.first_trade_date} 至 ${report.coverage.last_trade_date}` : "未提供"}</p></div>
+            <div><p className="text-muted-foreground">来源 / 复权</p><p className="font-medium">{report.input_mode} / {report.adjustment}</p></div>
+            <div className="sm:col-span-2"><p className="text-muted-foreground">组件来源</p><p className="font-medium">{Object.entries(report.component_sources ?? {}).map(([component, source]) => `${component}: ${source}`).join("；") || report.data_source}</p></div>
+            <div className="sm:col-span-2"><p className="text-muted-foreground">能力状态</p><p className="font-medium">{report.verification_status} / {report.capability}</p></div>
+          </div>
+          {t20 && (
+            <div className="grid gap-2 rounded-md bg-muted/50 p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              <div><p className="text-muted-foreground">T+20交易日</p><p className="font-semibold">{t20.target_trading_date ?? "覆盖不足"}</p></div>
+              <div><p className="text-muted-foreground">资产收益</p><p className="font-semibold">{formatPercent(t20.asset_return)}</p></div>
+              <div><p className="text-muted-foreground">沪深300 / 超额</p><p className="font-semibold">{formatPercent(t20.benchmark_return)} / {formatPercent(t20.excess_return)}</p></div>
+              <div><p className="text-muted-foreground">最大回撤</p><p className="font-semibold">{formatPercent(t20.maximum_drawdown)}</p></div>
+              {t20.data_gap && <p className="text-amber-700 sm:col-span-2 lg:col-span-4">数据缺口：{t20.data_gap}</p>}
+            </div>
+          )}
+          {report.warnings.map((warning) => (
+            <p key={warning} className="text-xs text-amber-700">{warning}</p>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PanicShadowSection({
   status,
   running,
@@ -224,7 +380,7 @@ function PanicShadowSection({
       disabled={running}
       className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {running ? "正在生成…" : actionLabel}
+      {running ? "正在获取全市场数据（最长约45秒）…" : actionLabel}
     </button>
   );
   const actions = (
@@ -437,6 +593,9 @@ export function InvestmentResearch() {
   const [shadowRunning, setShadowRunning] = useState(false);
   const [dateMode, setDateMode] = useState<PanicShadowDateMode>("auto");
   const [selectedDate, setSelectedDate] = useState(shanghaiDate());
+  const [historicalReport, setHistoricalReport] = useState<HistoricalEvaluationReport | null>(null);
+  const [historicalRunning, setHistoricalRunning] = useState(false);
+  const [historicalError, setHistoricalError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -448,12 +607,30 @@ export function InvestmentResearch() {
         api.listInvestmentResearchEvidenceInbox("accepted", 20),
         api.listInvestmentResearchEvidenceReadiness(),
       ]);
-      setStatus(nextStatus);
-      setTheses(nextTheses);
-      setPendingEvidence(nextEvidence);
-      setAcceptedEvidence(nextAcceptedEvidence);
-      setReadiness(nextReadiness);
-      try { setDaily(await api.getInvestmentResearchDaily(shanghaiDate())); } catch { setDaily(null); }
+      const validCollections = Array.isArray(nextTheses)
+        && Array.isArray(nextEvidence)
+        && Array.isArray(nextAcceptedEvidence)
+        && Array.isArray(nextReadiness);
+      if (!validCollections) {
+        setStatus({
+          enabled: false, shadow_mode: false, schema_version: 0,
+          schema_components: { research_core: 0, evidence_inbox: 0, evidence_association: 0, evidence_set_review: 0 },
+          thesis_count: 0, evidence_inbox: { pending: 0, accepted: 0, rejected: 0 },
+          positioning: "", output_contract: "",
+        });
+        setTheses([]);
+        setPendingEvidence([]);
+        setAcceptedEvidence([]);
+        setReadiness([]);
+        setDaily(null);
+      } else {
+        setStatus(nextStatus);
+        setTheses(nextTheses);
+        setPendingEvidence(nextEvidence);
+        setAcceptedEvidence(nextAcceptedEvidence);
+        setReadiness(nextReadiness);
+        try { setDaily(await api.getInvestmentResearchDaily(shanghaiDate())); } catch { setDaily(null); }
+      }
     } catch (reason) {
       if (isDisabledFeatureError(reason)) {
         setStatus({
@@ -534,6 +711,54 @@ export function InvestmentResearch() {
     }
   }, [dateMode, selectedDate]);
 
+  const evaluateAutomaticHistoricalPrices = useCallback(async (
+    stockCode: string,
+    evaluationDate: string,
+  ) => {
+    setHistoricalRunning(true);
+    setHistoricalError("");
+    try {
+      setHistoricalReport(await api.evaluateAutomaticHistoricalPrices({
+        stock_code: stockCode,
+        evaluation_date: evaluationDate,
+        horizon: 20,
+      }));
+    } catch (reason) {
+      setHistoricalReport(null);
+      if (reason instanceof ApiError) {
+        const details = reason.reasons.length > 0
+          ? `\n${reason.reasons.map((item) => `• ${item}`).join("\n")}`
+          : "";
+        setHistoricalError(`${reason.message}${details}\n此时可展开高级选项导入 JSON。`);
+      } else {
+        setHistoricalError(
+          reason instanceof Error ? reason.message : "自动历史行情获取失败。",
+        );
+      }
+    } finally {
+      setHistoricalRunning(false);
+    }
+  }, []);
+
+  const importHistoricalPrices = useCallback(async (file: File) => {
+    setHistoricalRunning(true);
+    setHistoricalError("");
+    try {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("历史价格文件超过 5 MiB。");
+      }
+      const manifest = JSON.parse(await file.text()) as unknown;
+      setHistoricalReport(await api.evaluateManualHistoricalPrices(manifest));
+    } catch (reason) {
+      setHistoricalReport(null);
+      setHistoricalError(
+        reason instanceof Error ? reason.message : "历史价格导入或计算失败。",
+      );
+    } finally {
+      setHistoricalRunning(false);
+    }
+  }, []);
+
   useEffect(() => { void load(); }, [load]);
   const versionedCount = useMemo(() => theses.filter((item) => item.research_state === "versioned").length, [theses]);
   const readinessByThesis = useMemo(
@@ -549,6 +774,15 @@ export function InvestmentResearch() {
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">把有限研究时间集中到少数可能被错误定价的机会；输出研究候选与否定问题，不输出交易指令。</p>
       </header>
       {error && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
+      <HistoricalOutcomeSection
+        report={historicalReport}
+        running={historicalRunning}
+        error={historicalError}
+        onAutomatic={(stockCode, evaluationDate) => {
+          void evaluateAutomaticHistoricalPrices(stockCode, evaluationDate);
+        }}
+        onImport={(file) => { void importHistoricalPrices(file); }}
+      />
       <PanicShadowSection
         status={shadowStatus}
         running={shadowRunning}

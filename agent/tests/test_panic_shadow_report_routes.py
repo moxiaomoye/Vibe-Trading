@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -360,6 +362,39 @@ def test_current_provider_failure_is_isolated_and_live_stays_available(monkeypat
     assert failed.json()["error"]["reasons"] == ["provider_error_type=RuntimeError"]
     assert "upstream detail" not in failed.text
     assert live.status_code == 200
+
+
+def test_current_provider_uses_bounded_sina_spot_as_first_hop() -> None:
+    from src.value_hunter.post_close_provider import (
+        ComponentFallbackPostCloseProvider,
+        SinaSpotAdapter,
+    )
+
+    provider = shadow_routes._current_provider()
+
+    assert isinstance(provider, ComponentFallbackPostCloseProvider)
+    assert isinstance(provider._primary, SinaSpotAdapter)
+    assert provider._benchmark_fallback is None
+
+
+def test_current_provider_timeout_returns_structured_error(monkeypatch) -> None:
+    class SlowProvider:
+        def load(self, *, as_of=None):
+            time.sleep(0.05)
+            return _FixturePostCloseProvider().load(as_of=as_of)
+
+    monkeypatch.setattr(shadow_routes, "_current_provider", SlowProvider)
+    monkeypatch.setattr(shadow_routes, "CURRENT_PROVIDER_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(shadow_routes, "_current_provider_future", None)
+
+    with pytest.raises(shadow_routes.CurrentReportDataError) as captured:
+        shadow_routes._load_current_post_close(TRADE_DATE)
+
+    assert captured.value.code == "provider_timeout"
+    assert captured.value.status_code == 504
+    assert "provider_timeout_seconds=0.01" in captured.value.reasons
+    time.sleep(0.06)
+    monkeypatch.setattr(shadow_routes, "_current_provider_future", None)
 
 
 def test_manual_import_runs_through_same_pipeline_and_persists(

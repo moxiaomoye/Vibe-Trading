@@ -15,6 +15,8 @@ const apiMock = vi.hoisted(() => ({
   runCurrentPanicShadowReport: vi.fn(),
   runManualPanicShadowReport: vi.fn(),
   runPanicShadowReport: vi.fn(),
+  evaluateAutomaticHistoricalPrices: vi.fn(),
+  evaluateManualHistoricalPrices: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -50,6 +52,7 @@ const theses: InvestmentResearchThesis[] = [{
 
 describe("InvestmentResearch page", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     apiMock.getInvestmentResearchStatus.mockResolvedValue(status);
     apiMock.listInvestmentResearchTheses.mockResolvedValue(theses);
     apiMock.listInvestmentResearchEvidenceInbox.mockResolvedValue([]);
@@ -109,6 +112,24 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("Research Candidate，不是交易指令")).toBeInTheDocument();
     expect(screen.getByText("当前没有待审证据。")).toBeInTheDocument();
     expect(screen.getByText("当前没有已接受证据。")).toBeInTheDocument();
+  });
+
+  it("does not crash when optional routes return disabled JSON stubs", async () => {
+    const disabled = {
+      enabled: false,
+      status: "disabled",
+      reason: "feature_not_enabled",
+    };
+    apiMock.getInvestmentResearchStatus.mockResolvedValue(disabled);
+    apiMock.listInvestmentResearchTheses.mockResolvedValue(disabled);
+    apiMock.listInvestmentResearchEvidenceInbox.mockResolvedValue(disabled);
+    apiMock.listInvestmentResearchEvidenceReadiness.mockResolvedValue(disabled);
+
+    render(<InvestmentResearch />);
+
+    expect(await screen.findByText(/V2 自动研究当前关闭/)).toBeInTheDocument();
+    expect(screen.getByText("AI Investment Researcher")).toBeInTheDocument();
+    expect(screen.queryByText(/filter is not a function/)).not.toBeInTheDocument();
   });
 
   it("generates and renders the current post-close shadow report", async () => {
@@ -189,6 +210,123 @@ describe("InvestmentResearch page", () => {
     });
     expect(await screen.findByText("correction")).toBeInTheDocument();
     expect(screen.getByText(/imported universe only/)).toBeInTheDocument();
+  });
+
+  it("imports historical prices and displays the T+20 outcome", async () => {
+    apiMock.evaluateManualHistoricalPrices.mockResolvedValue({
+      evaluation_date: "2025-07-21",
+      stock_code: "000001",
+      benchmark_code: "000300",
+      entry_price: 10,
+      data_source: "synthetic_hand_calculable_sample",
+      input_mode: "sample",
+      adjustment: "qfq",
+      capability: "sample_contract",
+      coverage: {
+        first_trade_date: "2025-07-21",
+        last_trade_date: "2025-08-18",
+        row_count: 21,
+      },
+      warnings: ["sample data is synthetic and does not validate investment performance"],
+      horizons: [{
+        horizon: 20,
+        target_trading_date: "2025-08-18",
+        asset_return: 0.2,
+        benchmark_return: 0.025,
+        excess_return: 0.175,
+        maximum_drawdown: -0.3076923077,
+        data_gap: null,
+        calculation_status: "complete",
+      }],
+    });
+    const manifest = {
+      schema_version: "1.0",
+      input_mode: "sample",
+      data_source: "synthetic_hand_calculable_sample",
+      prices: [],
+    };
+    render(<InvestmentResearch />);
+
+    fireEvent.change(await screen.findByLabelText("导入历史价格 JSON"), {
+      target: {
+        files: [
+          new File([JSON.stringify(manifest)], "historical-prices.json", {
+            type: "application/json",
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiMock.evaluateManualHistoricalPrices).toHaveBeenCalledWith(manifest);
+    });
+    expect(await screen.findByText("2025-08-18")).toBeInTheDocument();
+    expect(screen.getByText("20.00%")).toBeInTheDocument();
+    expect(screen.getByText("2.50% / 17.50%")).toBeInTheDocument();
+  });
+
+  it("uses automatic historical acquisition as the default T+20 flow", async () => {
+    apiMock.evaluateAutomaticHistoricalPrices.mockResolvedValue({
+      evaluation_date: "2025-07-21",
+      stock_code: "000001",
+      benchmark_code: "000300",
+      entry_price: 10,
+      data_source: "component_providers",
+      input_mode: "provider",
+      adjustment: "qfq",
+      capability: "provider",
+      component_sources: {
+        stock: "tencent",
+        benchmark: "tushare",
+      },
+      provider_attempts: [],
+      verification_status: "provider_acquired_unverified",
+      coverage: {
+        first_trade_date: "2025-07-21",
+        last_trade_date: "2025-08-18",
+        row_count: 21,
+      },
+      warnings: [],
+      horizons: [{
+        horizon: 20,
+        target_trading_date: "2025-08-18",
+        asset_return: 0.2,
+        benchmark_return: 0.025,
+        excess_return: 0.175,
+        maximum_drawdown: -0.1,
+        data_gap: null,
+        calculation_status: "complete",
+      }],
+    });
+    render(<InvestmentResearch />);
+
+    fireEvent.change(await screen.findByLabelText("历史评估日期"), {
+      target: { value: "2025-07-21" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "自动获取并评测 T+20" }));
+
+    await waitFor(() => {
+      expect(apiMock.evaluateAutomaticHistoricalPrices).toHaveBeenCalledWith({
+        stock_code: "000001",
+        evaluation_date: "2025-07-21",
+        horizon: 20,
+      });
+    });
+    expect(await screen.findByText("stock: tencent；benchmark: tushare")).toBeInTheDocument();
+    expect(screen.getByText(/provider_acquired_unverified/)).toBeInTheDocument();
+    expect(screen.getByText("自动获取失败 / 高级选项：手工 JSON 导入")).toBeInTheDocument();
+  });
+
+  it("does not submit an evaluation date that cannot have reached T+20", async () => {
+    render(<InvestmentResearch />);
+
+    const input = await screen.findByLabelText("历史评估日期");
+    fireEvent.change(input, {
+      target: { value: new Date().toISOString().slice(0, 10) },
+    });
+
+    expect(screen.getByRole("button", { name: "自动获取并评测 T+20" })).toBeDisabled();
+    expect(apiMock.evaluateAutomaticHistoricalPrices).not.toHaveBeenCalled();
   });
 
   it("runs a selected historical date and displays resolved provenance", async () => {

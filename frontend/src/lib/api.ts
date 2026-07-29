@@ -93,6 +93,32 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+async function requestWithTimeout<T>(
+  path: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await request<T>(path, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(
+        `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
+        504,
+        {
+          code: "provider_timeout",
+          reasons: ["The browser stopped waiting for the upstream market-data request."],
+        },
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -315,10 +341,10 @@ export const api = {
   getLatestPanicShadowReport: () =>
     request<unknown>("/investment-research/panic-shadow/latest"),
   runCurrentPanicShadowReport: (dateSelection: PanicShadowDateSelection) =>
-    request<unknown>("/investment-research/panic-shadow/run-current", {
+    requestWithTimeout<unknown>("/investment-research/panic-shadow/run-current", {
       method: "POST",
       body: JSON.stringify(dateSelection),
-    }),
+    }, 55_000),
   runManualPanicShadowReport: (
     manifest: unknown,
     dateSelection: PanicShadowDateSelection,
@@ -335,6 +361,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getHistoricalEvaluationStatus: () =>
+    request<HistoricalEvaluationStatus>(
+      "/investment-research/historical-evaluation/status",
+    ),
+  evaluateManualHistoricalPrices: (manifest: unknown) =>
+    request<HistoricalEvaluationReport>(
+      "/investment-research/historical-evaluation/evaluate-manual",
+      {
+        method: "POST",
+        body: JSON.stringify(manifest),
+      },
+    ),
+  evaluateAutomaticHistoricalPrices: (body: HistoricalAutomaticEvaluationRequest) =>
+    request<HistoricalEvaluationReport>(
+      "/investment-research/historical-evaluation/evaluate-auto",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
 };
 
 export interface ValueHunterIndexObservation {
@@ -363,7 +409,7 @@ export interface ValueHunterScan {
 }
 
 export interface ValueHunterStatus {
-  enabled: boolean; provider: string; schedule: string; timezone: string;
+  enabled: boolean; running?: boolean; provider: string; schedule: string; timezone: string;
   notification_channels: string[]; notification_ready: boolean;
   missing_notification_settings: string[]; latest: ValueHunterScan | null;
   status?: string; feature?: string; reason?: string;
@@ -1330,4 +1376,72 @@ export interface PanicShadowRunRequestBody {
   rows: PanicShadowMarketRow[];
   limit_up_symbols: string[];
   limit_down_symbols: string[];
+}
+
+export interface HistoricalEvaluationStatus {
+  enabled: boolean;
+  read_only: boolean;
+  supported_horizons: number[];
+  provider_supported: boolean;
+  manual_import_supported: boolean;
+  manual_schema_version: string;
+  adjustment: string;
+  automatic_fetch?: {
+    automatic_fetch: boolean;
+    local_cache_enabled?: boolean;
+    providers: Array<Record<string, unknown>>;
+  };
+}
+
+export interface HistoricalAutomaticEvaluationRequest {
+  stock_code: string;
+  evaluation_date: string;
+  horizon: 20;
+}
+
+export interface HistoricalProviderAttempt {
+  provider: string;
+  component: string;
+  status: string;
+  category: string | null;
+  message: string | null;
+}
+
+export interface HistoricalEvaluationHorizon {
+  horizon: number;
+  entry_date?: string;
+  target_trading_date?: string | null;
+  target_price?: number | null;
+  asset_return: number | null;
+  benchmark_entry_price?: number | null;
+  benchmark_target_price?: number | null;
+  benchmark_return: number | null;
+  excess_return: number | null;
+  maximum_drawdown: number | null;
+  data_gap: string | null;
+  calculation_status?: "complete" | "data_gap";
+}
+
+export interface HistoricalEvaluationReport {
+  evaluation_date: string;
+  requested_evaluation_date?: string;
+  effective_evaluation_date?: string;
+  date_resolution?: "exact_trading_day" | "previous_common_trading_day";
+  stock_code: string;
+  benchmark_code: string;
+  entry_price: number;
+  data_source: string;
+  input_mode: "manual" | "sample" | "provider";
+  adjustment: string;
+  capability: string;
+  component_sources: Record<string, string>;
+  provider_attempts: HistoricalProviderAttempt[];
+  verification_status: "provider_acquired_unverified" | "caller_supplied";
+  coverage: {
+    first_trade_date: string;
+    last_trade_date: string;
+    row_count: number;
+  } | null;
+  warnings: string[];
+  horizons: HistoricalEvaluationHorizon[];
 }

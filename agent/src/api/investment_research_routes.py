@@ -157,6 +157,32 @@ def _readiness_payload(readiness: Any) -> dict[str, Any]:
 def register_investment_research_routes(app: FastAPI, require_auth: AuthDep) -> None:
     try_register_routes(
         app,
+        feature_name="Historical Evaluation API",
+        env_var="PANIC_SHADOW_REPORT_API_ENABLED",
+        module_path="src.api.historical_evaluation_routes",
+        register_func_name="register_historical_evaluation_routes",
+        require_auth=require_auth,
+        disabled_stubs=[
+            DisabledStub(
+                "/investment-research/historical-evaluation/status",
+                {"enabled": False, "status": "disabled", "feature": "historical_evaluation", "reason": "feature_not_enabled"},
+            ),
+            DisabledStub(
+                "/investment-research/historical-evaluation/evaluate-auto",
+                {"enabled": False, "status": "disabled", "feature": "historical_evaluation", "reason": "feature_not_enabled"},
+                methods={"POST"},
+                status_code=404,
+            ),
+            DisabledStub(
+                "/investment-research/historical-evaluation/evaluate-manual",
+                {"enabled": False, "status": "disabled", "feature": "historical_evaluation", "reason": "feature_not_enabled"},
+                methods={"POST"},
+                status_code=404,
+            ),
+        ],
+    )
+    try_register_routes(
+        app,
         feature_name="Panic Shadow Report API",
         env_var="PANIC_SHADOW_REPORT_API_ENABLED",
         module_path="src.api.panic_shadow_report_routes",
