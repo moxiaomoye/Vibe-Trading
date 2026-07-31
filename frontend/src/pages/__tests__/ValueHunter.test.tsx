@@ -7,7 +7,10 @@ const apiMock = vi.hoisted(() => ({
   runValueHunter: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({ api: apiMock }));
+vi.mock("@/lib/api", () => ({
+  api: apiMock,
+  isDisabledFeatureError: () => false,
+}));
 
 const scan: ValueHunterScan = {
   run_id: "run-1", started_at: "2026-07-20T10:00:00Z", completed_at: "2026-07-20T10:00:01Z", mode: "demo",
@@ -55,5 +58,37 @@ describe("ValueHunter page", () => {
     fireEvent.click(screen.getByRole("button", { name: "立即扫描" }));
     await screen.findByText("示例芯片龙头");
     expect(apiMock.runValueHunter).toHaveBeenCalledWith(false);
+  });
+
+  it("disables duplicate scans while the backend reports a running scan", async () => {
+    apiMock.getValueHunterStatus.mockResolvedValue({
+      ...status,
+      running: true,
+      latest: null,
+    });
+
+    render(<ValueHunter />);
+
+    const button = await screen.findByRole("button");
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(apiMock.runValueHunter).not.toHaveBeenCalled();
+  });
+
+  it("renders the incomplete disabled stub without crashing", async () => {
+    apiMock.getValueHunterStatus.mockResolvedValue({
+      enabled: false,
+      status: "disabled",
+      feature: "value_hunter",
+      reason: "feature_not_enabled",
+    });
+
+    render(<ValueHunter />);
+
+    expect(
+      await screen.findByText("Value Hunter在当前Trial Shadow模式中未启用。"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "立即扫描" })).toBeDisabled();
+    expect(screen.getByText("尚未配置")).toBeInTheDocument();
   });
 });

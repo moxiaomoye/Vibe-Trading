@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Awaitable, Callable
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 
 from src.value_hunter import ValueHunterConfig, ValueHunterService
 from src.value_hunter.scheduler import ValueHunterScheduler
@@ -50,5 +50,10 @@ def register_value_hunter_routes(app: FastAPI, require_auth: AuthDep) -> None:
 
     @app.post("/value-hunter/run", dependencies=[Depends(require_auth)])
     async def value_hunter_run(notify: bool = False) -> dict:
-        result = await asyncio.to_thread(get_value_hunter_service().run, notify=notify)
+        try:
+            result = await asyncio.to_thread(get_value_hunter_service().run, notify=notify)
+        except RuntimeError as exc:
+            if "正在运行" in str(exc):
+                raise HTTPException(status_code=409, detail="Value Hunter 扫描正在运行，请稍后刷新。") from exc
+            raise
         return result.to_dict()

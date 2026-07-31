@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "input_mode": "manual",
+  "data_source": "user_supplied_price_series",
+  "availability_time": "YYYY-MM-DDTHH:MM:SS+08:00",
+  "evaluation_date": "YYYY-MM-DD",
+  "stock_code": "000000",
+  "benchmark_code": "000300",
+  "adjustment": "qfq",
+  "prices": [
+    {
+      "trade_date": "YYYY-MM-DD",
+      "asset_close": 0.01,
+      "benchmark_close": 0.01
+    }
+  ]
+}

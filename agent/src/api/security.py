@@ -178,7 +178,9 @@ async def _apply_security_headers(request: Request, call_next):
 # logs. Uvicorn's default access logger writes the full request line including
 # the query string, so without this an ``api_key=`` / ``ticket=`` value would
 # land in logs verbatim.
-_QUERY_SECRET_RE = re.compile(r"((?:api_key|ticket)=)[^&\s\"']+", re.IGNORECASE)
+_QUERY_SECRET_RE = re.compile(
+    r"((?:api_key|ticket|token|access_token)=)[^&\s\"']+", re.IGNORECASE
+)
 
 
 def _redact_query_secrets(text: str) -> str:

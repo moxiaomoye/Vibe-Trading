@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import json
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -138,6 +138,7 @@ def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
 
 class AkshareProvider(ValueHunterProvider):
     name = "akshare"
+    _ANNOUNCEMENT_TIMEOUT_SECONDS = 30.0
 
     _INDEX_MAP = {
         "sh000300": "沪深300", "sh000905": "中证500", "sh000852": "中证1000",
@@ -241,6 +242,31 @@ class AkshareProvider(ValueHunterProvider):
         self._write_cache("market", result)
         return result
 
+    def load_limit_down_context(self) -> MarketObservation:
+        """Load only the official current-day limit-down pool.
+
+        The unified daily report does not need the expensive full-market spot
+        pagination performed by ``load_market``.  Keeping this focused adapter
+        here preserves the Provider boundary and prevents a slow breadth
+        request from blocking otherwise available watchlist prices.
+        """
+        cached = self._read_market_cache()
+        if cached is not None and cached.limit_down_count is not None:
+            return cached
+        ak = self._ak()
+        frame = ak.stock_zt_pool_dtgc_em(date=date.today().strftime("%Y%m%d"))
+        return MarketObservation(
+            as_of=date.today().isoformat(),
+            indices=[],
+            advancer_ratio=None,
+            above_ma60_ratio=None,
+            limit_down_count=len(frame),
+            turnover_zscore=None,
+            source="AKShare/Eastmoney official limit-down pool",
+            coverage=["limit_down"],
+            warnings=[],
+        )
+
     def _base_watchlist(self) -> list[CandidateObservation]:
         if self.watchlist_path and self.watchlist_path.exists():
             return load_watchlist_csv(self.watchlist_path)
@@ -289,16 +315,29 @@ class AkshareProvider(ValueHunterProvider):
         days = [(date.today() - timedelta(days=offset)).strftime("%Y%m%d") for offset in range(7)]
         frames: list[Any] = []
         errors: list[str] = []
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="value-hunter-notices") as pool:
+        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="value-hunter-notices")
+        try:
             futures = {
                 pool.submit(ak.stock_notice_report, symbol="全部", date=day): day
                 for day in days
             }
-            for future in as_completed(futures):
+            done, pending = wait(futures, timeout=self._ANNOUNCEMENT_TIMEOUT_SECONDS)
+            for future in done:
                 try:
                     frames.append(future.result())
                 except Exception as exc:
                     errors.append(f"{futures[future]}:{type(exc).__name__}")
+            if pending:
+                for future in pending:
+                    future.cancel()
+                errors.append(
+                    f"timeout:{len(pending)} announcement request(s) exceeded "
+                    f"{self._ANNOUNCEMENT_TIMEOUT_SECONDS:g}s"
+                )
+        finally:
+            # Upstream HTTP calls do not consistently expose a timeout. Do not
+            # hold the scan response open indefinitely when an endpoint stalls.
+            pool.shutdown(wait=False, cancel_futures=True)
         for frame in frames:
             if "代码" not in frame or "公告标题" not in frame:
                 continue

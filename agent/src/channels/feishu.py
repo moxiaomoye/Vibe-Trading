@@ -691,7 +691,10 @@ class FeishuChannel(BaseChannel):
             .app_id(self.config.app_id)
             .app_secret(self.config.app_secret)
             .domain(domain)
-            .log_level(lark.LogLevel.INFO)
+            # The SDK's INFO WebSocket log includes the complete connection URL,
+            # including ephemeral access credentials. Keep SDK transport logs at
+            # WARNING while retaining this adapter's own lifecycle messages.
+            .log_level(lark.LogLevel.WARNING)
             .build()
         )
         builder = lark.EventDispatcherHandler.builder(
@@ -732,7 +735,7 @@ class FeishuChannel(BaseChannel):
             self.config.app_secret,
             domain=domain,
             event_handler=event_handler,
-            log_level=lark.LogLevel.INFO,
+            log_level=lark.LogLevel.WARNING,
         )
 
         # Start WebSocket client in a separate thread with reconnect loop.
@@ -814,10 +817,10 @@ class FeishuChannel(BaseChannel):
                 data = json.loads(response.raw.content)
                 bot = (data.get("data") or data).get("bot") or data.get("bot") or {}
                 return bot.get("open_id")
-            self.logger.warning("Failed to get bot info: code={}, msg={}", response.code, response.msg)
+            self.logger.warning("Failed to get bot info: code=%s, msg=%s", response.code, response.msg)
             return None
         except Exception as e:
-            self.logger.warning("Error fetching bot info: {}", e)
+            self.logger.warning("Error fetching bot info: %s", e)
             return None
 
     @staticmethod

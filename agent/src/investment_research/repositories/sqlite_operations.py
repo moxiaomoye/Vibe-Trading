@@ -148,6 +148,36 @@ class SQLiteOperationsRepository:
             )
         return cursor.rowcount == 1
 
+    def count_channel_messages_since(
+        self,
+        channel: DeliveryChannel,
+        since: datetime,
+    ) -> int:
+        """Count planned messages for one channel without changing outbox state."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT COUNT(*) AS message_count FROM notification_outbox
+                WHERE channel = ? AND created_at >= ?""",
+                (channel.value, since.isoformat()),
+            ).fetchone()
+        return int(row["message_count"])
+
+    def has_recent_source(
+        self,
+        channel: DeliveryChannel,
+        source_id: str,
+        since: datetime,
+    ) -> bool:
+        """Return whether the same event/reason was planned recently."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT 1 FROM notification_outbox
+                WHERE channel = ? AND source_id = ? AND created_at >= ?
+                LIMIT 1""",
+                (channel.value, source_id, since.isoformat()),
+            ).fetchone()
+        return row is not None
+
     def claim_due(self, now: datetime, limit: int = 20, max_attempts: int = 5) -> tuple[OutboxMessage, ...]:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("now must be timezone-aware")
@@ -171,6 +201,55 @@ class SQLiteOperationsRepository:
                 )
             connection.commit()
         return tuple(self.get_message(message_id) for message_id in ids)
+
+    def claim_message_ids(
+        self,
+        message_ids: tuple[str, ...],
+        now: datetime,
+        max_attempts: int = 5,
+    ) -> tuple[OutboxMessage, ...]:
+        """Claim only explicitly selected outbox rows.
+
+        Manual report delivery must never drain unrelated pending messages.
+        This targeted claim keeps the existing outbox state machine while
+        limiting a user-confirmed dispatch to the messages created for that
+        report.
+        """
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("now must be timezone-aware")
+        if max_attempts < 1:
+            raise ValueError("maximum attempts must be positive")
+        normalized = tuple(dict.fromkeys(item for item in message_ids if item))
+        if not normalized:
+            return ()
+        placeholders = ",".join("?" for _ in normalized)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                f"""SELECT message_id FROM notification_outbox
+                WHERE message_id IN ({placeholders})
+                AND status IN (?, ?) AND available_at <= ? AND attempt_count < ?
+                ORDER BY created_at""",
+                (
+                    *normalized,
+                    OutboxStatus.PENDING.value,
+                    OutboxStatus.FAILED.value,
+                    now.isoformat(),
+                    max_attempts,
+                ),
+            ).fetchall()
+            claimed_ids = [row["message_id"] for row in rows]
+            if claimed_ids:
+                claimed_placeholders = ",".join("?" for _ in claimed_ids)
+                connection.execute(
+                    f"""UPDATE notification_outbox
+                    SET status = ?, attempt_count = attempt_count + 1,
+                        updated_at = ?, last_error = NULL
+                    WHERE message_id IN ({claimed_placeholders})""",
+                    (OutboxStatus.SENDING.value, now.isoformat(), *claimed_ids),
+                )
+            connection.commit()
+        return tuple(self.get_message(message_id) for message_id in claimed_ids)
 
     def finish_message(
         self,

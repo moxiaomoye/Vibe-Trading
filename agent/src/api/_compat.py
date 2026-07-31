@@ -13,7 +13,7 @@ from typing import Any
 
 def host_attr(name: str, fallback: Any) -> Any:
     """Read a compatibility attribute from ``api_server`` when present."""
-    host = sys.modules.get("api_server")
+    host = sys.modules.get("api_server") or sys.modules.get("__main__")
     if host is not None and hasattr(host, name):
         return getattr(host, name)
     return fallback
@@ -21,6 +21,6 @@ def host_attr(name: str, fallback: Any) -> Any:
 
 def set_host_attr(name: str, value: Any) -> None:
     """Write a compatibility attribute onto ``api_server`` when present."""
-    host = sys.modules.get("api_server")
+    host = sys.modules.get("api_server") or sys.modules.get("__main__")
     if host is not None:
         setattr(host, name, value)

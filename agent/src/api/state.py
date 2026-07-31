@@ -31,7 +31,7 @@ def _get_session_service():
     global _session_service
 
     import sys as _sys
-    _host = _sys.modules.get("api_server")
+    _host = _sys.modules.get("api_server") or _sys.modules.get("__main__")
     if _host is not None and hasattr(_host, "_session_service"):
         host_val = getattr(_host, "_session_service")
         if host_val is not None:
@@ -75,7 +75,7 @@ def _get_channel_runtime():
     global _channel_runtime, _channel_bus, _channel_manager
 
     import sys as _sys
-    _host = _sys.modules.get("api_server")
+    _host = _sys.modules.get("api_server") or _sys.modules.get("__main__")
     if _host is not None and hasattr(_host, "_channel_runtime"):
         host_rt = getattr(_host, "_channel_runtime")
         if host_rt is not None:

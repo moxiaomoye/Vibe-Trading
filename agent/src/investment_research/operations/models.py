@@ -21,6 +21,7 @@ class JobStatus(StrEnum):
 class DeliveryChannel(StrEnum):
     EMAIL = "email"
     FEISHU = "feishu"
+    SERVERCHAN = "serverchan"
 
 
 class OutboxStatus(StrEnum):

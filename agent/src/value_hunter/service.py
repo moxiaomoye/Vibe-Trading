@@ -98,6 +98,7 @@ class ValueHunterService:
             ])
         return {
             "enabled": self.config.enabled,
+            "running": self._lock.locked(),
             "provider": self.provider.name,
             "schedule": self.config.schedule,
             "timezone": self.config.timezone,

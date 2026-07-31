@@ -1,6 +1,7 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 const Home = lazy(() => import("@/pages/Home").then((m) => ({ default: m.Home })));
 const Agent = lazy(() => import("@/pages/Agent").then((m) => ({ default: m.Agent })));
@@ -42,9 +43,11 @@ function PageLoader() {
 
 function wrap(Component: ComponentType) {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Component />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Component />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
