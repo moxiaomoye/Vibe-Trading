@@ -351,6 +351,11 @@ class AgentTuningConfig(_EnvBase):
     vibe_investment_research_issuer_disclosures_enabled: EnvBool = Field(
         alias="VIBE_INVESTMENT_RESEARCH_ISSUER_DISCLOSURES_ENABLED", default=False,
     )
+    vibe_investment_research_deep_timeout_seconds: float = Field(
+        alias="VIBE_INVESTMENT_RESEARCH_DEEP_TIMEOUT_SECONDS",
+        default=600.0,
+        gt=0,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +405,14 @@ class ResearchDeliveryConfig(_EnvBase):
     smtp_username: str = Field(alias="VIBE_RESEARCH_SMTP_USERNAME", default="")
     smtp_authorization_code: str = Field(alias="VIBE_RESEARCH_SMTP_AUTHORIZATION_CODE", default="")
     smtp_recipient: str = Field(alias="VIBE_RESEARCH_SMTP_RECIPIENT", default="")
+    serverchan_send_key: str = Field(alias="VIBE_RESEARCH_SERVERCHAN_SENDKEY", default="")
+    report_web_url: str = Field(
+        alias="VIBE_RESEARCH_REPORT_WEB_URL",
+        default="http://127.0.0.1:8899/investment-research",
+    )
+    daily_automation_enabled: EnvBool = Field(
+        alias="VIBE_RESEARCH_DAILY_AUTOMATION_ENABLED", default=False,
+    )
     run_timezone: str = Field(alias="VIBE_RESEARCH_RUN_TIMEZONE", default="Asia/Shanghai")
     run_hour: int = Field(alias="VIBE_RESEARCH_RUN_HOUR", default=18)
     run_minute: int = Field(alias="VIBE_RESEARCH_RUN_MINUTE", default=30)

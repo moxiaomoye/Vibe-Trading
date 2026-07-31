@@ -6,8 +6,8 @@
     Reuses the existing Compose image, temporarily enables the authenticated
     Investment Research, Panic Shadow, and manual Value Hunter HTTP routes,
     waits for container health, and opens the browser UI. It does not install
-    packages, build images, start schedulers, send notifications, or enable
-    trading.
+    packages or enable trading. Research delivery, the Feishu channel, and the
+    read-only daily research scheduler remain opt-in switches.
 
 .PARAMETER NoBrowser
     Start and verify the service without opening a browser.
@@ -16,6 +16,18 @@
     Build the local Compose image before starting so current working-tree
     changes are included. No packages are installed on the host.
 
+.PARAMETER EnableFeishuBot
+    Start only the channels already enabled in the protected agent config.
+    This is opt-in so a normal shadow launch remains side-effect free.
+
+.PARAMETER EnableNotifications
+    Enable configured research-only notification transports. Delivery failures
+    remain isolated from the research pipeline.
+
+.PARAMETER EnableDailyAutomation
+    Enable one idempotent post-close research run per trading day. This never
+    enables broker, order, or real-money execution.
+
 .PARAMETER WaitSeconds
     Maximum number of seconds to wait for the container to become healthy.
 #>
@@ -23,6 +35,9 @@
 param(
     [switch]$NoBrowser,
     [switch]$Build,
+    [switch]$EnableNotifications,
+    [switch]$EnableFeishuBot,
+    [switch]$EnableDailyAutomation,
     [ValidateRange(10, 300)]
     [int]$WaitSeconds = 120
 )
@@ -62,6 +77,9 @@ try {
         [System.IO.Path]::GetTempPath(),
         "vibe-trading-shadow-$([guid]::NewGuid().ToString('N')).yml"
     )
+    $deliveryMode = if ($EnableNotifications) { "live" } else { "disabled" }
+    $channelAutoStart = if ($EnableFeishuBot) { "true" } else { "false" }
+    $dailyAutomation = if ($EnableDailyAutomation) { "true" } else { "false" }
     @"
 services:
   vibe-trading:
@@ -72,8 +90,9 @@ services:
       VALUE_HUNTER_ENABLED: "false"
       VIBE_INVESTMENT_RESEARCH_ENABLED: "false"
       VIBE_TRADING_ENABLE_SCHEDULER: "false"
-      VIBE_TRADING_CHANNELS_AUTO_START: "false"
-      VIBE_RESEARCH_DELIVERY_MODE: "disabled"
+      VIBE_TRADING_CHANNELS_AUTO_START: "$channelAutoStart"
+      VIBE_RESEARCH_DELIVERY_MODE: "$deliveryMode"
+      VIBE_RESEARCH_DAILY_AUTOMATION_ENABLED: "$dailyAutomation"
 "@ | Set-Content -LiteralPath $overridePath -Encoding utf8
 
     try {
@@ -117,7 +136,26 @@ services:
     Write-Host "Live: $LiveUrl"
     Write-Host "T+20 sample: $HistoricalSample"
     Write-Host "Provider and Manual Import require the existing Server API key in Web Settings."
-    Write-Host "Scheduler, notification delivery, channel auto-start, and trading remain disabled."
+    if ($EnableNotifications) {
+        Write-Host "Research delivery is enabled."
+        if ($EnableDailyAutomation) {
+            Write-Host "Daily read-only research automation is enabled at the configured time."
+            Write-Host "Real trading remains disabled."
+        } else {
+            Write-Host "Daily automation remains disabled; sends require explicit confirmation."
+        }
+    } else {
+        Write-Host "Scheduler, notification delivery, channel auto-start, and trading remain disabled."
+        Write-Host "To enable manual Feishu/email delivery, rerun with -EnableNotifications."
+    }
+    if ($EnableDailyAutomation -and -not $EnableNotifications) {
+        Write-Host "Daily research generation is enabled, but delivery remains disabled."
+    }
+    if ($EnableFeishuBot) {
+        Write-Host "Configured Feishu bot channel auto-start is enabled."
+    } else {
+        Write-Host "To start the configured Feishu bot, rerun with -EnableFeishuBot."
+    }
 
     if (-not $NoBrowser) {
         Start-Process $FrontendUrl

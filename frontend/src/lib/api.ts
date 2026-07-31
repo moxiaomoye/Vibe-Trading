@@ -247,10 +247,48 @@ export const api = {
   getValueHunterHistory: (limit = 30) => request<ValueHunterScan[]>(`/value-hunter/history?limit=${encodeURIComponent(String(limit))}`),
   runValueHunter: (notify = false) => request<ValueHunterScan>(`/value-hunter/run?notify=${notify ? "true" : "false"}`, { method: "POST" }),
   getInvestmentResearchStatus: () => request<InvestmentResearchStatus>("/investment-research/status"),
+  getDailyOpportunityStatus: () =>
+    request<DailyOpportunityStatus>("/investment-research/opportunity-daily/status"),
+  getLatestDailyOpportunityReport: () =>
+    request<DailyOpportunityReport>("/investment-research/opportunity-daily/latest"),
+  runDailyOpportunityReport: () =>
+    requestWithTimeout<DailyOpportunityReport>(
+      "/investment-research/opportunity-daily/run",
+      { method: "POST" },
+      95_000,
+    ),
+  getDailyOpportunityNotificationPreview: () =>
+    request<DailyOpportunityNotificationPreview>(
+      "/investment-research/opportunity-daily/notification-preview",
+    ),
+  notifyDailyOpportunityReport: (channels: Array<"feishu" | "email" | "serverchan">) =>
+    request<DailyOpportunityNotificationResult>(
+      "/investment-research/opportunity-daily/notify",
+      {
+        method: "POST",
+        body: JSON.stringify({ confirm: true, channels }),
+      },
+    ),
+  getShadowPortfolio: () =>
+    request<ShadowPortfolio>("/investment-research/shadow-portfolio"),
+  runDailyOpportunityAutomationOnce: () =>
+    request<DailyOpportunityAutomationResult>(
+      "/investment-research/opportunity-daily/automation/run-once",
+      { method: "POST" },
+    ),
   listInvestmentResearchTheses: (asOf?: string) => {
     const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
     return request<InvestmentResearchThesis[]>(`/investment-research/theses${query}`);
   },
+  getWatchlistThesisInitialization: () =>
+    request<WatchlistThesisInitializationStatus>(
+      "/investment-research/thesis-initialization/watchlist",
+    ),
+  initializeWatchlistThesis: (body: ManualThesisInitializationRequest) =>
+    request<ManualThesisInitializationResult>(
+      "/investment-research/thesis-initialization/watchlist",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   listInvestmentResearchEvidenceReadiness: (asOf?: string) => {
     const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
     return request<InvestmentResearchEvidenceReadiness[]>(
@@ -486,6 +524,61 @@ export interface InvestmentResearchThesis {
   created_at: string;
   current_version: InvestmentResearchVersion | null;
   research_state: "versioned" | "uninitialized";
+}
+
+export interface WatchlistThesisStarter {
+  thesis_id: "thesis:600522.SH" | "thesis:588000.SH";
+  symbol: "600522.SH" | "588000.SH";
+  name: string;
+  scope: "theme" | "company";
+  initialized: boolean;
+  thesis_version_id: string | null;
+  proposed_core_claim: string;
+  proposed_catalysts: string[];
+  proposed_kill_criteria: string[];
+}
+
+export interface WatchlistThesisInitializationStatus {
+  items: WatchlistThesisStarter[];
+  human_review_required: true;
+  automatic_evidence_approval: false;
+  scheduler_started: false;
+  notification_sent: false;
+  trading_executed: false;
+}
+
+export interface ManualThesisEvidenceRequest {
+  provider: string;
+  source_locator: string;
+  title: string;
+  summary: string;
+  published_at: string;
+}
+
+export interface ManualThesisInitializationRequest {
+  thesis_id: WatchlistThesisStarter["thesis_id"];
+  core_claim: string;
+  confidence: number;
+  supporting_evidence: ManualThesisEvidenceRequest[];
+  counter_evidence: ManualThesisEvidenceRequest[];
+  catalysts: string[];
+  kill_criteria: string[];
+  next_review_days: number;
+  reviewer: string;
+  review_rationale: string;
+  confirm: boolean;
+}
+
+export interface ManualThesisInitializationResult {
+  thesis_id: string;
+  thesis_version_id: string;
+  initialized: true;
+  created: boolean;
+  evidence_count: number;
+  next_review_at: string;
+  scheduler_started: false;
+  notification_sent: false;
+  trading_executed: false;
 }
 
 export type InvestmentResearchEvidenceReadinessVerdict =
@@ -1342,6 +1435,334 @@ export interface PanicShadowStatusResponse {
   trading_enabled: boolean;
   manual_review_required: boolean;
   date_context?: PanicShadowDateContext;
+}
+
+export type DailyOpportunityActionLevel =
+  | "watch"
+  | "research"
+  | "prepare"
+  | "action_candidate";
+
+export interface DailyOpportunityTrigger {
+  code: "ASSET_PANIC" | "MARKET_DRAWDOWN" | "MARKET_CRASH";
+  label: string;
+  observed: number;
+  threshold: number;
+}
+
+export interface DailyOpportunityAsset {
+  symbol: string;
+  name: string;
+  asset_type: "stock" | "etf";
+  effective_trade_date: string | null;
+  latest_close: number | null;
+  return_5d_pct: number | null;
+  return_20d_pct: number | null;
+  return_60d_pct: number | null;
+  relative_to_shanghai_20d_pct: number | null;
+  history_position: {
+    high: number | null;
+    low: number | null;
+    drawdown_from_high_pct: number | null;
+    price_percentile: number | null;
+  };
+  technical: {
+    ma20: number | null;
+    ma60: number | null;
+    ma120: number | null;
+    distance_to_ma20_pct?: number | null;
+    rsi14: number | null;
+    volatility20_annualized_pct: number | null;
+    trend: string;
+    stabilization: boolean;
+  };
+  fundamentals: {
+    period_end: string | null;
+    notice_date: string | null;
+    eps: number | null;
+    revenue_cny: number | null;
+    revenue_yoy_pct: number | null;
+    net_profit_cny: number | null;
+    net_profit_yoy_pct: number | null;
+    roe_pct: number | null;
+    gross_margin_pct: number | null;
+    net_margin_pct: number | null;
+    operating_cashflow_to_revenue_pct: number | null;
+    debt_ratio_pct: number | null;
+    source: string | null;
+  } | null;
+  valuation: {
+    available: boolean;
+    method: string;
+    reason?: string;
+    eps?: number;
+    eps_period?: string | null;
+    current_pe?: number;
+    bear?: { pe: number; price: number };
+    base?: { pe: number; price: number };
+    bull?: { pe: number; price: number };
+    premium_to_base_pct?: number;
+    assessment?: string;
+    formal_status?: "unconfigured" | "partial" | "provisional" | "configured";
+    decision_source?: string;
+    provisional?: boolean;
+  };
+  margin: {
+    latest_date: string | null;
+    financing_balance_cny: number | null;
+    short_balance_cny: number | null;
+    period_change_pct: number | null;
+    period_days: number;
+    interpretation: string;
+    source: string | null;
+  } | null;
+  fund_flow: {
+    latest_date: string | null;
+    main_net_inflow_5d_cny: number;
+    main_net_inflow_20d_cny: number;
+    source: string | null;
+  } | null;
+  sectors: Array<{ code: string | null; name: string; change_pct: number | null }>;
+  news: Array<{
+    title: string;
+    url: string | null;
+    source: string | null;
+    published: string | null;
+    snippet: string;
+  }>;
+  panic: boolean;
+  panic_triggers: DailyOpportunityTrigger[];
+  action_level: DailyOpportunityActionLevel;
+  action_label: string;
+  entry_framework: {
+    status: "wait" | "observe" | "prepare" | "research_zone";
+    label: string;
+    summary: string;
+    reasons: string[];
+    conditions: string[];
+    reference_zones: Array<{
+      name: string;
+      low: number;
+      high: number;
+      basis: string;
+    }>;
+    next_review_condition: string;
+  };
+  supporting_evidence: string[];
+  counter_evidence: string[];
+  next_condition: string;
+  data_source: string;
+  research_sources: Record<string, string>;
+  data_quality: string;
+  formal_research?: {
+    bridge_version: string;
+    candidate_id: string | null;
+    opportunity_status: string;
+    action_level: DailyOpportunityActionLevel;
+    research_priority: "immediate" | "high" | "normal" | "low";
+    confidence: number;
+    thesis_status: "draft" | "active" | "weakening" | "invalidated" | "archived";
+    thesis_initialized: boolean;
+    evidence_complete: boolean;
+    mispricing_significant: boolean;
+    attribution_scope: string;
+    permanence: "temporary" | "structural" | "uncertain";
+    quality_status: "unconfigured" | "partial" | "provisional" | "configured";
+    valuation_status: "unconfigured" | "partial" | "provisional" | "configured";
+    scenario_value_range: [string, string] | null;
+    blocked_reasons: string[];
+    data_coverage: string[];
+    data_gaps: string[];
+    policy_version: string;
+    first_rejection_question: string;
+    next_review_at: string;
+    supporting_evidence: DailyOpportunityFormalEvidence[];
+    counter_evidence: DailyOpportunityFormalEvidence[];
+    invalidation_conditions: string[];
+    decision_source: "PanicMispricingResearchPipeline";
+  };
+}
+
+export interface DailyOpportunityFormalEvidence {
+  evidence_id: string;
+  provider: string;
+  source_locator: string;
+  title: string;
+  summary: string;
+  direction: "supporting" | "counter" | "neutral";
+  published_at: string;
+  available_at: string;
+  quality_warnings: string[];
+}
+
+export interface DailyOpportunityReport {
+  report_version: string;
+  report_date: string;
+  generated_at: string;
+  read_only: boolean;
+  shadow_run: boolean;
+  market: {
+    panic: boolean;
+    regime: string;
+    panic_triggers: DailyOpportunityTrigger[];
+    shanghai_symbol: string;
+    shanghai_effective_trade_date: string | null;
+    shanghai_close: number | null;
+    shanghai_5d_return_pct: number | null;
+    shanghai_20d_return_pct: number | null;
+    shanghai_60d_return_pct: number | null;
+    shanghai_60d_point_change: number | null;
+    limit_down_count: number | null;
+    limit_down_count_quality: string;
+    market_context_source: string;
+    style_rotation: {
+      bank_proxy: string;
+      technology_proxy: string;
+      bank_5d_return_pct: number | null;
+      bank_20d_return_pct: number | null;
+      technology_5d_return_pct: number | null;
+      technology_20d_return_pct: number | null;
+      bank_minus_technology_20d_pct: number | null;
+      interpretation: string;
+      state_support_inference: string;
+    };
+  };
+  assets: DailyOpportunityAsset[];
+  data_sources: Record<string, string>;
+  data_gaps: string[];
+  unresolved_symbols: string[];
+  conclusion: string;
+  research_workflow: {
+    mode: string;
+    stages: Array<{
+      name: string;
+      status: "ready" | "on_demand" | "eligible" | "gated";
+      capabilities: string[];
+    }>;
+    skipped_by_default: string[];
+  };
+  agent_prompt: string;
+  notifications_sent: boolean;
+  scheduler_started: boolean;
+  trading_executed: boolean;
+  shadow_portfolio?: ShadowPortfolio;
+}
+
+export interface ShadowPosition {
+  position_id: string;
+  symbol: string;
+  name: string;
+  signal_trade_date: string;
+  entry_trade_date: string;
+  entry_price: number;
+  units: number;
+  notional: number;
+  last_price: number;
+  market_value: number;
+  pnl: number;
+  return_pct: number;
+  observed_sessions: number;
+  horizon: number;
+  status: string;
+}
+
+export interface ShadowPortfolio {
+  schema_version: string;
+  mode: "shadow_only";
+  initial_cash: number;
+  cash: number;
+  position_fraction: number;
+  horizon: number;
+  pending_intents: Array<{
+    intent_id: string;
+    symbol: string;
+    name: string;
+    signal_trade_date: string;
+    action_level: string;
+    status: string;
+  }>;
+  open_positions: ShadowPosition[];
+  closed_positions: ShadowPosition[];
+  daily_snapshots: Array<{
+    report_date: string;
+    cash: number;
+    market_value: number;
+    equity: number;
+    total_return_pct: number;
+    open_position_count: number;
+    pending_intent_count: number;
+  }>;
+  trading_executed: false;
+}
+
+export interface DailyOpportunityAutomationResult {
+  report_date: string;
+  market_panic: boolean;
+  vibe_research: {
+    status: string;
+    session_id: string | null;
+    attempt_id: string | null;
+  };
+  shadow_equity: number;
+  delivery: {
+    planned: number;
+    delivered: number;
+    failed: number;
+    suppressed: number;
+  };
+  trading_executed: false;
+}
+
+export interface DailyOpportunityStatus {
+  enabled: boolean;
+  read_only: boolean;
+  watchlist: Array<{ symbol: string; name: string; asset_type: "stock" | "etf" }>;
+  rules: {
+    lookback_trading_days: number;
+    asset_return_pct_lte: number;
+    shanghai_point_change_lte: number;
+    limit_down_count_gte: number;
+    match: "any";
+  };
+  capabilities?: string[];
+  notifications: boolean;
+  scheduler: boolean;
+  trading: boolean;
+  delivery?: DailyOpportunityDeliveryStatus;
+  automation?: {
+    enabled: boolean;
+    running: boolean;
+    last_completed_trade_date: string | null;
+    last_status: string;
+    last_error: string | null;
+  };
+  shadow_portfolio?: ShadowPortfolio;
+}
+
+export interface DailyOpportunityDeliveryStatus {
+  mode: "disabled" | "dry_run" | "live";
+  enabled: boolean;
+  manual_confirmation_required: boolean;
+  scheduler_enabled: boolean;
+  configured_channels: Array<"feishu" | "email" | "serverchan">;
+  channel_status: Record<"feishu" | "email" | "serverchan", { configured: boolean }>;
+  credentials_exposed: false;
+}
+
+export interface DailyOpportunityNotificationPreview extends DailyOpportunityDeliveryStatus {
+  subject: string;
+  body: string;
+}
+
+export interface DailyOpportunityNotificationResult {
+  mode: "dry_run" | "live";
+  channels: Array<"feishu" | "email" | "serverchan">;
+  delivered: number;
+  failed: number;
+  duplicate_or_already_delivered: number;
+  report_date: string;
+  scheduler_started: false;
+  trading_executed: false;
 }
 
 export type PanicShadowDateMode = "auto" | "selected";

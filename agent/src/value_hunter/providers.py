@@ -242,6 +242,31 @@ class AkshareProvider(ValueHunterProvider):
         self._write_cache("market", result)
         return result
 
+    def load_limit_down_context(self) -> MarketObservation:
+        """Load only the official current-day limit-down pool.
+
+        The unified daily report does not need the expensive full-market spot
+        pagination performed by ``load_market``.  Keeping this focused adapter
+        here preserves the Provider boundary and prevents a slow breadth
+        request from blocking otherwise available watchlist prices.
+        """
+        cached = self._read_market_cache()
+        if cached is not None and cached.limit_down_count is not None:
+            return cached
+        ak = self._ak()
+        frame = ak.stock_zt_pool_dtgc_em(date=date.today().strftime("%Y%m%d"))
+        return MarketObservation(
+            as_of=date.today().isoformat(),
+            indices=[],
+            advancer_ratio=None,
+            above_ma60_ratio=None,
+            limit_down_count=len(frame),
+            turnover_zscore=None,
+            source="AKShare/Eastmoney official limit-down pool",
+            coverage=["limit_down"],
+            warnings=[],
+        )
+
     def _base_watchlist(self) -> list[CandidateObservation]:
         if self.watchlist_path and self.watchlist_path.exists():
             return load_watchlist_csv(self.watchlist_path)

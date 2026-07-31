@@ -250,3 +250,164 @@ def test_initialization_route_exposes_bound_evidence_set_review(tmp_path, monkey
     assert response.status_code == 200
     assert response.json()["thesis_version_id"] == version.thesis_version_id
     assert response.json()["evidence_set_review_id"] == "route-review"
+
+
+def test_watchlist_thesis_initialization_requires_and_persists_human_review(
+    tmp_path, monkeypatch
+) -> None:
+    client, repository = _client(tmp_path, monkeypatch)
+    payload = {
+        "thesis_id": "thesis:600522.SH",
+        "core_claim": "The durable businesses may be worth more than the panic price implies.",
+        "confidence": 0.61,
+        "supporting_evidence": [
+            {
+                "provider": "company_announcement",
+                "source_locator": "https://example.test/support",
+                "title": "Cash flow remained positive",
+                "summary": "The owner reviewed the cited annual filing.",
+                "published_at": "2026-07-20T08:00:00+00:00",
+            }
+        ],
+        "counter_evidence": [
+            {
+                "provider": "company_announcement",
+                "source_locator": "https://example.test/counter",
+                "title": "Margin recovery remains unproven",
+                "summary": "The owner reviewed the cited margin disclosure.",
+                "published_at": "2026-07-20T08:00:00+00:00",
+            }
+        ],
+        "catalysts": ["Higher-margin business mix improves"],
+        "kill_criteria": ["Cash conversion deteriorates structurally"],
+        "next_review_days": 30,
+        "reviewer": "local-owner",
+        "review_rationale": "I checked the source, counter-case, and falsifiers.",
+        "confirm": True,
+    }
+
+    before = client.get(
+        "/investment-research/thesis-initialization/watchlist"
+    )
+    rejected = client.post(
+        "/investment-research/thesis-initialization/watchlist",
+        json={**payload, "confirm": False},
+    )
+    created = client.post(
+        "/investment-research/thesis-initialization/watchlist",
+        json=payload,
+    )
+    after = client.get(
+        "/investment-research/thesis-initialization/watchlist"
+    )
+
+    assert before.status_code == 200
+    assert len(before.json()["items"]) == 2
+    assert rejected.status_code == 422
+    assert created.status_code == 200
+    assert created.json()["created"] is True
+    assert created.json()["notification_sent"] is False
+    assert created.json()["trading_executed"] is False
+    assert after.json()["items"][0]["initialized"] is True
+    versions = repository.list_thesis_versions("thesis:600522.SH")
+    assert len(versions) == 1
+    assert versions[0].supporting_evidence_ids
+    assert versions[0].counter_evidence_ids
+
+
+def test_daily_opportunity_routes_reuse_one_read_only_service(tmp_path, monkeypatch) -> None:
+    client, _ = _client(tmp_path, monkeypatch)
+
+    class FakeService:
+        def __init__(self) -> None:
+            self.report = {
+                "report_date": "2026-07-29",
+                "shadow_run": True,
+                "assets": [{"symbol": "600522.SH"}, {"symbol": "588000.SH"}],
+            }
+            self.run_count = 0
+
+        def status(self):
+            return {
+                "enabled": True,
+                "read_only": True,
+                "notifications": False,
+                "scheduler": False,
+                "trading": False,
+            }
+
+        def latest(self):
+            return self.report if self.run_count else None
+
+        def run(self):
+            self.run_count += 1
+            return self.report
+
+    fake = FakeService()
+    monkeypatch.setattr(routes, "_daily_opportunity_service", fake)
+
+    status = client.get("/investment-research/opportunity-daily/status")
+    missing = client.get("/investment-research/opportunity-daily/latest")
+    generated = client.post("/investment-research/opportunity-daily/run")
+    latest = client.get("/investment-research/opportunity-daily/latest")
+
+    assert status.status_code == 200
+    assert status.json()["read_only"] is True
+    assert missing.status_code == 404
+    assert generated.status_code == 200
+    assert generated.json()["shadow_run"] is True
+    assert [item["symbol"] for item in latest.json()["assets"]] == [
+        "600522.SH",
+        "588000.SH",
+    ]
+
+
+def test_daily_opportunity_notification_is_manual_dry_run_and_idempotent(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("VIBE_RESEARCH_DELIVERY_MODE", "dry_run")
+    client, _ = _client(tmp_path, monkeypatch)
+
+    class FakeService:
+        def status(self):
+            return {"enabled": True, "read_only": True}
+
+        def latest(self):
+            return {
+                "report_version": "2.0",
+                "report_date": "2026-07-29",
+                "conclusion": "继续等待。",
+                "market": {"regime": "correction"},
+                "assets": [],
+                "data_gaps": [],
+            }
+
+    monkeypatch.setattr(routes, "_daily_opportunity_service", FakeService())
+
+    status = client.get("/investment-research/opportunity-daily/status")
+    preview = client.get(
+        "/investment-research/opportunity-daily/notification-preview"
+    )
+    unconfirmed = client.post(
+        "/investment-research/opportunity-daily/notify",
+        json={"confirm": False, "channels": ["feishu", "email"]},
+    )
+    sent = client.post(
+        "/investment-research/opportunity-daily/notify",
+        json={"confirm": True, "channels": ["feishu", "email"]},
+    )
+    duplicate = client.post(
+        "/investment-research/opportunity-daily/notify",
+        json={"confirm": True, "channels": ["feishu", "email"]},
+    )
+
+    assert status.json()["delivery"]["mode"] == "dry_run"
+    assert status.json()["delivery"]["credentials_exposed"] is False
+    assert "每日投资研究简报" in preview.json()["subject"]
+    assert unconfirmed.status_code == 422
+    assert sent.json()["delivered"] == 2
+    assert sent.json()["failed"] == 0
+    assert duplicate.json()["delivered"] == 0
+    assert duplicate.json()["duplicate_or_already_delivered"] == 2
+    assert sent.json()["scheduler_started"] is False
+    assert sent.json()["trading_executed"] is False

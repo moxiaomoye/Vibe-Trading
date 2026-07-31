@@ -21,8 +21,12 @@ def test_start_script_reuses_compose_image_and_keeps_side_effects_disabled() -> 
     assert 'INVESTMENT_RESEARCH_ROUTES_ENABLED: "true"' in source
     assert 'PANIC_SHADOW_REPORT_API_ENABLED: "true"' in source
     assert 'VIBE_TRADING_ENABLE_SCHEDULER: "false"' in source
-    assert 'VIBE_TRADING_CHANNELS_AUTO_START: "false"' in source
-    assert 'VIBE_RESEARCH_DELIVERY_MODE: "disabled"' in source
+    assert '$channelAutoStart = if ($EnableFeishuBot) { "true" } else { "false" }' in source
+    assert 'VIBE_TRADING_CHANNELS_AUTO_START: "$channelAutoStart"' in source
+    assert '$deliveryMode = if ($EnableNotifications) { "live" } else { "disabled" }' in source
+    assert 'VIBE_RESEARCH_DELIVERY_MODE: "$deliveryMode"' in source
+    assert '$dailyAutomation = if ($EnableDailyAutomation) { "true" } else { "false" }' in source
+    assert 'VIBE_RESEARCH_DAILY_AUTOMATION_ENABLED: "$dailyAutomation"' in source
     assert "http://127.0.0.1:8899/investment-research" in source
     assert ".State.Health" in source
     assert '@("healthy", "ok")' in source

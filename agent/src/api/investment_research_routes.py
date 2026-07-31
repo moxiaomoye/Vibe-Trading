@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+import asyncio
+import sys
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from src.api.optional_routes import DisabledStub, try_register_routes
 from src.config.accessor import get_env_config
@@ -15,6 +18,15 @@ from src.investment_research.discovery.models import DiscoveryDisposition
 from src.investment_research.evidence.inbox import EvidenceInboxStatus
 from src.investment_research.evidence.associations import EvidenceSubjectType
 from src.investment_research.application.evidence_readiness import ThesisEvidenceReadinessService
+from src.investment_research.application.macro_evidence_ingestion import (
+    MacroEvidenceIngestionService,
+)
+from src.investment_research.application.manual_thesis_initialization import (
+    ManualEvidenceDraft,
+    ManualThesisInitializationCommand,
+    ManualThesisInitializationService,
+)
+from src.investment_research.macro.fred_provider import FredMacroEvidenceProvider
 from src.investment_research.repositories.sqlite import SCHEMA_VERSION, SQLiteResearchRepository
 from src.investment_research.repositories.sqlite_discovery import SQLiteDiscoveryRepository
 from src.investment_research.repositories.sqlite_evidence_inbox import (
@@ -31,6 +43,28 @@ from src.investment_research.repositories.sqlite_evidence_set_reviews import (
 )
 from src.investment_research.repositories.sqlite_intelligence import SQLiteIntelligenceRepository
 from src.investment_research.thesis.models import Thesis, ThesisVersion
+from src.investment_research.operations.daily_opportunity_report import (
+    DailyOpportunityReportService,
+)
+from src.investment_research.operations.reviewed_context import (
+    ReviewedResearchContextLoader,
+)
+from src.investment_research.operations.daily_automation import (
+    DailyOpportunityAutomation,
+)
+from src.investment_research.operations.delivery import (
+    DryRunTransport,
+    FeishuWebhookTransport,
+    OpportunityReportNotificationPlanner,
+    OutboxDispatcher,
+    ServerChanTurboTransport,
+    SMTPTransport,
+)
+from src.investment_research.operations.models import DeliveryChannel
+from src.investment_research.operations.scheduling import TradingDaySchedule
+from src.investment_research.operations.shadow_portfolio import ShadowPortfolioTracker
+from src.investment_research.operations.vibe_research import VibeResearchCoordinator
+from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
 
 
 AuthDep = Callable[..., Awaitable[Any] | Any]
@@ -40,6 +74,45 @@ _discovery_repository: SQLiteDiscoveryRepository | None = None
 _evidence_inbox_repository: SQLiteEvidenceInboxRepository | None = None
 _evidence_association_repository: SQLiteEvidenceAssociationRepository | None = None
 _evidence_set_review_repository: SQLiteEvidenceSetReviewRepository | None = None
+_daily_opportunity_service: DailyOpportunityReportService | None = None
+_operations_repository: SQLiteOperationsRepository | None = None
+_shadow_portfolio_tracker: ShadowPortfolioTracker | None = None
+_daily_opportunity_automation: DailyOpportunityAutomation | None = None
+_vibe_research_coordinator: VibeResearchCoordinator | None = None
+
+
+class OpportunityNotificationRequest(BaseModel):
+    confirm: bool = False
+    channels: list[DeliveryChannel] = Field(
+        default_factory=lambda: [DeliveryChannel.FEISHU, DeliveryChannel.EMAIL],
+        min_length=1,
+    )
+
+
+class ManualThesisEvidenceRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=100)
+    source_locator: str = Field(min_length=1, max_length=2000)
+    title: str = Field(min_length=1, max_length=300)
+    summary: str = Field(min_length=1, max_length=4000)
+    published_at: datetime
+
+
+class ManualThesisInitializationRequest(BaseModel):
+    thesis_id: str = Field(min_length=1, max_length=100)
+    core_claim: str = Field(min_length=1, max_length=4000)
+    confidence: float = Field(ge=0.0, le=1.0)
+    supporting_evidence: list[ManualThesisEvidenceRequest] = Field(
+        min_length=1, max_length=10
+    )
+    counter_evidence: list[ManualThesisEvidenceRequest] = Field(
+        min_length=1, max_length=10
+    )
+    catalysts: list[str] = Field(min_length=1, max_length=20)
+    kill_criteria: list[str] = Field(min_length=1, max_length=20)
+    next_review_days: int = Field(default=30, ge=1, le=365)
+    reviewer: str = Field(min_length=1, max_length=100)
+    review_rationale: str = Field(min_length=1, max_length=2000)
+    confirm: bool = False
 
 
 def _database_path() -> Path:
@@ -89,15 +162,129 @@ def get_evidence_set_review_repository() -> SQLiteEvidenceSetReviewRepository:
     return _evidence_set_review_repository
 
 
+def get_daily_opportunity_service() -> DailyOpportunityReportService:
+    global _daily_opportunity_service
+    if _daily_opportunity_service is None:
+        _daily_opportunity_service = DailyOpportunityReportService(
+            research_context_loader=ReviewedResearchContextLoader(
+                get_investment_research_repository()
+            ).load
+        )
+    return _daily_opportunity_service
+
+
+def get_shadow_portfolio_tracker() -> ShadowPortfolioTracker:
+    global _shadow_portfolio_tracker
+    if _shadow_portfolio_tracker is None:
+        _shadow_portfolio_tracker = ShadowPortfolioTracker(
+            get_data_dir() / "investment-research" / "shadow-portfolio.json"
+        )
+    return _shadow_portfolio_tracker
+
+
+def get_vibe_research_coordinator() -> VibeResearchCoordinator:
+    global _vibe_research_coordinator
+    if _vibe_research_coordinator is None:
+        timeout_seconds = (
+            get_env_config()
+            .agent_tuning
+            .vibe_investment_research_deep_timeout_seconds
+        )
+        _vibe_research_coordinator = VibeResearchCoordinator(
+            get_data_dir() / "investment-research" / "vibe-deep-research.json",
+            timeout_seconds=timeout_seconds,
+        )
+    return _vibe_research_coordinator
+
+
+def get_operations_repository() -> SQLiteOperationsRepository:
+    global _operations_repository
+    if _operations_repository is None:
+        _operations_repository = SQLiteOperationsRepository(_database_path())
+    return _operations_repository
+
+
+def _delivery_status() -> dict[str, Any]:
+    config = get_env_config().research_delivery
+    configured = {
+        DeliveryChannel.FEISHU: bool(config.feishu_webhook_url.strip()),
+        DeliveryChannel.EMAIL: bool(
+            config.smtp_host.strip()
+            and config.smtp_username.strip()
+            and config.smtp_authorization_code.strip()
+            and config.smtp_recipient.strip()
+        ),
+        DeliveryChannel.SERVERCHAN: bool(config.serverchan_send_key.strip()),
+    }
+    return {
+        "mode": config.mode,
+        "enabled": config.mode in {"dry_run", "live"},
+        "manual_confirmation_required": not config.daily_automation_enabled,
+        "scheduler_enabled": config.daily_automation_enabled,
+        "configured_channels": [
+            channel.value for channel, ready in configured.items() if ready
+        ],
+        "channel_status": {
+            channel.value: {"configured": ready}
+            for channel, ready in configured.items()
+        },
+        "credentials_exposed": False,
+    }
+
+
+def _delivery_transports(
+    channels: tuple[DeliveryChannel, ...],
+) -> dict[DeliveryChannel, Any]:
+    config = get_env_config().research_delivery
+    if config.mode == "dry_run":
+        return {channel: DryRunTransport() for channel in channels}
+    transports: dict[DeliveryChannel, Any] = {}
+    if DeliveryChannel.FEISHU in channels and config.feishu_webhook_url.strip():
+        transports[DeliveryChannel.FEISHU] = FeishuWebhookTransport(
+            config.feishu_webhook_url.strip()
+        )
+    if DeliveryChannel.EMAIL in channels and all(
+        (
+            config.smtp_host.strip(),
+            config.smtp_username.strip(),
+            config.smtp_authorization_code.strip(),
+            config.smtp_recipient.strip(),
+        )
+    ):
+        transports[DeliveryChannel.EMAIL] = SMTPTransport(
+            host=config.smtp_host.strip(),
+            port=config.smtp_port,
+            username=config.smtp_username.strip(),
+            authorization_code=config.smtp_authorization_code.strip(),
+            recipient=config.smtp_recipient.strip(),
+        )
+    if (
+        DeliveryChannel.SERVERCHAN in channels
+        and config.serverchan_send_key.strip()
+    ):
+        transports[DeliveryChannel.SERVERCHAN] = ServerChanTurboTransport(
+            config.serverchan_send_key.strip()
+        )
+    return transports
+
+
 def reset_investment_research_repository() -> None:
     global _repository, _intelligence_repository, _discovery_repository
     global _evidence_inbox_repository, _evidence_association_repository, _evidence_set_review_repository
+    global _daily_opportunity_service, _operations_repository
+    global _shadow_portfolio_tracker, _daily_opportunity_automation
+    global _vibe_research_coordinator
     _repository = None
     _intelligence_repository = None
     _discovery_repository = None
     _evidence_inbox_repository = None
     _evidence_association_repository = None
     _evidence_set_review_repository = None
+    _daily_opportunity_service = None
+    _operations_repository = None
+    _shadow_portfolio_tracker = None
+    _daily_opportunity_automation = None
+    _vibe_research_coordinator = None
 
 
 def _as_of(value: datetime | None) -> datetime:
@@ -154,7 +341,131 @@ def _readiness_payload(readiness: Any) -> dict[str, Any]:
     }
 
 
+def _configured_delivery_channels() -> tuple[DeliveryChannel, ...]:
+    config = get_env_config().research_delivery
+    channels: list[DeliveryChannel] = []
+    if config.feishu_webhook_url.strip():
+        channels.append(DeliveryChannel.FEISHU)
+    if all(
+        (
+            config.smtp_host.strip(),
+            config.smtp_username.strip(),
+            config.smtp_authorization_code.strip(),
+            config.smtp_recipient.strip(),
+        )
+    ):
+        channels.append(DeliveryChannel.EMAIL)
+    if config.serverchan_send_key.strip():
+        channels.append(DeliveryChannel.SERVERCHAN)
+    return tuple(channels)
+
+
+async def _dispatch_vibe_research(report: dict[str, Any]) -> dict[str, Any]:
+    if not bool((report.get("market") or {}).get("panic")):
+        return {"status": "not_required", "session_id": None, "attempt_id": None}
+    host = (
+        sys.modules.get("api_server")
+        or sys.modules.get("agent.api_server")
+        or sys.modules.get("__main__")
+    )
+    service = getattr(host, "_get_session_service", lambda: None)() if host else None
+    if service is None:
+        return {"status": "session_runtime_unavailable", "session_id": None, "attempt_id": None}
+    report_date = str(report.get("report_date") or "")
+    return await get_vibe_research_coordinator().dispatch(
+        service,
+        report_date=report_date,
+        prompt=str(report.get("agent_prompt") or ""),
+        title=f"每日恐慌投研 {report_date}",
+    )
+
+
+async def _run_daily_opportunity_automation(_now: datetime) -> dict[str, Any]:
+    report = await asyncio.wait_for(
+        asyncio.to_thread(get_daily_opportunity_service().run),
+        timeout=90.0,
+    )
+    shadow = await asyncio.to_thread(get_shadow_portfolio_tracker().process, report)
+    try:
+        research = await _dispatch_vibe_research(report)
+    except Exception as exc:
+        research = {
+            "status": "failed",
+            "error": type(exc).__name__,
+            "session_id": None,
+            "attempt_id": None,
+        }
+
+    delivery = {
+        "planned": 0,
+        "delivered": 0,
+        "failed": 0,
+        "suppressed": 0,
+    }
+    config = get_env_config().research_delivery
+    channels = _configured_delivery_channels()
+    if config.mode in {"dry_run", "live"} and channels:
+        try:
+            repository = get_operations_repository()
+            planner = OpportunityReportNotificationPlanner(
+                repository,
+                report_web_url=config.report_web_url,
+            )
+            message_ids = planner.enqueue(report, channels, datetime.now(timezone.utc))
+            delivered, failed = OutboxDispatcher(
+                repository,
+                _delivery_transports(channels),
+            ).dispatch_message_ids(message_ids, datetime.now(timezone.utc))
+            delivery = {
+                "planned": len(message_ids),
+                "delivered": delivered,
+                "failed": failed,
+                "suppressed": len(message_ids) - delivered - failed,
+            }
+        except Exception as exc:
+            delivery = {
+                "planned": 0,
+                "delivered": 0,
+                "failed": 1,
+                "suppressed": 0,
+                "error": type(exc).__name__,
+            }
+    return {
+        "report_date": report["report_date"],
+        "report_fingerprint": report.get("_fingerprint"),
+        "market_panic": bool((report.get("market") or {}).get("panic")),
+        "vibe_research": research,
+        "shadow_equity": (
+            shadow.get("daily_snapshots", [{}])[-1].get("equity")
+            if shadow.get("daily_snapshots")
+            else shadow.get("initial_cash")
+        ),
+        "delivery": delivery,
+        "trading_executed": False,
+    }
+
+
+def get_daily_opportunity_automation() -> DailyOpportunityAutomation:
+    global _daily_opportunity_automation
+    if _daily_opportunity_automation is None:
+        config = get_env_config().research_delivery
+        _daily_opportunity_automation = DailyOpportunityAutomation(
+            _run_daily_opportunity_automation,
+            get_data_dir() / "investment-research" / "daily-automation.json",
+            schedule=TradingDaySchedule(
+                timezone_name=config.run_timezone,
+                run_after=clock_time(config.run_hour, config.run_minute),
+            ),
+            enabled=config.daily_automation_enabled,
+        )
+    return _daily_opportunity_automation
+
+
 def register_investment_research_routes(app: FastAPI, require_auth: AuthDep) -> None:
+    automation = get_daily_opportunity_automation()
+    if automation.enabled:
+        app.on_event("startup")(automation.start)
+        app.on_event("shutdown")(automation.stop)
     try_register_routes(
         app,
         feature_name="Historical Evaluation API",
@@ -223,10 +534,271 @@ def register_investment_research_routes(app: FastAPI, require_auth: AuthDep) -> 
                 "review_state": {status.value: count for status, count in issuer_counts.items()},
                 "automatic_classification": False,
             },
+            "macro_evidence": {
+                "provider": "fred",
+                "configured": FredMacroEvidenceProvider().configured,
+                "automatic_collection": False,
+                "automatic_classification": False,
+                "historical_replay": "requires_alfred_vintage_data",
+            },
             "positioning": "AI Investment Researcher",
             "output_contract": "Research Candidate, not a trade instruction",
         }
 
+    @app.get("/investment-research/macro-evidence/status", dependencies=dependencies)
+    async def investment_research_macro_evidence_status() -> dict[str, Any]:
+        provider = FredMacroEvidenceProvider()
+        return {
+            "provider": provider.provider_name,
+            "configured": provider.configured,
+            "series": [
+                {
+                    "series_id": definition.series_id,
+                    "title": definition.title,
+                    "subject_id": definition.subject_id,
+                }
+                for definition in provider.series
+            ],
+            "collection_mode": "manual_only",
+            "automatic_classification": False,
+            "candidate_or_valuation_effect": "none_until_human_review",
+            "historical_replay": "requires_alfred_vintage_data",
+            "credentials_exposed": False,
+        }
+
+    @app.post("/investment-research/macro-evidence/collect", dependencies=dependencies)
+    async def investment_research_macro_evidence_collect() -> dict[str, Any]:
+        """Collect current FRED observations into the existing evidence inbox."""
+        provider = FredMacroEvidenceProvider()
+        now = datetime.now(timezone.utc)
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    MacroEvidenceIngestionService(
+                        get_evidence_inbox_repository()
+                    ).ingest_fred,
+                    provider,
+                    as_of=date.today(),
+                    ingested_at=now,
+                ),
+                timeout=30.0,
+            )
+        except TimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "provider": "fred",
+                    "status": "timeout",
+                    "evidence_ingested": 0,
+                },
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "provider": "fred",
+                    "status": "collection_failed",
+                    "error_type": type(exc).__name__,
+                    "evidence_ingested": 0,
+                },
+            ) from exc
+        return {
+            **result.batch.to_dict(),
+            "ingested": result.ingested,
+            "deduplicated": result.deduplicated,
+            "automatic_classification": False,
+            "candidate_or_valuation_effect": "none_until_human_review",
+            "scheduler_started": False,
+            "notification_sent": False,
+            "trading_executed": False,
+        }
+
+    @app.get("/investment-research/opportunity-daily/status", dependencies=dependencies)
+    async def investment_research_opportunity_daily_status() -> dict[str, Any]:
+        status = get_daily_opportunity_service().status()
+        status["delivery"] = _delivery_status()
+        status["automation"] = get_daily_opportunity_automation().status()
+        status["shadow_portfolio"] = get_shadow_portfolio_tracker().status()
+        status["vibe_research"] = get_vibe_research_coordinator().status()
+        return status
+
+    @app.get("/investment-research/opportunity-daily/latest", dependencies=dependencies)
+    async def investment_research_opportunity_daily_latest() -> dict[str, Any]:
+        report = get_daily_opportunity_service().latest()
+        if report is None:
+            raise HTTPException(status_code=404, detail="daily opportunity report not found")
+        return {
+            **report,
+            "shadow_portfolio": get_shadow_portfolio_tracker().status(),
+            "vibe_research": get_vibe_research_coordinator().status(),
+        }
+
+    @app.post("/investment-research/opportunity-daily/run", dependencies=dependencies)
+    async def investment_research_opportunity_daily_run() -> dict[str, Any]:
+        try:
+            report = await asyncio.wait_for(
+                asyncio.to_thread(get_daily_opportunity_service().run),
+                timeout=90.0,
+            )
+            shadow = await asyncio.to_thread(
+                get_shadow_portfolio_tracker().process,
+                report,
+            )
+            return {**report, "shadow_portfolio": shadow}
+        except TimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail="daily opportunity data providers timed out; no sample data was used",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"daily opportunity report unavailable: {type(exc).__name__}",
+            ) from exc
+
+    @app.get(
+        "/investment-research/thesis-initialization/watchlist",
+        dependencies=dependencies,
+    )
+    async def investment_research_watchlist_thesis_initialization_status() -> dict[str, Any]:
+        service = ManualThesisInitializationService(
+            get_investment_research_repository(),
+            get_evidence_association_repository(),
+            get_evidence_set_review_repository(),
+        )
+        return {
+            "items": service.status(),
+            "human_review_required": True,
+            "automatic_evidence_approval": False,
+            "scheduler_started": False,
+            "notification_sent": False,
+            "trading_executed": False,
+        }
+
+    @app.post(
+        "/investment-research/thesis-initialization/watchlist",
+        dependencies=dependencies,
+    )
+    async def investment_research_watchlist_thesis_initialize(
+        request: ManualThesisInitializationRequest,
+    ) -> dict[str, object]:
+        now = datetime.now(timezone.utc)
+        command = ManualThesisInitializationCommand(
+            thesis_id=request.thesis_id,
+            core_claim=request.core_claim,
+            confidence=request.confidence,
+            supporting_evidence=tuple(
+                ManualEvidenceDraft(
+                    item.provider,
+                    item.source_locator,
+                    item.title,
+                    item.summary,
+                    item.published_at,
+                )
+                for item in request.supporting_evidence
+            ),
+            counter_evidence=tuple(
+                ManualEvidenceDraft(
+                    item.provider,
+                    item.source_locator,
+                    item.title,
+                    item.summary,
+                    item.published_at,
+                )
+                for item in request.counter_evidence
+            ),
+            catalysts=tuple(request.catalysts),
+            kill_criteria=tuple(request.kill_criteria),
+            next_review_at=now + timedelta(days=request.next_review_days),
+            reviewer=request.reviewer,
+            review_rationale=request.review_rationale,
+            confirmed=request.confirm,
+        )
+        try:
+            result = await asyncio.to_thread(
+                ManualThesisInitializationService(
+                    get_investment_research_repository(),
+                    get_evidence_association_repository(),
+                    get_evidence_set_review_repository(),
+                ).initialize,
+                command,
+                initialized_at=now,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "status": "review_rejected",
+                    "reason": str(exc),
+                    "thesis_id": request.thesis_id,
+                },
+            ) from exc
+        return result.to_dict()
+
+    @app.get("/investment-research/opportunity-daily/notification-preview", dependencies=dependencies)
+    async def investment_research_opportunity_notification_preview() -> dict[str, Any]:
+        report = get_daily_opportunity_service().latest()
+        if report is None:
+            raise HTTPException(status_code=404, detail="daily opportunity report not found")
+        planner = OpportunityReportNotificationPlanner(get_operations_repository())
+        planner.report_web_url = get_env_config().research_delivery.report_web_url
+        return {**_delivery_status(), **planner.preview(report)}
+
+    @app.post("/investment-research/opportunity-daily/notify", dependencies=dependencies)
+    async def investment_research_opportunity_notify(
+        request: OpportunityNotificationRequest,
+    ) -> dict[str, Any]:
+        if not request.confirm:
+            raise HTTPException(status_code=422, detail="manual confirmation is required")
+        report = get_daily_opportunity_service().latest()
+        if report is None:
+            raise HTTPException(status_code=404, detail="daily opportunity report not found")
+        config = get_env_config().research_delivery
+        if config.mode == "disabled":
+            raise HTTPException(
+                status_code=409,
+                detail="research delivery is disabled; enable dry_run or live mode explicitly",
+            )
+        channels = tuple(dict.fromkeys(request.channels))
+        transports = _delivery_transports(channels)
+        missing = [channel.value for channel in channels if channel not in transports]
+        if missing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"research delivery configuration is incomplete for: {', '.join(missing)}",
+            )
+        repository = get_operations_repository()
+        planner = OpportunityReportNotificationPlanner(
+            repository,
+            report_web_url=config.report_web_url,
+        )
+        message_ids = planner.enqueue(report, channels, datetime.now(timezone.utc))
+        delivered, failed = OutboxDispatcher(repository, transports).dispatch_message_ids(
+            message_ids,
+            datetime.now(timezone.utc),
+        )
+        return {
+            "mode": config.mode,
+            "channels": [channel.value for channel in channels],
+            "delivered": delivered,
+            "failed": failed,
+            "duplicate_or_already_delivered": len(message_ids) - delivered - failed,
+            "report_date": report["report_date"],
+            "scheduler_started": False,
+            "trading_executed": False,
+        }
+
+    @app.get("/investment-research/shadow-portfolio", dependencies=dependencies)
+    async def investment_research_shadow_portfolio() -> dict[str, Any]:
+        return get_shadow_portfolio_tracker().status()
+
+    @app.post(
+        "/investment-research/opportunity-daily/automation/run-once",
+        dependencies=dependencies,
+    )
+    async def investment_research_daily_automation_run_once() -> dict[str, Any]:
+        """Run one explicit read-only automation pass for operator verification."""
+        return await _run_daily_opportunity_automation(datetime.now(timezone.utc))
     @app.get("/investment-research/theses", dependencies=dependencies)
     async def investment_research_theses(as_of: datetime | None = Query(default=None)) -> list[dict[str, Any]]:
         repository = get_investment_research_repository()
