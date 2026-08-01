@@ -148,12 +148,13 @@ export function InvestmentResearch() {
   const [history, setHistory] = useState<ResearchMvpHistoricalEvaluation | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [feishu, setFeishu] = useState<ResearchMvpFeishuPreview | null>(null);
+  const [panicSensitivity, setPanicSensitivity] = useState(50);
 
   const generate = async () => {
     setLoading(true);
     setError("");
     try {
-      setReport(await api.runInvestmentResearch());
+      setReport(await api.runInvestmentResearch(panicSensitivity));
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成盘后研究失败");
     } finally {
@@ -205,6 +206,34 @@ export function InvestmentResearch() {
           {loading ? "正在生成" : "生成盘后研究"}
         </button>
       </header>
+
+      <section className="rounded-xl border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">恐慌敏感度</h2>
+            <p className="mt-1 text-sm text-muted-foreground">数值越低越敏感，越高越强调多项指标共同确认。</p>
+          </div>
+          <span className="rounded-full border bg-muted px-3 py-1 text-sm font-semibold">
+            {panicSensitivity <= 30 ? "敏感" : panicSensitivity <= 70 ? "平衡" : "严谨"} · {panicSensitivity}
+          </span>
+        </div>
+        <input
+          aria-label="恐慌敏感度"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={panicSensitivity}
+          onChange={(event) => setPanicSensitivity(Number(event.target.value))}
+          className="mt-4 w-full accent-primary"
+        />
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground"><span>敏感</span><span>平衡</span><span>严谨</span></div>
+        {report && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            本次阈值：指数 ≤ {report.panic_sensitivity.index_daily_return_pct}% · 上涨占比 ≤ {(report.panic_sensitivity.max_advancer_ratio * 100).toFixed(1)}% · 跌停 ≥ {report.panic_sensitivity.min_limit_down_count} · 已触发 {report.panic_sensitivity.trigger_count}/{report.panic_sensitivity.required_confirmations} 项
+          </p>
+        )}
+      </section>
 
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>}
 

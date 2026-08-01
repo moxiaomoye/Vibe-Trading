@@ -35,9 +35,15 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"trade_date", "market_state", "market_summary", "candidates", "data_gaps"}
+    assert set(body) == {
+        "trade_date", "market_state", "panic_sensitivity", "market_summary",
+        "candidates", "data_gaps",
+    }
     assert body["trade_date"] == "2024-02-05"
     assert body["market_state"] == "EXTREME_PANIC"
+    assert body["panic_sensitivity"]["value"] == 50
+    assert body["panic_sensitivity"]["required_confirmations"] == 2
+    assert body["panic_sensitivity"]["trigger_count"] == 3
     assert body["market_summary"]["limit_down"] == 170
     assert "turnover_amount" in body["market_summary"]
     assert "market_summary.turnover_amount" in body["data_gaps"]
@@ -53,6 +59,41 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
         "t5": None, "t20": None, "t60": None,
     }
     assert service.history(1)[0]["mode"] == "demo"
+
+
+def test_research_run_applies_requested_panic_sensitivity(tmp_path, monkeypatch) -> None:
+    service = _service(tmp_path)
+    monkeypatch.setattr(research_mvp_routes, "get_research_scan_service", lambda: service)
+    app = FastAPI()
+    research_mvp_routes.register_research_mvp_routes(app, lambda: None)
+
+    response = TestClient(app).post(
+        "/investment-research/research-run",
+        json={"panic_sensitivity": 100},
+    )
+
+    assert response.status_code == 200
+    profile = response.json()["panic_sensitivity"]
+    assert profile["label"] == "严谨"
+    assert profile["required_confirmations"] == 3
+    assert profile["min_limit_down_count"] == 80
+
+
+def test_research_run_rejects_out_of_range_sensitivity(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        research_mvp_routes,
+        "get_research_scan_service",
+        lambda: _service(tmp_path),
+    )
+    app = FastAPI()
+    research_mvp_routes.register_research_mvp_routes(app, lambda: None)
+
+    response = TestClient(app).post(
+        "/investment-research/research-run",
+        json={"panic_sensitivity": 101},
+    )
+
+    assert response.status_code == 422
 
 
 def test_historical_evaluation_uses_stored_snapshot_and_trading_session_horizons(tmp_path) -> None:

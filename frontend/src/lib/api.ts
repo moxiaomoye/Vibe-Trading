@@ -187,8 +187,11 @@ export const api = {
     request<InvestmentResearchDailyReport>(
       `/investment-research/daily-research/${encodeURIComponent(reportDate)}?mode=${encodeURIComponent(mode)}`,
     ),
-  runInvestmentResearch: () =>
-    request<ResearchMvpRun>("/investment-research/research-run", { method: "POST" }),
+  runInvestmentResearch: (panicSensitivity = 50) =>
+    request<ResearchMvpRun>("/investment-research/research-run", {
+      method: "POST",
+      body: JSON.stringify({ panic_sensitivity: panicSensitivity }),
+    }),
   evaluateInvestmentResearchHistory: (tradeDate: string) =>
     request<ResearchMvpHistoricalEvaluation>("/investment-research/historical-evaluation", {
       method: "POST",
@@ -483,6 +486,17 @@ export interface ResearchMvpCandidate {
 export interface ResearchMvpRun {
   trade_date: string;
   market_state: "NORMAL" | "CAUTION" | "PANIC" | "EXTREME_PANIC";
+  panic_sensitivity: {
+    value: number;
+    label: "敏感" | "平衡" | "严谨";
+    index_daily_return_pct: number;
+    max_advancer_ratio: number;
+    min_limit_down_count: number;
+    required_confirmations: number;
+    trigger_count: number;
+    config_version: number;
+    checks: Record<string, { observed: number | null; threshold: number; triggered: boolean | null }>;
+  };
   market_summary: {
     advancers: number | null;
     decliners: number | null;

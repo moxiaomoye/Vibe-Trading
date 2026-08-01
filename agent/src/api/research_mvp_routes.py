@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable
 from datetime import date
 
 from fastapi import Depends, FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.investment_research.application.research_mvp import (
     build_historical_evaluation,
@@ -24,6 +24,10 @@ AuthDep = Callable[..., Awaitable[Any] | Any]
 
 class HistoricalEvaluationRequest(BaseModel):
     trade_date: date
+
+
+class ResearchRunRequest(BaseModel):
+    panic_sensitivity: int = Field(default=50, ge=0, le=100)
 
 
 class FeishuPreviewRequest(BaseModel):
@@ -46,8 +50,15 @@ def get_research_outbox_repository() -> SQLiteOperationsRepository:
 
 def register_research_mvp_routes(app: FastAPI, require_auth: AuthDep) -> None:
     @app.post("/investment-research/research-run", dependencies=[Depends(require_auth)])
-    async def investment_research_run() -> dict[str, Any]:
-        return await asyncio.to_thread(build_research_run, get_research_scan_service())
+    async def investment_research_run(
+        request: ResearchRunRequest | None = None,
+    ) -> dict[str, Any]:
+        sensitivity = request.panic_sensitivity if request else 50
+        return await asyncio.to_thread(
+            build_research_run,
+            get_research_scan_service(),
+            sensitivity,
+        )
 
     @app.post("/investment-research/historical-evaluation", dependencies=[Depends(require_auth)])
     async def investment_research_historical_evaluation(request: HistoricalEvaluationRequest) -> dict[str, Any]:

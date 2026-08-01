@@ -8,7 +8,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 
-from .config import ValueHunterConfig
+from .config import PanicValueMethodConfig, ValueHunterConfig
 from .models import ScanResult
 from .notifier import NotificationSender
 from .providers import ValueHunterProvider, build_provider
@@ -34,14 +34,21 @@ class ValueHunterService:
         self.notifier = notifier or NotificationSender(self.config)
         self._lock = threading.Lock()
 
-    def run(self, *, notify: bool = True, include_incomplete: bool = False) -> ScanResult:
+    def run(
+        self,
+        *,
+        notify: bool = True,
+        include_incomplete: bool = False,
+        method_override: PanicValueMethodConfig | None = None,
+    ) -> ScanResult:
         if not self._lock.acquire(blocking=False):
             raise RuntimeError("Value Hunter扫描正在运行")
         try:
             started = datetime.now(timezone.utc).isoformat()
-            market = score_market(self.provider.load_market(), self.config.method)
+            method = method_override or self.config.method
+            market = score_market(self.provider.load_market(), method)
             scored = [
-                score_candidate(item, self.config.method)
+                score_candidate(item, method)
                 for item in self.provider.load_candidates()
             ]
             eligible = [

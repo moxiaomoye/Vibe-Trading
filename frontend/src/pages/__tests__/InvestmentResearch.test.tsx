@@ -11,6 +11,17 @@ vi.mock("@/lib/api", () => ({ api: apiMock }));
 const report: ResearchMvpRun = {
   trade_date: "2026-07-24",
   market_state: "PANIC",
+  panic_sensitivity: {
+    value: 50,
+    label: "平衡",
+    index_daily_return_pct: -2.25,
+    max_advancer_ratio: 0.35,
+    min_limit_down_count: 43,
+    required_confirmations: 2,
+    trigger_count: 3,
+    config_version: 2,
+    checks: {},
+  },
   market_summary: {
     advancers: 512,
     decliners: 4210,
@@ -83,7 +94,7 @@ describe("InvestmentResearch page", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成盘后研究" }));
 
     expect(await screen.findByText("中芯国际")).toBeInTheDocument();
-    expect(apiMock.runInvestmentResearch).toHaveBeenCalledTimes(1);
+    expect(apiMock.runInvestmentResearch).toHaveBeenCalledWith(50);
     expect(screen.getByText("PANIC")).toBeInTheDocument();
     expect(screen.getByText("4210.00")).toBeInTheDocument();
     expect(screen.getByText("Top 5 Research Candidate")).toBeInTheDocument();
@@ -99,6 +110,18 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("观察条件：什么情况下值得进一步关注")).toBeInTheDocument();
     expect(screen.getByText("风险条件：什么情况下判断错误")).toBeInTheDocument();
     expect(screen.getByText("验证条件：未来如何验证判断")).toBeInTheDocument();
+  });
+
+  it("sends the selected panic sensitivity and displays resolved thresholds", async () => {
+    render(<InvestmentResearch />);
+    fireEvent.change(screen.getByRole("slider", { name: "恐慌敏感度" }), {
+      target: { value: "80" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成盘后研究" }));
+
+    await screen.findByText("中芯国际");
+    expect(apiMock.runInvestmentResearch).toHaveBeenCalledWith(80);
+    expect(screen.getByText(/本次阈值：指数/)).toBeInTheDocument();
   });
 
   it("shows point-in-time historical outcomes without filling unavailable horizons", async () => {

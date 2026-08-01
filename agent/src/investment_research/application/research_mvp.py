@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from statistics import median
 from typing import Any, Callable
 
 from src.value_hunter.models import CandidateResult, ScanResult
+from src.value_hunter.config import resolve_panic_sensitivity
 from src.value_hunter.service import ValueHunterService
 from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
@@ -14,14 +16,48 @@ from uuid import NAMESPACE_URL, uuid5
 MarketFetcher = Callable[..., dict[str, Any]]
 
 
-def _market_state(score: float) -> str:
-    if score >= 85:
+def _market_state(
+    score: float,
+    trigger_count: int | None = None,
+    required_confirmations: int | None = None,
+) -> str:
+    confirmed = (
+        trigger_count is None
+        or required_confirmations is None
+        or trigger_count >= required_confirmations
+    )
+    if score >= 85 and confirmed:
         return "EXTREME_PANIC"
-    if score >= 70:
+    if confirmed and trigger_count is not None and trigger_count > 0:
         return "PANIC"
-    if score >= 50:
+    if score >= 50 or (trigger_count or 0) > 0:
         return "CAUTION"
     return "NORMAL"
+
+
+def _panic_profile(scan: ScanResult, sensitivity: dict[str, Any]) -> dict[str, Any]:
+    observation = scan.market.observation
+    index_returns = [float(item.daily_return_pct) for item in observation.indices]
+    daily_return = median(index_returns) if index_returns else None
+    checks = {
+        "index_daily_return": {
+            "observed": round(daily_return, 3) if daily_return is not None else None,
+            "threshold": sensitivity["index_daily_return_pct"],
+            "triggered": daily_return <= sensitivity["index_daily_return_pct"] if daily_return is not None else None,
+        },
+        "advancer_ratio": {
+            "observed": observation.advancer_ratio,
+            "threshold": sensitivity["max_advancer_ratio"],
+            "triggered": observation.advancer_ratio <= sensitivity["max_advancer_ratio"] if observation.advancer_ratio is not None else None,
+        },
+        "limit_down_count": {
+            "observed": observation.limit_down_count,
+            "threshold": sensitivity["min_limit_down_count"],
+            "triggered": observation.limit_down_count >= sensitivity["min_limit_down_count"] if observation.limit_down_count is not None else None,
+        },
+    }
+    trigger_count = sum(item["triggered"] is True for item in checks.values())
+    return {**sensitivity, "trigger_count": trigger_count, "checks": checks}
 
 
 def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
@@ -121,9 +157,18 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
     }
 
 
-def build_research_run(service: ValueHunterService) -> dict[str, Any]:
+def build_research_run(
+    service: ValueHunterService,
+    panic_sensitivity: int = 50,
+) -> dict[str, Any]:
     """Run the existing scanner once with notifications disabled and adapt it."""
-    scan: ScanResult = service.run(notify=False, include_incomplete=True)
+    method, resolved = resolve_panic_sensitivity(panic_sensitivity, service.config.method)
+    scan: ScanResult = service.run(
+        notify=False,
+        include_incomplete=True,
+        method_override=method,
+    )
+    panic_profile = _panic_profile(scan, resolved.to_dict())
     observation = scan.market.observation
     gaps = list(observation.warnings)
     summary_fields = {
@@ -149,7 +194,12 @@ def build_research_run(service: ValueHunterService) -> dict[str, Any]:
         gaps.append("No candidate met the existing Value Hunter research threshold.")
     return {
         "trade_date": observation.as_of,
-        "market_state": _market_state(scan.market.score),
+        "market_state": _market_state(
+            scan.market.score,
+            panic_profile["trigger_count"],
+            panic_profile["required_confirmations"],
+        ),
+        "panic_sensitivity": panic_profile,
         "market_summary": summary_fields,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
