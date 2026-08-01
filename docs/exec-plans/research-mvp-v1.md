@@ -285,6 +285,7 @@ for the continuation milestones.
 
 #### M1 - Real-data observation contract
 
+- Status: complete.
 - Define the normalized market/security observation required by the existing
   scanner: source/as-of/provenance, security type, OHLCV-derived changes,
   breadth, turnover, fundamentals, valuation and explicit field-level gaps.
@@ -371,3 +372,28 @@ for the continuation milestones.
   followed by M2 Tushare-first routing.
 - Stop conditions remain external data entitlement/token limits, product-boundary
   changes, schema migration, notification send activation, or trade execution.
+
+### M1 handoff
+
+- Result: extended the existing `CandidateObservation` and Research MVP
+  candidate payload with security type, current price, daily/20-session/
+  60-session change, 20-session volume ratio, 252-session drawdown,
+  benchmark-relative return and market-data as-of date.
+- Data path: `AkshareProvider` remains the existing scanner provider but now
+  obtains OHLCV in one batch through `src.market_data.fetch_market_data`; the
+  scoring and Research MVP application layers consume normalized observations
+  and do not call a source SDK.
+- ETF posture: exchange-listed fund symbols are normalized and typed as ETF;
+  registry OHLCV remains usable even when issuer-only AKShare enrichment has no
+  fund result. Fund-specific fundamentals/metadata stay scheduled for M8.
+- Point-in-time posture: rows later than the latest complete trade date are
+  ignored. Insufficient bars, missing volume or unavailable benchmark history
+  remain field-level Data Gaps.
+- Cache posture: configured-watchlist caches without the new as-of field are
+  invalidated once and regenerated; legacy/default cache behavior remains
+  backward compatible.
+- Tests: 19 focused backend tests and 3 Investment Research UI tests passed;
+  TypeScript and the production Vite build passed. Existing bundle-size and
+  TestClient deprecation warnings are unchanged.
+- Next: M2 select Tushare first when its token is usable, preserve registry
+  fallbacks, and expose actual source provenance without leaking credentials.

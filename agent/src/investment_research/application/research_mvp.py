@@ -31,6 +31,16 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         gaps.append("current_price")
     if observation.relative_to_sector_pct is None:
         gaps.append("relative_to_sector_pct")
+    for field in (
+        "daily_return_pct",
+        "return_20d_pct",
+        "return_60d_pct",
+        "volume_ratio_20d",
+        "relative_to_market_pct",
+        "market_data_as_of",
+    ):
+        if getattr(observation, field) is None:
+            gaps.append(field)
     observation_conditions = list(candidate.reasons) or [
         "补齐公司质量、财务、估值与价格错位证据后再进一步关注。"
     ]
@@ -43,13 +53,19 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         "name": observation.name,
         "code": observation.symbol,
         "current_price": observation.current_price,
+        "security_type": observation.security_type,
+        "daily_return_pct": observation.daily_return_pct,
+        "return_20d_pct": observation.return_20d_pct,
+        "return_60d_pct": observation.return_60d_pct,
+        "volume_ratio_20d": observation.volume_ratio_20d,
         "drawdown_pct": observation.drawdown_252_pct,
-        "relative_to_market_pct": None,
+        "relative_to_market_pct": observation.relative_to_market_pct,
+        "market_data_as_of": observation.market_data_as_of,
         "sector": observation.sector,
         "sector_performance_pct": observation.relative_to_sector_pct,
         "selection_reasons": list(candidate.reasons),
         "risks": list(observation.risk_flags) + list(observation.risk_evidence),
-        "data_gaps": list(dict.fromkeys(["relative_to_market_pct", *gaps])),
+        "data_gaps": list(dict.fromkeys(gaps)),
         "score": candidate.score.total,
         "research_status": candidate.status,
         "first_rejection": candidate.first_rejection,

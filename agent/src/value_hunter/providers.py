@@ -14,10 +14,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
+from backtest.loaders._symbol_utils import _is_etf_listed
+from src.market_data import fetch_market_data
+
 from .models import CandidateObservation, IndexObservation, MarketObservation
+
+
+MarketFetcher = Callable[..., dict[str, Any]]
 
 
 class ValueHunterProvider(ABC):
@@ -119,6 +125,62 @@ def _bool_value(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "是"}
 
 
+def normalize_ashare_symbol(symbol: str) -> str:
+    """Return the loader-registry symbol for an exchange-listed A-share asset."""
+    value = symbol.strip().upper()
+    if value.endswith((".SH", ".SZ", ".BJ")):
+        return value
+    if len(value) != 6 or not value.isdigit():
+        return value
+    if value.startswith(("4", "8")):
+        return f"{value}.BJ"
+    if value.startswith(("5", "6", "9")):
+        return f"{value}.SH"
+    return f"{value}.SZ"
+
+
+def security_type_for_symbol(symbol: str) -> str:
+    normalized = normalize_ashare_symbol(symbol)
+    return "etf" if _is_etf_listed(normalized) else "stock"
+
+
+def _market_rows(raw: Any, *, through: date) -> list[dict[str, Any]]:
+    if isinstance(raw, dict) and isinstance(raw.get("data"), list):
+        raw = raw["data"]
+    if not isinstance(raw, list):
+        return []
+    dated: list[tuple[date, dict[str, Any]]] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        row_date: date | None = None
+        for key in ("trade_date", "date", "datetime", "index", "Date"):
+            value = row.get(key)
+            if value is None:
+                continue
+            try:
+                row_date = date.fromisoformat(str(value)[:10])
+                break
+            except ValueError:
+                continue
+        if row_date is not None and row_date <= through:
+            dated.append((row_date, row))
+    return [row for _, row in sorted(dated, key=lambda item: item[0])]
+
+
+def _series_number(row: dict[str, Any], key: str) -> float | None:
+    try:
+        return float(row[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _period_return(closes: list[float], sessions: int) -> float | None:
+    if len(closes) <= sessions or closes[-(sessions + 1)] <= 0:
+        return None
+    return round((closes[-1] / closes[-(sessions + 1)] - 1.0) * 100.0, 4)
+
+
 def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -155,9 +217,15 @@ class AkshareProvider(ValueHunterProvider):
         "sz399006": "创业板指", "sh000001": "上证指数",
     }
 
-    def __init__(self, watchlist_path: Path | None = None, cache_dir: Path | None = None):
+    def __init__(
+        self,
+        watchlist_path: Path | None = None,
+        cache_dir: Path | None = None,
+        market_fetcher: MarketFetcher = fetch_market_data,
+    ):
         self.watchlist_path = watchlist_path
         self.cache_dir = cache_dir
+        self.market_fetcher = market_fetcher
 
     def _cache_path(self, kind: str) -> Path | None:
         if self.cache_dir is None:
@@ -193,7 +261,9 @@ class AkshareProvider(ValueHunterProvider):
                 candidate.symbol for candidate in load_watchlist_csv(self.watchlist_path)
             }
             cached_symbols = {candidate.symbol for candidate in candidates}
-            if cached_symbols != expected_symbols:
+            if cached_symbols != expected_symbols or any(
+                candidate.market_data_as_of is None for candidate in candidates
+            ):
                 return None
         if stale_date:
             for candidate in candidates:
@@ -294,6 +364,7 @@ class AkshareProvider(ValueHunterProvider):
             return cached
         ak = self._ak()
         candidates = self._base_watchlist()
+        self._enrich_market_history(candidates)
         # Financial and historical-valuation endpoints are per issuer. Four
         # workers keep a normal scan practical while avoiding a burst of
         # dozens of simultaneous public-data requests.
@@ -308,6 +379,65 @@ class AkshareProvider(ValueHunterProvider):
         self._enrich_announcements(ak, candidates)
         self._write_cache("candidates", candidates)
         return candidates
+
+    def _enrich_market_history(self, candidates: list[CandidateObservation]) -> None:
+        """Populate point-in-time OHLCV metrics through the shared loader registry."""
+        through = _latest_complete_weekday()
+        start = through - timedelta(days=400)
+        normalized = {item.symbol: normalize_ashare_symbol(item.symbol) for item in candidates}
+        benchmark_symbol = "000300.SH"
+        codes = list(dict.fromkeys([*normalized.values(), benchmark_symbol]))
+        try:
+            payload = self.market_fetcher(
+                codes=codes,
+                start_date=start.isoformat(),
+                end_date=through.isoformat(),
+                source="auto",
+                interval="1D",
+                max_rows=0,
+            )
+        except Exception as exc:  # noqa: BLE001 - provider gaps belong on observations
+            for candidate in candidates:
+                candidate.security_type = security_type_for_symbol(candidate.symbol)
+                candidate.warnings.append(
+                    f"market_data_registry unavailable: {type(exc).__name__}: {exc}"
+                )
+            return
+
+        benchmark_rows = _market_rows(payload.get(benchmark_symbol), through=through)
+        benchmark_closes = [
+            close for row in benchmark_rows if (close := _series_number(row, "close")) is not None
+        ]
+        benchmark_return_20d = _period_return(benchmark_closes, 20)
+
+        for candidate in candidates:
+            candidate.security_type = security_type_for_symbol(candidate.symbol)
+            provider_symbol = normalized[candidate.symbol]
+            rows = _market_rows(payload.get(provider_symbol), through=through)
+            closes = [close for row in rows if (close := _series_number(row, "close")) is not None]
+            if not closes:
+                candidate.warnings.append(f"market_data.{provider_symbol}.price_history")
+                continue
+
+            candidate.current_price = closes[-1]
+            candidate.daily_return_pct = _period_return(closes, 1)
+            candidate.return_20d_pct = _period_return(closes, 20)
+            candidate.return_60d_pct = _period_return(closes, 60)
+            recent = closes[-252:]
+            if recent and max(recent) > 0:
+                candidate.drawdown_252_pct = (recent[-1] / max(recent) - 1.0) * 100.0
+
+            volumes = [volume for row in rows if (volume := _series_number(row, "volume")) is not None]
+            if len(volumes) >= 21:
+                prior_average = sum(volumes[-21:-1]) / 20.0
+                if prior_average > 0:
+                    candidate.volume_ratio_20d = volumes[-1] / prior_average
+
+            if candidate.return_20d_pct is not None and benchmark_return_20d is not None:
+                candidate.relative_to_market_pct = candidate.return_20d_pct - benchmark_return_20d
+            candidate.market_data_as_of = through.isoformat()
+            if "market_data_registry_ohlcv" not in candidate.source_fields:
+                candidate.source_fields.append("market_data_registry_ohlcv")
 
     @staticmethod
     def _classify_announcement(title: str) -> str | None:

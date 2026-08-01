@@ -37,6 +37,7 @@ class MarketObservation:
     advancer_count: int | None = None
     decliner_count: int | None = None
     limit_up_count: int | None = None
+    turnover_amount: float | None = None
 
 
 @dataclass(slots=True)
@@ -64,6 +65,13 @@ class CandidateObservation:
     source_fields: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     current_price: float | None = None
+    security_type: str = "stock"
+    daily_return_pct: float | None = None
+    return_20d_pct: float | None = None
+    return_60d_pct: float | None = None
+    volume_ratio_20d: float | None = None
+    relative_to_market_pct: float | None = None
+    market_data_as_of: str | None = None
 
 
 @dataclass(slots=True)

@@ -443,8 +443,14 @@ export interface ResearchMvpCandidate {
   name: string;
   code: string;
   current_price: number | null;
+  security_type: "stock" | "etf";
+  daily_return_pct: number | null;
+  return_20d_pct: number | null;
+  return_60d_pct: number | null;
+  volume_ratio_20d: number | null;
   drawdown_pct: number | null;
   relative_to_market_pct: number | null;
+  market_data_as_of: string | null;
   sector: string;
   sector_performance_pct: number | null;
   selection_reasons: string[];
