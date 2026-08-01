@@ -76,6 +76,7 @@ accepted as an M0 capability.
 
 ### M2 - Candidate board
 
+- Status: complete.
 - Wire the existing page to the real POST API.
 - Display Top 5 candidate identity, price, drawdown, benchmark/sector relative
   performance, selection reason, risk, and Data Gap.
@@ -135,3 +136,17 @@ accepted as an M0 capability.
   and `git diff --check` passed.
 - Safety: no scheduler, Feishu send, order path, dependency, or database change.
 - Next: M2 replace the incomplete trial UI contract with the real POST response.
+
+### M2 handoff
+
+- Result: the existing `/investment-research` page now waits for the explicit
+  “生成盘后研究” action, calls `POST /investment-research/research-run`, and
+  renders the returned market summary and Top 5 maximum candidate board.
+- Candidate display: name, code, current price, drawdown, benchmark-relative
+  Data Gap, sector performance, selection reasons, first rejection, risks, and
+  candidate Data Gaps.
+- Tests: focused Vitest passed; TypeScript and production Vite build passed;
+  `git diff --check` passed. Existing chunk-size warnings are unchanged.
+- Boundary: zero candidates is displayed honestly; there is no mock fallback,
+  order action, position advice, scheduler, or notification send.
+- Next: M3 candidate detail interaction and three-part Research Plan.

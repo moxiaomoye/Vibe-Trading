@@ -187,6 +187,8 @@ export const api = {
     request<InvestmentResearchDailyReport>(
       `/investment-research/daily-research/${encodeURIComponent(reportDate)}?mode=${encodeURIComponent(mode)}`,
     ),
+  runInvestmentResearch: () =>
+    request<ResearchMvpRun>("/investment-research/research-run", { method: "POST" }),
   listInvestmentResearchEvidenceInbox: (status?: InvestmentResearchEvidenceInboxStatus, limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (status) params.set("status", status);
@@ -425,6 +427,43 @@ export interface InvestmentResearchDailyReport {
   candidates: InvestmentResearchCandidateBrief[];
   warnings: string[];
   conclusion: string;
+}
+
+export interface ResearchMvpCandidate {
+  name: string;
+  code: string;
+  current_price: number | null;
+  drawdown_pct: number | null;
+  relative_to_market_pct: number | null;
+  sector: string;
+  sector_performance_pct: number | null;
+  selection_reasons: string[];
+  risks: string[];
+  data_gaps: string[];
+  score: number;
+  research_status: string;
+  first_rejection: string;
+  quality: Record<string, number | null>;
+  financials: Record<string, number | null>;
+  valuation: Record<string, number | null>;
+  supporting_evidence: string[];
+  counter_evidence: string[];
+}
+
+export interface ResearchMvpRun {
+  trade_date: string;
+  market_state: "NORMAL" | "CAUTION" | "PANIC" | "EXTREME_PANIC";
+  market_summary: {
+    advancers: number | null;
+    decliners: number | null;
+    limit_up: number | null;
+    limit_down: number | null;
+    breadth: number | null;
+    panic_reasons: string[];
+    source: string;
+  };
+  candidates: ResearchMvpCandidate[];
+  data_gaps: string[];
 }
 
 // --- Swarm types ---
