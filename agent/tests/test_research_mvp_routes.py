@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import research_mvp_routes
+from src.investment_research.application.research_mvp import build_historical_evaluation
 from src.value_hunter.config import ValueHunterConfig
 from src.value_hunter.providers import DemoProvider
 from src.value_hunter.service import ValueHunterService
@@ -42,3 +43,38 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
         "observation_conditions", "risk_conditions", "validation_conditions"
     }
     assert service.history(1)[0]["mode"] == "demo"
+
+
+def test_historical_evaluation_uses_stored_snapshot_and_trading_session_horizons(tmp_path) -> None:
+    service = _service(tmp_path)
+    service.run(notify=False)
+
+    def prices(**kwargs):
+        assert kwargs["start_date"] == "2024-02-05"
+        rows = [
+            {"date": f"2024-02-{day:02d}", "close": 100 + index}
+            for index, day in enumerate(range(5, 29))
+        ] + [
+            {"date": f"2024-03-{day:02d}", "close": 124 + index}
+            for index, day in enumerate(range(1, 32))
+        ] + [
+            {"date": f"2024-04-{day:02d}", "close": 155 + index}
+            for index, day in enumerate(range(1, 12))
+        ]
+        return {symbol: rows for symbol in kwargs["codes"]}
+
+    result = build_historical_evaluation(service, __import__("datetime").date(2024, 2, 5), prices)
+
+    assert result["market_state"] == "EXTREME_PANIC"
+    assert result["candidates"][0]["t5"] == 5.0
+    assert result["candidates"][0]["t20"] == 20.0
+    assert result["candidates"][0]["t60"] == 60.0
+
+
+def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) -> None:
+    result = build_historical_evaluation(
+        _service(tmp_path), __import__("datetime").date(2025, 4, 7), lambda **_: {}
+    )
+    assert result["market_state"] is None
+    assert result["candidates"] == []
+    assert "point-in-time" in result["data_gaps"][0]

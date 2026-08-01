@@ -189,6 +189,11 @@ export const api = {
     ),
   runInvestmentResearch: () =>
     request<ResearchMvpRun>("/investment-research/research-run", { method: "POST" }),
+  evaluateInvestmentResearchHistory: (tradeDate: string) =>
+    request<ResearchMvpHistoricalEvaluation>("/investment-research/historical-evaluation", {
+      method: "POST",
+      body: JSON.stringify({ trade_date: tradeDate }),
+    }),
   listInvestmentResearchEvidenceInbox: (status?: InvestmentResearchEvidenceInboxStatus, limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (status) params.set("status", status);
@@ -468,6 +473,21 @@ export interface ResearchMvpRun {
     source: string;
   };
   candidates: ResearchMvpCandidate[];
+  data_gaps: string[];
+}
+
+export interface ResearchMvpHistoricalEvaluation {
+  trade_date: string;
+  market_state: ResearchMvpRun["market_state"] | null;
+  candidates: Array<{
+    name: string;
+    code: string;
+    research_status: string;
+    t5: number | null;
+    t20: number | null;
+    t60: number | null;
+    data_gaps: string[];
+  }>;
   data_gaps: string[];
 }
 

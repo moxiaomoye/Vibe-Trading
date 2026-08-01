@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ResearchMvpRun } from "@/lib/api";
 import { InvestmentResearch } from "../InvestmentResearch";
 
-const apiMock = vi.hoisted(() => ({ runInvestmentResearch: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ runInvestmentResearch: vi.fn(), evaluateInvestmentResearchHistory: vi.fn() }));
 vi.mock("@/lib/api", () => ({ api: apiMock }));
 
 const report: ResearchMvpRun = {
@@ -50,6 +50,12 @@ describe("InvestmentResearch page", () => {
   beforeEach(() => {
     apiMock.runInvestmentResearch.mockReset();
     apiMock.runInvestmentResearch.mockResolvedValue(report);
+    apiMock.evaluateInvestmentResearchHistory.mockReset();
+    apiMock.evaluateInvestmentResearchHistory.mockResolvedValue({
+      trade_date: "2025-04-07", market_state: "PANIC",
+      candidates: [{ name: "中芯国际", code: "688981", research_status: "Research", t5: 3.2, t20: 8.1, t60: null, data_gaps: ["t60"] }],
+      data_gaps: ["688981.t60"],
+    });
   });
 
   it("calls the real Research MVP API only after the user generates a report", async () => {
@@ -73,5 +79,14 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("观察条件：什么情况下值得进一步关注")).toBeInTheDocument();
     expect(screen.getByText("风险条件：什么情况下判断错误")).toBeInTheDocument();
     expect(screen.getByText("验证条件：未来如何验证判断")).toBeInTheDocument();
+  });
+
+  it("shows point-in-time historical outcomes without filling unavailable horizons", async () => {
+    render(<InvestmentResearch />);
+    fireEvent.click(screen.getByRole("button", { name: "查看历史验证" }));
+    expect(await screen.findByText("当时市场状态：PANIC")).toBeInTheDocument();
+    expect(apiMock.evaluateInvestmentResearchHistory).toHaveBeenCalledWith("2025-04-07");
+    expect(screen.getByText("3.20%")).toBeInTheDocument();
+    expect(screen.getAllByText("Data Gap").length).toBeGreaterThan(0);
   });
 });

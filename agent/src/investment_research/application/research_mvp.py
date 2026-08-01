@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import date, timedelta
+from typing import Any, Callable
 
 from src.value_hunter.models import CandidateResult, ScanResult
 from src.value_hunter.service import ValueHunterService
+
+MarketFetcher = Callable[..., dict[str, Any]]
 
 
 def _market_state(score: float) -> str:
@@ -96,6 +99,101 @@ def build_research_run(service: ValueHunterService) -> dict[str, Any]:
         "trade_date": observation.as_of,
         "market_state": _market_state(scan.market.score),
         "market_summary": summary_fields,
+        "candidates": candidates,
+        "data_gaps": list(dict.fromkeys(gaps)),
+    }
+
+
+def _row_date(row: dict[str, Any]) -> date | None:
+    for key in ("date", "datetime", "trade_date", "index", "Date"):
+        try:
+            return date.fromisoformat(str(row[key])[:10])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _row_close(row: dict[str, Any]) -> float | None:
+    for key in ("close", "Close"):
+        try:
+            return float(row[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _forward_returns(raw_rows: Any, trade_date: date) -> tuple[dict[str, float | None], list[str]]:
+    if isinstance(raw_rows, dict) and isinstance(raw_rows.get("data"), list):
+        raw_rows = raw_rows["data"]
+    rows = sorted(
+        ((row_date, close) for row in raw_rows or [] if isinstance(row, dict)
+         if (row_date := _row_date(row)) is not None and (close := _row_close(row)) is not None),
+        key=lambda item: item[0],
+    )
+    start_index = next((index for index, (row_date, _) in enumerate(rows) if row_date == trade_date), None)
+    gaps: list[str] = []
+    if start_index is None:
+        return {"t5": None, "t20": None, "t60": None}, ["base_trade_date_price"]
+    base_close = rows[start_index][1]
+    returns: dict[str, float | None] = {}
+    for horizon in (5, 20, 60):
+        target_index = start_index + horizon
+        key = f"t{horizon}"
+        if target_index >= len(rows):
+            returns[key] = None
+            gaps.append(key)
+        else:
+            returns[key] = round((rows[target_index][1] / base_close - 1.0) * 100.0, 2)
+    return returns, gaps
+
+
+def build_historical_evaluation(
+    service: ValueHunterService,
+    trade_date: date,
+    market_fetcher: MarketFetcher,
+) -> dict[str, Any]:
+    """Evaluate a stored point-in-time scan without reconstructing it from future data."""
+    snapshot = next(
+        (item for item in service.history(200) if item.get("market", {}).get("observation", {}).get("as_of") == trade_date.isoformat()),
+        None,
+    )
+    if snapshot is None:
+        return {
+            "trade_date": trade_date.isoformat(),
+            "market_state": None,
+            "candidates": [],
+            "data_gaps": ["No point-in-time Value Hunter snapshot exists for the selected date."],
+        }
+    raw_candidates = snapshot.get("candidates", [])[:5]
+    symbols = [item.get("observation", {}).get("symbol") for item in raw_candidates]
+    symbols = [symbol for symbol in symbols if symbol]
+    price_data = market_fetcher(
+        codes=symbols,
+        start_date=trade_date.isoformat(),
+        end_date=(trade_date + timedelta(days=100)).isoformat(),
+        source="auto",
+        interval="1D",
+        max_rows=0,
+    ) if symbols else {}
+    candidates: list[dict[str, Any]] = []
+    gaps: list[str] = []
+    for item in raw_candidates:
+        observation = item.get("observation", {})
+        symbol = observation.get("symbol", "")
+        returns, return_gaps = _forward_returns(price_data.get(symbol, []), trade_date)
+        candidates.append({
+            "name": observation.get("name", symbol),
+            "code": symbol,
+            "research_status": item.get("status", "Research Candidate"),
+            "t5": returns["t5"],
+            "t20": returns["t20"],
+            "t60": returns["t60"],
+            "data_gaps": return_gaps,
+        })
+        gaps.extend(f"{symbol}.{gap}" for gap in return_gaps)
+    return {
+        "trade_date": trade_date.isoformat(),
+        "market_state": _market_state(float(snapshot.get("market", {}).get("score", 0.0))),
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
     }

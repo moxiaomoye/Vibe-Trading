@@ -92,6 +92,7 @@ accepted as an M0 capability.
 
 ### M4 - Historical validation connection
 
+- Status: complete.
 - Accept a requested date and reconstruct that point-in-time research run.
 - Display T+5/T+20/T+60 performance without future leakage or current-price
   substitution.
@@ -163,3 +164,21 @@ accepted as an M0 capability.
 - Boundary: Research Plan contains verification conditions only and introduces
   no transaction, position, scheduler, or notification behavior.
 - Next: M4 requested-date point-in-time replay and T+5/T+20/T+60 outcomes.
+
+### M4 handoff
+
+- Result: added requested-date historical evaluation backed only by stored
+  Value Hunter point-in-time snapshots and the existing historical market-data
+  loader.
+- Outcome logic: T+5/T+20/T+60 use trading-session offsets from the exact base
+  trade date. Missing base bars, unfinished horizons, and missing snapshots are
+  returned as Data Gap; current candidates and current prices are never used as
+  historical substitutes.
+- UI: date picker, contemporaneous market state/candidates, horizon table, and
+  explicit point-in-time gap messaging are on the existing research page.
+- Tests: three backend tests and two frontend tests passed; Python compile and
+  production frontend build passed.
+- Known data posture: dates such as 2025-04-07 require an archived scan from
+  that date. The local Value Hunter database had no such row during M0/M4, so
+  that date correctly returns Data Gap rather than a reconstructed claim.
+- Next: M5 preview-first Feishu flow with send and scheduler disabled by default.

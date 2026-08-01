@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, BarChart3, BookOpenCheck, DatabaseZap, RefreshCw } from "lucide-react";
 
-import { api, type ResearchMvpCandidate, type ResearchMvpRun } from "@/lib/api";
+import { api, type ResearchMvpCandidate, type ResearchMvpHistoricalEvaluation, type ResearchMvpRun } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const MARKET_TONE: Record<ResearchMvpRun["market_state"], string> = {
@@ -131,6 +131,9 @@ export function InvestmentResearch() {
   const [report, setReport] = useState<ResearchMvpRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [historyDate, setHistoryDate] = useState("2025-04-07");
+  const [history, setHistory] = useState<ResearchMvpHistoricalEvaluation | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const generate = async () => {
     setLoading(true);
@@ -141,6 +144,18 @@ export function InvestmentResearch() {
       setError(err instanceof Error ? err.message : "生成盘后研究失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const evaluateHistory = async () => {
+    setHistoryLoading(true);
+    setError("");
+    try {
+      setHistory(await api.evaluateInvestmentResearchHistory(historyDate));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "历史验证失败");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -213,6 +228,33 @@ export function InvestmentResearch() {
           </section>
         </>
       )}
+
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="font-semibold">历史验证</h2>
+        <p className="mt-1 text-sm text-muted-foreground">仅使用所选日期已保存的时点快照；缺失时不以当前候选回填。</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" />
+          <button type="button" onClick={() => void evaluateHistory()} disabled={historyLoading} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60">
+            {historyLoading ? "验证中" : "查看历史验证"}
+          </button>
+        </div>
+        {history && (
+          <div className="mt-4">
+            <p className="text-sm">当时市场状态：{history.market_state ?? "Data Gap"}</p>
+            {history.data_gaps.length > 0 && <p className="mt-2 text-xs text-amber-700">Data Gap：{history.data_gaps.join("、")}</p>}
+            {history.candidates.length > 0 && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="border-b"><th className="p-2">候选</th><th className="p-2">T+5</th><th className="p-2">T+20</th><th className="p-2">T+60</th></tr></thead>
+                  <tbody>{history.candidates.map((candidate) => (
+                    <tr key={candidate.code} className="border-b"><td className="p-2">{candidate.name} ({candidate.code})</td><td className="p-2">{formatNumber(candidate.t5, "%")}</td><td className="p-2">{formatNumber(candidate.t20, "%")}</td><td className="p-2">{formatNumber(candidate.t60, "%")}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
