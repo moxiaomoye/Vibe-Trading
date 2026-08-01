@@ -30,7 +30,10 @@ const report: ResearchMvpRun = {
     sector: "半导体",
     sector_performance_pct: -8.2,
     selection_reasons: ["距一年高点回撤31.5%"],
+    entry_reasons: { market: ["市场回撤"], company: ["ROE稳定"], valuation: ["历史低分位"] },
     risks: ["盈利持续性仍需验证"],
+    catalysts: ["下一期财报验证"],
+    invalidation: ["现金流持续恶化"],
     data_gaps: ["relative_to_market_pct"],
     score: 81,
     research_status: "A - 深入研究",
@@ -40,6 +43,7 @@ const report: ResearchMvpRun = {
     valuation: { pe_ttm: 28 },
     supporting_evidence: ["距一年高点回撤31.5%"],
     counter_evidence: [],
+    forward_validation: { t5: null, t20: null, t60: null },
     research_plan: {
       observation_conditions: ["收入与利润趋势保持稳定"],
       risk_conditions: ["现金流持续恶化"],
@@ -83,6 +87,8 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("支持证据")).toBeInTheDocument();
     expect(screen.getByText("反方证据")).toBeInTheDocument();
     expect(screen.getByText("Research Plan")).toBeInTheDocument();
+    expect(screen.getByText("催化剂")).toBeInTheDocument();
+    expect(screen.getByText("失效条件")).toBeInTheDocument();
     expect(screen.getByText("观察条件：什么情况下值得进一步关注")).toBeInTheDocument();
     expect(screen.getByText("风险条件：什么情况下判断错误")).toBeInTheDocument();
     expect(screen.getByText("验证条件：未来如何验证判断")).toBeInTheDocument();

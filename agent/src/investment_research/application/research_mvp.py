@@ -31,6 +31,8 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         gaps.append("current_price")
     if observation.relative_to_sector_pct is None:
         gaps.append("relative_to_sector_pct")
+    if not observation.catalyst_evidence:
+        gaps.append("catalyst_evidence")
     for field in (
         "daily_return_pct",
         "return_20d_pct",
@@ -50,6 +52,21 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
         "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。",
     ]
+    market_reasons = [reason for reason in (
+        f"单日涨跌幅{observation.daily_return_pct:.1f}%" if observation.daily_return_pct is not None else None,
+        f"20日相对大盘{observation.relative_to_market_pct:+.1f}%" if observation.relative_to_market_pct is not None else None,
+        f"距一年高点{observation.drawdown_252_pct:.1f}%" if observation.drawdown_252_pct is not None else None,
+    ) if reason]
+    company_reasons = [reason for reason in (
+        f"五年ROE中位数{observation.roe_5y_median_pct:.1f}%" if observation.roe_5y_median_pct is not None else None,
+        f"收入增长{observation.revenue_growth_pct:.1f}%" if observation.revenue_growth_pct is not None else None,
+        f"利润增长{observation.profit_growth_pct:.1f}%" if observation.profit_growth_pct is not None else None,
+    ) if reason]
+    valuation_reasons = [reason for reason in (
+        f"PE(TTM) {observation.pe_ttm:.1f}" if observation.pe_ttm is not None else None,
+        f"PE历史分位{observation.pe_history_percentile:.0%}" if observation.pe_history_percentile is not None else None,
+        f"PE行业分位{observation.pe_industry_percentile:.0%}" if observation.pe_industry_percentile is not None else None,
+    ) if reason]
     return {
         "name": observation.name,
         "code": observation.symbol,
@@ -66,7 +83,14 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         "sector": observation.sector,
         "sector_performance_pct": observation.relative_to_sector_pct,
         "selection_reasons": list(candidate.reasons),
+        "entry_reasons": {
+            "market": market_reasons,
+            "company": company_reasons,
+            "valuation": valuation_reasons,
+        },
         "risks": list(observation.risk_flags) + list(observation.risk_evidence),
+        "catalysts": list(observation.catalyst_evidence),
+        "invalidation": risk_conditions,
         "data_gaps": list(dict.fromkeys(gaps)),
         "score": candidate.score.total,
         "research_status": candidate.status,
@@ -88,6 +112,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         },
         "supporting_evidence": list(candidate.reasons),
         "counter_evidence": list(observation.risk_evidence),
+        "forward_validation": {"t5": None, "t20": None, "t60": None},
         "research_plan": {
             "observation_conditions": observation_conditions,
             "risk_conditions": risk_conditions,

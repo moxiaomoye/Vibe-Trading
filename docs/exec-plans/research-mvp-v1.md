@@ -333,6 +333,7 @@ for the continuation milestones.
 
 #### M7 - Candidate report enrichment
 
+- Status: complete.
 - Add market/company/valuation entry reasons, Evidence, Counter Evidence,
   Risk, Catalyst, Invalidation, current price, valuation position and forward
   validation placeholders to the existing Research Candidate contract/UI.
@@ -494,3 +495,18 @@ for the continuation milestones.
   passed.
 - Next: M7 expose catalyst, invalidation and the enhanced candidate evidence in
   the existing Research Candidate detail card.
+
+### M7 handoff
+
+- Result: the existing Research Candidate payload and expandable detail card
+  now expose market/company/valuation reasons, supporting evidence, counter
+  evidence, risks, catalysts, invalidation and the Research Plan together.
+- Validation posture: T+5/T+20/T+60 placeholders are explicit nulls on the
+  creation-day report; only the historical evaluator may populate matured
+  outcomes. Catalyst absence is a named Data Gap and earns no score.
+- Evidence integrity: entry reasons are formatted only from observed fields;
+  empty sections display Data Gap rather than generated claims.
+- Tests: 20 focused backend tests and three Investment Research UI tests passed;
+  the production TypeScript/Vite build passed.
+- Next: M8 verify fund-specific behavior for every ETF in the personal universe
+  and add the requested broad-market ETF coverage through the same config.

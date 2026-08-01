@@ -459,7 +459,10 @@ export interface ResearchMvpCandidate {
   sector: string;
   sector_performance_pct: number | null;
   selection_reasons: string[];
+  entry_reasons: { market: string[]; company: string[]; valuation: string[] };
   risks: string[];
+  catalysts: string[];
+  invalidation: string[];
   data_gaps: string[];
   score: number;
   research_status: string;
@@ -469,6 +472,7 @@ export interface ResearchMvpCandidate {
   valuation: Record<string, number | null>;
   supporting_evidence: string[];
   counter_evidence: string[];
+  forward_validation: { t5: number | null; t20: number | null; t60: number | null };
   research_plan: {
     observation_conditions: string[];
     risk_conditions: string[];

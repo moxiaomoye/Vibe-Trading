@@ -84,6 +84,15 @@ function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
             <DetailList title="反方证据" items={candidate.counter_evidence} />
             <DetailList title="潜在风险" items={candidate.risks} />
           </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DetailList title="市场原因" items={candidate.entry_reasons.market} />
+            <DetailList title="公司原因" items={candidate.entry_reasons.company} />
+            <DetailList title="估值原因" items={candidate.entry_reasons.valuation} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DetailList title="催化剂" items={candidate.catalysts} />
+            <DetailList title="失效条件" items={candidate.invalidation} />
+          </div>
           <section className="rounded-lg border bg-background p-4">
             <h4 className="font-semibold">Research Plan</h4>
             <div className="mt-3 grid gap-4 lg:grid-cols-3">

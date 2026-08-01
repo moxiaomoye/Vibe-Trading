@@ -46,6 +46,11 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     assert set(body["candidates"][0]["research_plan"]) == {
         "observation_conditions", "risk_conditions", "validation_conditions"
     }
+    assert set(body["candidates"][0]["entry_reasons"]) == {"market", "company", "valuation"}
+    assert body["candidates"][0]["catalysts"]
+    assert body["candidates"][0]["forward_validation"] == {
+        "t5": None, "t20": None, "t60": None,
+    }
     assert service.history(1)[0]["mode"] == "demo"
 
 
