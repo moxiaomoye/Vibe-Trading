@@ -12,9 +12,10 @@ import json
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .models import CandidateObservation, IndexObservation, MarketObservation
 
@@ -27,6 +28,16 @@ class ValueHunterProvider(ABC):
 
     @abstractmethod
     def load_candidates(self) -> list[CandidateObservation]: ...
+
+
+def _latest_complete_weekday(now: datetime | None = None) -> date:
+    current = now or datetime.now(ZoneInfo("Asia/Shanghai"))
+    resolved = current.date()
+    if current.weekday() < 5 and current.time() < time(15, 5):
+        resolved -= timedelta(days=1)
+    while resolved.weekday() >= 5:
+        resolved -= timedelta(days=1)
+    return resolved
 
 
 class DemoProvider(ValueHunterProvider):
@@ -158,15 +169,31 @@ class AkshareProvider(ValueHunterProvider):
         if path is None or not path.exists():
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
+        cached_date = date.fromisoformat(data["as_of"])
+        if cached_date.weekday() >= 5:
+            data["as_of"] = _latest_complete_weekday().isoformat()
         data["indices"] = [IndexObservation(**item) for item in data["indices"]]
         data["warnings"] = list(data.get("warnings", [])) + ["使用当日缓存行情"]
         return MarketObservation(**data)
 
     def _read_candidate_cache(self) -> list[CandidateObservation] | None:
         path = self._cache_path("candidates")
-        if path is None or not path.exists():
+        if path is None:
             return None
-        return [CandidateObservation(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
+        stale_date: str | None = None
+        if not path.exists():
+            available = sorted(path.parent.glob("akshare-candidates-*.json"), reverse=True)
+            if not available:
+                return None
+            path = available[0]
+            stale_date = path.stem.removeprefix("akshare-candidates-")
+        candidates = [CandidateObservation(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
+        if stale_date:
+            for candidate in candidates:
+                candidate.warnings.append(
+                    f"Using latest available candidate cache from {stale_date}; current-day enrichment is a Data Gap."
+                )
+        return candidates
 
     def _write_cache(self, kind: str, value: Any) -> None:
         path = self._cache_path(kind)
@@ -239,7 +266,7 @@ class AkshareProvider(ValueHunterProvider):
             warnings.append(f"市场宽度读取失败: {type(exc).__name__}")
 
         result = MarketObservation(
-            as_of=date.today().isoformat(), indices=observations,
+            as_of=_latest_complete_weekday().isoformat(), indices=observations,
             advancer_ratio=advancer_ratio, above_ma60_ratio=None,
             limit_down_count=limit_down_count, turnover_zscore=None,
             source="AKShare/Eastmoney", coverage=["indices", "spot_breadth"], warnings=warnings,

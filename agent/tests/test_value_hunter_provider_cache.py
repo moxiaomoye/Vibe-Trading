@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
-from src.value_hunter.providers import AkshareProvider
+from src.value_hunter.providers import AkshareProvider, _latest_complete_weekday
 
 
 def test_akshare_daily_cache_round_trip(tmp_path):
@@ -37,6 +40,27 @@ def test_akshare_daily_cache_round_trip(tmp_path):
     assert "使用当日缓存行情" in loaded_market.warnings
     assert loaded_candidates is not None
     assert loaded_candidates[0].pe_ttm == 35.0
+
+
+def test_candidate_cache_uses_latest_available_file_and_marks_staleness(tmp_path) -> None:
+    cache = tmp_path / "akshare-candidates-2026-07-22.json"
+    cache.write_text(
+        '[{"symbol":"688981","name":"SMIC","sector":"Semiconductor","theme":"Foundry"}]',
+        encoding="utf-8",
+    )
+    provider = AkshareProvider(cache_dir=tmp_path)
+
+    candidates = provider._read_candidate_cache()
+
+    assert candidates is not None
+    assert candidates[0].symbol == "688981"
+    assert "2026-07-22" in candidates[0].warnings[0]
+
+
+def test_latest_complete_weekday_skips_weekend_and_pre_close_session() -> None:
+    timezone = ZoneInfo("Asia/Shanghai")
+    assert _latest_complete_weekday(datetime(2026, 8, 1, 16, 0, tzinfo=timezone)).isoformat() == "2026-07-31"
+    assert _latest_complete_weekday(datetime(2026, 7, 31, 14, 0, tzinfo=timezone)).isoformat() == "2026-07-30"
 
 
 def test_announcement_classifier_marks_severe_and_soft_risks():

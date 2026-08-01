@@ -34,7 +34,7 @@ class ValueHunterService:
         self.notifier = notifier or NotificationSender(self.config)
         self._lock = threading.Lock()
 
-    def run(self, *, notify: bool = True) -> ScanResult:
+    def run(self, *, notify: bool = True, include_incomplete: bool = False) -> ScanResult:
         if not self._lock.acquire(blocking=False):
             raise RuntimeError("Value Hunter扫描正在运行")
         try:
@@ -47,9 +47,11 @@ class ValueHunterService:
                 and not item.missing_fields
                 and item.score.total >= self.config.candidate_alert_score
             ]
+            if include_incomplete:
+                eligible = [item for item in scored if item.status != "Reject"]
             eligible.sort(key=lambda item: item.score.total, reverse=True)
             selected = eligible[: self.config.max_candidates]
-            required = market.score >= self.config.market_alert_score and bool(selected)
+            required = not include_incomplete and market.score >= self.config.market_alert_score and bool(selected)
             reason = (
                 f"市场{market.score:.1f}分且{len(selected)}家公司达到研究门槛"
                 if required else "市场或候选未同时达到通知门槛"

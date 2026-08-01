@@ -80,7 +80,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
 
 def build_research_run(service: ValueHunterService) -> dict[str, Any]:
     """Run the existing scanner once with notifications disabled and adapt it."""
-    scan: ScanResult = service.run(notify=False)
+    scan: ScanResult = service.run(notify=False, include_incomplete=True)
     observation = scan.market.observation
     gaps = list(observation.warnings)
     summary_fields = {
@@ -96,6 +96,8 @@ def build_research_run(service: ValueHunterService) -> dict[str, Any]:
         if summary_fields[field] is None:
             gaps.append(f"market_summary.{field}")
     candidates = [_candidate_payload(item) for item in scan.candidates[:5]]
+    for item in scan.candidates[:5]:
+        gaps.extend(item.observation.warnings)
     if not candidates:
         gaps.append("No candidate met the existing Value Hunter research threshold.")
     return {

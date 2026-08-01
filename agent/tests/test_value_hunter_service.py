@@ -121,3 +121,13 @@ def test_status_exposes_missing_notification_configuration(tmp_path):
     status = service.status()
     assert status["notification_ready"] is False
     assert "VALUE_HUNTER_FEISHU_WEBHOOK" in status["missing_notification_settings"]
+
+
+def test_research_queue_can_include_incomplete_candidates_without_notification(tmp_path):
+    cfg = config(tmp_path, candidate_alert_score=100)
+    service = ValueHunterService(cfg, DemoProvider(), ValueHunterStore(cfg.database_path))
+
+    result = service.run(notify=False, include_incomplete=True)
+
+    assert len(result.candidates) == 3
+    assert result.notification_required is False

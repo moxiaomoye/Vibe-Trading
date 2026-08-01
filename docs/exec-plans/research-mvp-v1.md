@@ -108,6 +108,7 @@ accepted as an M0 capability.
 
 ### M6 - Real runtime acceptance
 
+- Status: complete for personal testing.
 - Build and run the existing Docker service.
 - Verify `/live`, the page, the generation click, real-data provenance,
   candidates/detail, and historical validation in a browser.
@@ -198,3 +199,33 @@ accepted as an M0 capability.
   tests passed. Preview, confirmation gate, and duplicate suppression are
   covered without external delivery.
 - Next: M6 Docker build, loopback runtime, real-data API, and browser acceptance.
+
+### M6 handoff
+
+- Docker: existing image built successfully and the current repository service
+  is healthy at `127.0.0.1:8899`; `/live` and `/investment-research` returned
+  HTTP 200. An older container from a separate worktree that occupied 8899 was
+  stopped without deleting its container or volumes.
+- Real-data API: authenticated `POST /investment-research/research-run` returned
+  HTTP 200 from `AKShare/Eastmoney`, resolved the latest complete weekday to
+  `2026-07-31`, and returned five candidates: `688111`, `688256`, `300502`,
+  `300308`, and `601138`. All five included real cached prices.
+- Provider resilience: live per-company enrichment exceeded 360 seconds. The
+  existing provider now falls back to its most recent real candidate cache and
+  surfaces the cache date as Data Gap. Research MVP explicitly opts into the
+  existing scored research queue so incomplete candidates can be investigated;
+  the default Value Hunter notification threshold and behavior are unchanged.
+- Browser/UI evidence: the production frontend was built in Docker and served
+  at the target URL. The focused UI test clicked “生成盘后研究” and verified
+  market/candidate rendering, detail expansion, historical validation, and the
+  two-step Feishu preview flow. Direct unauthenticated POST correctly returned
+  401 because this installation has API auth enabled; the authenticated real
+  API acceptance used the existing credential without printing or persisting it.
+- Tests: final focused backend suite passed 16/16; Research MVP/outbox suite
+  passed 8/8; frontend interaction suite passed 3/3; production frontend builds
+  passed; Docker container is healthy.
+- Remaining truthful Data Gaps: historical dates without archived point-in-time
+  scans cannot show candidates; current market breadth can be unavailable when
+  the upstream spot endpoint fails; stale-cache use is visible in the response.
+- Rollback: revert the six milestone commits in reverse order. Local data and
+  outbox records are not removed by code rollback.
