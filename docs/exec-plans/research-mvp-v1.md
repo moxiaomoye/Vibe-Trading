@@ -229,3 +229,145 @@ accepted as an M0 capability.
   the upstream spot endpoint fails; stale-cache use is visible in the response.
 - Rollback: revert the six milestone commits in reverse order. Local data and
   outbox records are not removed by code rollback.
+
+## Personal Research Assistant continuation (2026-08-01)
+
+### Product decision
+
+Continue from Research MVP V1 as one **Panic Value Hunter** workflow. The
+existing Investment Research API/page remains the product entry, Value Hunter
+remains the scanner/scorer, the existing market-data loader registry remains
+the source adapter layer, and the existing Investment Research repositories,
+Historical Evaluation, Daily Pipeline, and Notification Outbox remain the
+storage and delivery boundaries. No parallel research mode, database, page,
+notification transport, scheduler, or execution path will be introduced.
+
+The maximum outputs are `Research Candidate`, `Action Level`, and
+`Daily Intelligence`. Candidate labels must not use Buy, Sell, Strong Buy,
+position sizing, stop-loss instructions, or order-execution language.
+
+### M0 refreshed capability audit
+
+| Area | Reusable implementation | Verified gap / next decision |
+| --- | --- | --- |
+| Unified product entry | `POST /investment-research/research-run`, `frontend/src/pages/InvestmentResearch.tsx` | Keep this as the sole user-facing run path. |
+| Daily orchestration | `investment_research/application/daily_pipeline.py` and existing repositories | Connect enriched snapshot/candidate records here; do not create a second daily service. |
+| OHLCV provider registry | `src/market_data.py`, `backtest/loaders/registry.py`, Tushare/AKShare/Tencent loaders | Already supports fallback and Tushare stock/fund/index routing, but Value Hunter bypasses it. Introduce one Value Hunter-facing provider contract over this registry. |
+| Current Value Hunter provider | `value_hunter/providers.py` | AKShare-specific market and issuer calls are coupled in one class. ETF codes are sent to stock-only endpoints and degrade to Data Gap. |
+| Market snapshot | `MarketObservation`, `AkshareProvider.load_market`, `score_market` | Index moves, breadth, up/down and limit counts exist. Total turnover is absent and breadth can be lost when the spot endpoint fails. |
+| Candidate observation | `CandidateObservation`, `score_candidate` | Current price, 252-day drawdown and some fundamentals exist. Daily/20-day/60-day returns, volume change, benchmark-relative strength, explicit security type and catalyst fields are absent. |
+| Tushare support | Existing token settings, `backtest/loaders/tushare.py`, Tushare fundamentals provider | Token is optional and loader routing already distinguishes stock, fund, index and HK symbols. Research scanning does not yet prefer it. |
+| Watchlist | `agent/value_hunter_watchlist.csv`, `VALUE_HUNTER_WATCHLIST_PATH` | The personal nine-security universe is active and cache identity is protected. Add security type and optional full-market-plus-watchlist scope without a new store. |
+| Scoring | `value_hunter/scoring.py` | Existing five components do not match the single requested 30/30/20/10/10 Panic Value Hunter weighting and are hard-coded. |
+| Candidate report | `research_mvp._candidate_payload`, existing candidate detail UI | Evidence, counter evidence, risk and research plan exist. Catalyst, invalidation, period returns, valuation position provenance and clearer market/company/valuation reasons are missing. |
+| Historical evaluation | Stored Value Hunter point-in-time scans plus `build_historical_evaluation` | T+5/T+20/T+60 returns exist. Maximum drawdown, benchmark excess return, outcome classification and automatic matured-horizon refresh are missing. Missing snapshots must remain Data Gap. |
+| Notifications | Existing Investment Research outbox and Feishu preview/confirmation | Preserve preview-only defaults. Add PANIC/EXTREME_PANIC plus high-quality-candidate eligibility before enqueue; no network send during implementation. |
+| Date safety | Latest-complete-session resolution and stored-snapshot-only replay | Preserve strict point-in-time reads and never reconstruct a past candidate set from current fundamentals. |
+
+### Working-tree boundary at refreshed M0
+
+`main` is the only local development line. GitHub, remote pushes, and pull
+requests are out of scope. Existing uncommitted files remain user-owned. The
+uncommitted `trial-daily-watchlist` route/module is specifically excluded from
+the implementation because it duplicates the research path, hard-codes a
+second watchlist, contains mojibake, and uses entry-zone/build-position
+language outside the product boundary. It remains unstaged and is not a source
+for the continuation milestones.
+
+### Continuation milestones
+
+#### M0 - Refreshed audit
+
+- Status: complete.
+- Confirm current local Git state, existing modules, provider paths, tests,
+  runtime, and product boundaries.
+- Deliverable: this continuation audit and milestone handoff.
+
+#### M1 - Real-data observation contract
+
+- Define the normalized market/security observation required by the existing
+  scanner: source/as-of/provenance, security type, OHLCV-derived changes,
+  breadth, turnover, fundamentals, valuation and explicit field-level gaps.
+- Adapt existing loaders; business/scoring code receives observations only.
+- Preserve the current Research MVP response while adding fields compatibly.
+
+#### M2 - Tushare-first provider
+
+- Add a Value Hunter provider implementation/facade that prefers Tushare when
+  a usable token exists, then AKShare, then existing public loader fallbacks.
+- Reuse existing Tushare stock/fund/index loaders and fundamentals provider.
+- Record actual source per field; provider failures become Data Gap.
+
+#### M3 - Complete market snapshot
+
+- Populate index moves, A-share advancers/decliners, limit up/down, turnover,
+  breadth and panic reasons for the latest complete trade date.
+- Never combine mismatched trade dates without surfacing a gap.
+
+#### M4 - Single Panic Value Hunter score
+
+- Replace the current research rank with one configurable score:
+  mispricing 30%, quality 30%, valuation 20%, relative strength 10%,
+  catalyst 10%.
+- Market panic is a gate/context, not a second strategy mode.
+
+#### M5 - Configuration
+
+- Add one versioned `config/panic_value_config.yaml` with current-compatible
+  defaults for panic gates, filters and score weights.
+- Validate weights and thresholds at startup; invalid configuration fails
+  clearly rather than silently changing the method.
+
+#### M6 - Watchlist scope
+
+- Extend the existing watchlist loader to support A-share and ETF entries plus
+  `full_market + watchlist` scope using one configuration surface.
+- Migrate the existing nine-security personal list without creating a second
+  store or losing cache identity checks.
+
+#### M7 - Candidate report enrichment
+
+- Add market/company/valuation entry reasons, Evidence, Counter Evidence,
+  Risk, Catalyst, Invalidation, current price, valuation position and forward
+  validation placeholders to the existing Research Candidate contract/UI.
+
+#### M8 - ETF support
+
+- Use fund-specific OHLCV and metadata paths; do not call issuer-only financial
+  endpoints for ETFs. ETF quality/valuation fields use fund/index evidence or
+  remain explicit Data Gap.
+- Include the requested major broad-market ETF coverage through the same
+  watchlist/provider contract.
+
+#### M9 - Historical validation enrichment
+
+- Persist immutable candidate snapshots through the existing repository path.
+- Calculate matured T+5/T+20/T+60 return, maximum drawdown and benchmark excess
+  return; classify each horizon as correct, incorrect or uncertain using
+  versioned rules and point-in-time data only.
+
+#### M10 - Notification eligibility
+
+- Reuse Notification Outbox and require PANIC/EXTREME_PANIC plus at least one
+  high-quality candidate before preview/enqueue eligibility.
+- Keep send and scheduler disabled throughout tests and personal acceptance.
+
+#### M11 - Local acceptance
+
+- Run focused and regression tests, production frontend build, Docker runtime,
+  authenticated real-data API checks and browser interaction at
+  `127.0.0.1:8899/investment-research`.
+- Verify current date and an archived historical date, including honest Data
+  Gap behavior where a point-in-time snapshot does not exist.
+
+### Refreshed M0 handoff
+
+- Branch/HEAD at audit: local `main` at `6662aa8`.
+- Existing working-tree changes were inspected and left unstaged.
+- Primary architectural move: make Value Hunter consume the existing loader
+  registry through one normalized observation contract; do not replace either
+  subsystem.
+- First implementation target: M1 observation contracts and adapter tests,
+  followed by M2 Tushare-first routing.
+- Stop conditions remain external data entitlement/token limits, product-boundary
+  changes, schema migration, notification send activation, or trade execution.
