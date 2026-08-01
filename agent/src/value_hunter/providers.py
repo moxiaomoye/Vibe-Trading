@@ -250,6 +250,34 @@ def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
     return result
 
 
+def load_watchlist(path: Path) -> list[CandidateObservation]:
+    """Load the existing research universe from CSV or the concise YAML form."""
+    if path.suffix.lower() not in {".yaml", ".yml"}:
+        return load_watchlist_csv(path)
+    import yaml
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if raw.get("scope", "watchlist") != "watchlist":
+        raise ValueError("Only the single watchlist research scope is supported")
+    rows = [*(raw.get("stocks") or []), *(raw.get("etfs") or [])]
+    result: list[CandidateObservation] = []
+    seen: set[str] = set()
+    for row in rows:
+        symbol = str(row.get("symbol", "")).strip()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        result.append(CandidateObservation(
+            symbol=symbol,
+            name=str(row.get("name", symbol)).strip(),
+            sector=str(row.get("sector", "Data Gap")).strip(),
+            theme=str(row.get("theme", "Data Gap")).strip(),
+            security_type=security_type_for_symbol(symbol),
+            source_fields=["watchlist_yaml"],
+        ))
+    return result
+
+
 class AkshareProvider(ValueHunterProvider):
     name = "akshare"
 
@@ -299,7 +327,7 @@ class AkshareProvider(ValueHunterProvider):
         candidates = [CandidateObservation(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
         if self.watchlist_path and self.watchlist_path.exists():
             expected_symbols = {
-                candidate.symbol for candidate in load_watchlist_csv(self.watchlist_path)
+                candidate.symbol for candidate in load_watchlist(self.watchlist_path)
             }
             cached_symbols = {candidate.symbol for candidate in candidates}
             if cached_symbols != expected_symbols or any(
@@ -425,7 +453,7 @@ class AkshareProvider(ValueHunterProvider):
 
     def _base_watchlist(self) -> list[CandidateObservation]:
         if self.watchlist_path and self.watchlist_path.exists():
-            return load_watchlist_csv(self.watchlist_path)
+            return load_watchlist(self.watchlist_path)
         return [CandidateObservation(code, name, sector, theme) for code, name, sector, theme in _DEFAULT_TECH_WATCHLIST]
 
     def load_candidates(self) -> list[CandidateObservation]:

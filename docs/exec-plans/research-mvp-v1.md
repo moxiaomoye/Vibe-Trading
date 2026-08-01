@@ -325,6 +325,7 @@ for the continuation milestones.
 
 #### M6 - Watchlist scope
 
+- Status: complete.
 - Extend the existing watchlist loader to support A-share and ETF entries plus
   `full_market + watchlist` scope using one configuration surface.
 - Migrate the existing nine-security personal list without creating a second
@@ -475,3 +476,21 @@ for the continuation milestones.
 - Tests: 19 focused configuration, scoring and service tests passed.
 - Next: M6 consolidate stock and ETF watchlists on this existing loader and
   preserve the user's nine-security scope.
+
+### M6 handoff
+
+- Result: the existing provider watchlist loader accepts both the legacy CSV
+  and one concise YAML file; no second scanner, store or candidate path exists.
+- Personal universe: `config/watchlist.yaml` contains exactly the requested
+  nine securities, separated only for editing clarity into four stocks and five
+  ETFs. Runtime candidates still enter the same normalized observation flow.
+- Scope: `watchlist` is the sole active research scope, matching the user's
+  instruction to focus future research on these securities. Unsupported scope
+  values fail clearly instead of silently launching a full-market scan.
+- Compatibility: an explicit `VALUE_HUNTER_WATCHLIST_PATH` still wins. Without
+  it, the versioned YAML becomes the default; cache identity checks use the same
+  loader and invalidate stale universes.
+- Tests: 25 focused watchlist, provider, config, service and Research MVP tests
+  passed.
+- Next: M7 expose catalyst, invalidation and the enhanced candidate evidence in
+  the existing Research Candidate detail card.

@@ -1,0 +1,42 @@
+version: 1
+scope: watchlist
+
+etfs:
+  - symbol: "588060"
+    name: 科创50ETF
+    sector: 科创板宽基
+    theme: 科创50
+  - symbol: "588170"
+    name: 科创板半导体材料设备ETF
+    sector: 半导体
+    theme: 半导体材料设备
+  - symbol: "588200"
+    name: 科创芯片ETF
+    sector: 半导体
+    theme: 科创芯片
+  - symbol: "159941"
+    name: 纳斯达克100ETF(QDII)
+    sector: 海外科技
+    theme: 纳斯达克100
+  - symbol: "159516"
+    name: 半导体材料设备ETF
+    sector: 半导体
+    theme: 半导体材料设备
+
+stocks:
+  - symbol: "000791"
+    name: 甘肃能源
+    sector: 电力
+    theme: 水电与新能源
+  - symbol: "002261"
+    name: 拓维信息
+    sector: 软件与信息技术服务
+    theme: 人工智能与国产算力
+  - symbol: "601991"
+    name: 大唐发电
+    sector: 电力
+    theme: 火电与新能源
+  - symbol: "600522"
+    name: 中天科技
+    sector: 通信设备
+    theme: 海缆与光通信

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -11,6 +12,7 @@ from src.value_hunter.providers import (
     AkshareProvider,
     _frame_on_or_before,
     _latest_complete_weekday,
+    load_watchlist,
 )
 from src.value_hunter.providers import normalize_ashare_symbol, security_type_for_symbol
 
@@ -133,6 +135,18 @@ def test_symbol_normalization_and_security_type() -> None:
     assert normalize_ashare_symbol("588060") == "588060.SH"
     assert security_type_for_symbol("588060") == "etf"
     assert security_type_for_symbol("600522") == "stock"
+
+
+def test_yaml_watchlist_keeps_the_personal_stock_and_etf_universe() -> None:
+    path = Path(__file__).resolve().parents[2] / "config" / "watchlist.yaml"
+
+    candidates = load_watchlist(path)
+
+    assert [item.symbol for item in candidates] == [
+        "000791", "002261", "601991", "600522",
+        "588060", "588170", "588200", "159941", "159516",
+    ]
+    assert {item.security_type for item in candidates} == {"stock", "etf"}
 
 
 def test_latest_complete_weekday_skips_weekend_and_pre_close_session() -> None:

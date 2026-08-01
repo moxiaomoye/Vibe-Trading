@@ -110,6 +110,7 @@ class ValueHunterConfig:
         root = get_runtime_root() / "value-hunter"
         db_value = os.getenv("VALUE_HUNTER_DB_PATH", "").strip()
         watchlist = os.getenv("VALUE_HUNTER_WATCHLIST_PATH", "").strip()
+        default_watchlist = Path(__file__).resolve().parents[3] / "config" / "watchlist.yaml"
         return cls(
             enabled=_bool("VALUE_HUNTER_ENABLED"),
             provider=os.getenv("VALUE_HUNTER_PROVIDER", "akshare").strip().lower(),
@@ -119,7 +120,11 @@ class ValueHunterConfig:
             candidate_alert_score=_float("VALUE_HUNTER_CANDIDATE_ALERT_SCORE", 75.0),
             max_candidates=max(1, _int("VALUE_HUNTER_MAX_CANDIDATES", 5)),
             database_path=Path(db_value) if db_value else root / "value_hunter.sqlite3",
-            watchlist_path=Path(watchlist) if watchlist else None,
+            watchlist_path=(
+                Path(watchlist) if watchlist
+                else default_watchlist if default_watchlist.exists()
+                else None
+            ),
             feishu_webhook_url=os.getenv("VALUE_HUNTER_FEISHU_WEBHOOK", "").strip(),
             smtp_host=os.getenv("VALUE_HUNTER_SMTP_HOST", "").strip(),
             smtp_port=_int("VALUE_HUNTER_SMTP_PORT", 465),
