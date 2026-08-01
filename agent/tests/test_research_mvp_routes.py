@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from src.api import research_mvp_routes
 from src.investment_research.application.research_mvp import build_historical_evaluation
@@ -94,15 +95,33 @@ def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) 
 
 def test_feishu_preview_defaults_to_no_send_and_confirmation_queues_once(tmp_path) -> None:
     repository = SQLiteOperationsRepository(tmp_path / "outbox.sqlite3")
-    report = {"trade_date": "2026-07-24", "market_state": "PANIC", "market_summary": {}, "candidates": []}
+    report = {
+        "trade_date": "2026-07-24", "market_state": "PANIC", "market_summary": {},
+        "candidates": [{"score": 82, "research_status": "A - 深入研究"}],
+    }
 
     preview = prepare_feishu_delivery(report, repository)
     assert preview["status"] == "preview"
     assert preview["send"] is False
     assert preview["scheduler"] is False
+    assert preview["eligible"] is True
 
     queued = prepare_feishu_delivery(report, repository, send=True, confirmed=True)
     duplicate = prepare_feishu_delivery(report, repository, send=True, confirmed=True)
     assert queued["status"] == "queued"
     assert duplicate["status"] == "already_queued"
     assert repository.get_message(queued["message_id"]).body == preview["preview"]
+
+
+def test_feishu_confirmation_rejects_non_panic_or_low_quality_report(tmp_path) -> None:
+    repository = SQLiteOperationsRepository(tmp_path / "outbox.sqlite3")
+    report = {
+        "trade_date": "2026-07-24", "market_state": "NORMAL", "market_summary": {},
+        "candidates": [{"score": 90, "research_status": "A - 深入研究"}],
+    }
+
+    preview = prepare_feishu_delivery(report, repository)
+
+    assert preview["eligible"] is False
+    with pytest.raises(ValueError, match="PANIC"):
+        prepare_feishu_delivery(report, repository, send=True, confirmed=True)

@@ -328,17 +328,30 @@ def prepare_feishu_delivery(
     confirmed: bool = False,
 ) -> dict[str, Any]:
     preview = render_feishu_preview(report)
+    eligible = (
+        report.get("market_state") in {"PANIC", "EXTREME_PANIC"}
+        and any(
+            float(candidate.get("score", 0.0)) >= 75
+            and str(candidate.get("research_status", "")).startswith(("A", "B"))
+            for candidate in report.get("candidates", [])
+        )
+    )
     result: dict[str, Any] = {
         "preview": preview,
         "send": send,
         "confirmed": confirmed,
         "scheduler": False,
         "status": "preview",
+        "eligible": eligible,
     }
     if not send:
         return result
     if not confirmed:
         raise ValueError("confirmed=true is required when send=true")
+    if not eligible:
+        raise ValueError(
+            "Feishu outbox requires PANIC/EXTREME_PANIC and a high-quality candidate"
+        )
     now = datetime.now(timezone.utc)
     trade_date = str(report.get("trade_date", "unknown"))
     key = f"research-mvp:{trade_date}:feishu"

@@ -527,6 +527,7 @@ export interface ResearchMvpFeishuPreview {
   confirmed: boolean;
   scheduler: false;
   status: "preview" | "queued" | "already_queued";
+  eligible: boolean;
   message_id?: string;
 }
 

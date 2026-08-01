@@ -54,7 +54,7 @@ class ValueHunterService:
                 eligible = [item for item in scored if item.status != "Reject"]
             eligible.sort(key=lambda item: item.score.total, reverse=True)
             selected = eligible[: self.config.max_candidates]
-            required = not include_incomplete and market.score >= self.config.market_alert_score and bool(selected)
+            required = not include_incomplete and market.score >= 70.0 and bool(selected)
             reason = (
                 f"市场{market.score:.1f}分且{len(selected)}家公司达到研究门槛"
                 if required else "市场或候选未同时达到通知门槛"

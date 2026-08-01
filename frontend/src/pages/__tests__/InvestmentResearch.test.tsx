@@ -72,8 +72,8 @@ describe("InvestmentResearch page", () => {
     });
     apiMock.previewInvestmentResearchFeishu.mockReset();
     apiMock.previewInvestmentResearchFeishu
-      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: false, confirmed: false, scheduler: false, status: "preview" })
-      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "queued", message_id: "message-1" });
+      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: false, confirmed: false, scheduler: false, status: "preview", eligible: true })
+      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "queued", message_id: "message-1", eligible: true });
   });
 
   it("calls the real Research MVP API only after the user generates a report", async () => {

@@ -357,6 +357,7 @@ for the continuation milestones.
 
 #### M10 - Notification eligibility
 
+- Status: complete.
 - Reuse Notification Outbox and require PANIC/EXTREME_PANIC plus at least one
   high-quality candidate before preview/enqueue eligibility.
 - Keep send and scheduler disabled throughout tests and personal acceptance.
@@ -546,3 +547,18 @@ for the continuation milestones.
   TypeScript/Vite build passed.
 - Next: M10 restrict notification eligibility to PANIC/EXTREME_PANIC plus a
   high-quality candidate while keeping preview and scheduler defaults off.
+
+### M10 handoff
+
+- Result: both the Value Hunter notification decision and the Investment
+  Research Feishu confirmation require PANIC/EXTREME_PANIC plus a selected
+  high-quality A/B research candidate.
+- Preview safety: preview remains available with `send=false` and
+  `scheduler=false`. Ineligible reports explain the gate and do not expose the
+  outbox confirmation action.
+- Delivery safety: confirmation only writes to the existing Notification Outbox;
+  no network send or scheduler was enabled or exercised.
+- Tests: 17 notification, outbox, service and Research MVP backend tests and
+  three UI tests passed; the production TypeScript/Vite build passed.
+- Next: M11 run the full regression, rebuild/recreate Docker, perform an
+  authenticated real-data API run and verify the browser interaction.

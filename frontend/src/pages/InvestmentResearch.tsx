@@ -259,7 +259,8 @@ export function InvestmentResearch() {
             {feishu && (
               <div className="mt-3 space-y-3">
                 <pre className="whitespace-pre-wrap rounded-lg bg-muted p-4 text-xs">{feishu.preview}</pre>
-                {feishu.status === "preview" && <button type="button" onClick={() => void confirmFeishu()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">确认加入飞书发件箱</button>}
+                {feishu.status === "preview" && feishu.eligible && <button type="button" onClick={() => void confirmFeishu()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">确认加入飞书发件箱</button>}
+                {feishu.status === "preview" && !feishu.eligible && <p className="text-xs text-muted-foreground">仅 PANIC/EXTREME_PANIC 且存在高质量候选时可加入发件箱。</p>}
                 {feishu.status !== "preview" && <p className="text-sm text-emerald-700">飞书状态：{feishu.status}</p>}
               </div>
             )}
