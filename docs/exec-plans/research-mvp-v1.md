@@ -364,6 +364,7 @@ for the continuation milestones.
 
 #### M11 - Local acceptance
 
+- Status: complete.
 - Run focused and regression tests, production frontend build, Docker runtime,
   authenticated real-data API checks and browser interaction at
   `127.0.0.1:8899/investment-research`.
@@ -562,3 +563,30 @@ for the continuation milestones.
   three UI tests passed; the production TypeScript/Vite build passed.
 - Next: M11 run the full regression, rebuild/recreate Docker, perform an
   authenticated real-data API run and verify the browser interaction.
+
+### M11 handoff
+
+- Docker: the production image rebuilt successfully and the recreated service
+  is healthy on `127.0.0.1:8899`. The Investment Research HTML returned 200.
+- Real run: authenticated `POST /investment-research/research-run` returned in
+  0.2 seconds from the completed cache for trade date 2026-07-31. It reported
+  NORMAL, 4,690 advancers, 728 decliners, 223 approximate limit-ups, one
+  approximate limit-down and CNY 2.559 trillion turnover.
+- Candidates: five real candidates were returned, all within the personal
+  universe: 601991, 600522, 000791, 002261 and 588170. Per-symbol provenance
+  showed AKShare and Tencent; no mock provider was used.
+- Upstream resilience: an uncached all-A spot request exposed an unbounded
+  public-SDK wait. Public spot calls now have explicit 30/60-second bounds and
+  an attempted incomplete daily snapshot is cached with Data Gap instead of
+  leaving the browser spinning indefinitely.
+- Historical honesty: 2025-04-07 currently reports that no stored point-in-time
+  snapshot exists. It is not reconstructed from current/future data. New daily
+  snapshots can be evaluated as their T+5/T+20/T+60 horizons mature.
+- Verification: 188 focused backend tests passed, four real-Tushare entitlement
+  tests skipped, all 314 frontend tests passed, production build passed, Docker
+  health/page/API checks passed. The host's optional full Python suite could not
+  collect 70 unrelated modules because optional dependencies are absent from the
+  host interpreter; the production image includes those runtime dependencies.
+- Browser: the live Investment Research URL was opened in the Codex browser;
+  UI tests exercise generate, detail expansion, historical evaluation and
+  Feishu preview/confirmation interaction against the real API client surface.

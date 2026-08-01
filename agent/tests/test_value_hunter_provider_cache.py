@@ -5,12 +5,14 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import pytest
 
 from src.value_hunter import providers as provider_module
 from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
 from src.value_hunter.providers import (
     AkshareProvider,
     _frame_on_or_before,
+    _call_with_timeout,
     _latest_complete_weekday,
     load_watchlist,
 )
@@ -28,6 +30,10 @@ def test_akshare_daily_cache_round_trip(tmp_path):
         turnover_zscore=None,
         source="test",
         coverage=["indices", "spot_breadth"],
+        advancer_count=100,
+        decliner_count=300,
+        limit_up_count=5,
+        turnover_amount=1_000_000_000.0,
     )
     candidates = [
         CandidateObservation(
@@ -50,6 +56,27 @@ def test_akshare_daily_cache_round_trip(tmp_path):
     assert "使用当日缓存行情" in loaded_market.warnings
     assert loaded_candidates is not None
     assert loaded_candidates[0].pe_ttm == 35.0
+
+
+def test_incomplete_legacy_market_cache_is_invalidated(tmp_path) -> None:
+    provider = AkshareProvider(cache_dir=tmp_path)
+    path = provider._cache_path("market")
+    assert path is not None
+    path.write_text(
+        '{"as_of":"2026-07-31","indices":[],"advancer_ratio":null,'
+        '"above_ma60_ratio":null,"limit_down_count":null,"turnover_zscore":null,'
+        '"source":"legacy"}',
+        encoding="utf-8",
+    )
+
+    assert provider._read_market_cache() is None
+
+
+def test_public_provider_call_has_a_bounded_timeout() -> None:
+    from time import sleep
+
+    with pytest.raises(TimeoutError, match="exceeded"):
+        _call_with_timeout(lambda: sleep(0.05), 0.001)
 
 
 def test_candidate_cache_uses_latest_available_file_and_marks_staleness(tmp_path) -> None:

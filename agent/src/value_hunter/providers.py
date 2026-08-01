@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import json
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -35,6 +35,19 @@ RESEARCH_MARKET_DATA_FALLBACK_CHAIN: tuple[str, ...] = (
     "baostock",
     "local",
 )
+
+
+def _call_with_timeout(call: Callable[[], Any], seconds: float) -> Any:
+    """Bound a public SDK call so one upstream cannot block the UI forever."""
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-provider-timeout")
+    future = pool.submit(call)
+    try:
+        return future.result(timeout=seconds)
+    except FutureTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(f"public market data call exceeded {seconds:g}s") from exc
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 class ValueHunterProvider(ABC):
@@ -306,6 +319,12 @@ class AkshareProvider(ValueHunterProvider):
         if path is None or not path.exists():
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
+        required_summary = (
+            "advancer_count", "decliner_count", "limit_up_count",
+            "limit_down_count", "advancer_ratio", "turnover_amount",
+        )
+        if any(field not in data for field in required_summary):
+            return None
         cached_date = date.fromisoformat(data["as_of"])
         if cached_date.weekday() >= 5:
             data["as_of"] = _latest_complete_weekday().isoformat()
@@ -415,11 +434,11 @@ class AkshareProvider(ValueHunterProvider):
             if current.weekday() < 5 and current.time() < time(15, 5):
                 raise RuntimeError("current A-share session is not complete")
             try:
-                spot = ak.stock_zh_a_spot_em()
+                spot = _call_with_timeout(ak.stock_zh_a_spot_em, 30)
             except Exception:
                 # Sina's paginated endpoint is slower but independent of the
                 # Eastmoney route and supplies the breadth fields we need.
-                spot = ak.stock_zh_a_spot()
+                spot = _call_with_timeout(ak.stock_zh_a_spot, 60)
                 warnings.append("市场宽度使用新浪备用行情（读取较慢）")
             changes = spot["涨跌幅"].astype(float)
             advancer_count = int((changes > 0).sum())
