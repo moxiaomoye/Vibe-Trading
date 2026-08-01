@@ -473,6 +473,27 @@ export interface ResearchMvpCandidate {
   quality: Record<string, number | null>;
   financials: Record<string, number | null>;
   valuation: Record<string, number | null>;
+  etf_valuation: null | {
+    latest_nav: number | null;
+    nav_as_of: string | null;
+    nav_market_price: number | null;
+    nav_premium_pct: number | null;
+    nav_source: string | null;
+    premium_reliability: string | null;
+    reasonable_price_low: number | null;
+    reasonable_price_high: number | null;
+    bargain_price_low: number | null;
+    bargain_price_high: number | null;
+    deep_value_below: number | null;
+    historical_price_percentile: number | null;
+    underlying_valuation_premium_pct: number | null;
+    valuation_state: string | null;
+    valuation_method: string | null;
+    confidence: string | null;
+    price_as_of: string | null;
+    price_source: string | null;
+    history_sessions: number | null;
+  };
   supporting_evidence: string[];
   counter_evidence: string[];
   forward_validation: { t5: number | null; t20: number | null; t60: number | null };

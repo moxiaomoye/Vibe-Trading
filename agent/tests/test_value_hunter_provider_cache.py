@@ -11,6 +11,7 @@ from src.value_hunter import providers as provider_module
 from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
 from src.value_hunter.providers import (
     AkshareProvider,
+    _etf_price_bands,
     _frame_on_or_before,
     _call_with_timeout,
     _latest_complete_weekday,
@@ -154,6 +155,43 @@ def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> No
     assert candidates[0].market_data_source == "tushare"
     assert candidates[1].market_data_source == "akshare"
     assert "market_data_registry_ohlcv" in candidates[0].source_fields
+
+
+def test_etf_price_bands_are_derived_from_observed_history() -> None:
+    bands = _etf_price_bands([1.0 + index / 1000 for index in range(252)])
+
+    assert bands["reasonable_price_low"] < bands["reasonable_price_high"]
+    assert bands["bargain_price_high"] < bands["reasonable_price_low"]
+    assert bands["deep_value_below"] == bands["bargain_price_low"]
+    assert bands["history_sessions"] == 252
+    assert bands["confidence"] == "screen_grade"
+
+
+def test_etf_nav_snapshot_calculates_market_premium_and_marks_qdii_limit() -> None:
+    frame = pd.DataFrame({
+        "基金代码": ["588060", "159941"],
+        "2026-07-31-单位净值": [1.0, "---"],
+        "2026-07-30-单位净值": [0.99, 1.4],
+        "市价": [1.01, 1.54],
+    })
+
+    class FakeAkshare:
+        @staticmethod
+        def fund_etf_fund_daily_em():
+            return frame
+
+    candidates = [
+        CandidateObservation("588060", "科创50ETF", "科创板", "宽基", security_type="etf"),
+        CandidateObservation("159941", "纳指ETF", "海外", "纳指", security_type="etf"),
+    ]
+
+    AkshareProvider._enrich_etf_nav(FakeAkshare(), candidates)
+
+    assert candidates[0].etf_valuation["latest_nav"] == 1.0
+    assert candidates[0].etf_valuation["nav_premium_pct"] == 1.0
+    assert candidates[1].etf_valuation["nav_as_of"] == "2026-07-30"
+    assert candidates[1].etf_valuation["premium_reliability"] == "limited_qdii_stale_nav"
+    assert any("QDII" in warning for warning in candidates[1].warnings)
 
 
 def test_symbol_normalization_and_security_type() -> None:

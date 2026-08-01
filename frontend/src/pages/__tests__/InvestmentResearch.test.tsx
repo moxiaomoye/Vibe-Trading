@@ -52,6 +52,7 @@ const report: ResearchMvpRun = {
     quality: { score: 20, roe_5y_median_pct: 12 },
     financials: { revenue_growth_pct: 18 },
     valuation: { pe_ttm: 28 },
+    etf_valuation: null,
     supporting_evidence: ["距一年高点回撤31.5%"],
     counter_evidence: [],
     forward_validation: { t5: null, t20: null, t60: null },
@@ -85,6 +86,46 @@ describe("InvestmentResearch page", () => {
     apiMock.previewInvestmentResearchFeishu
       .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: false, confirmed: false, scheduler: false, status: "preview", eligible: true })
       .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "queued", message_id: "message-1", eligible: true });
+  });
+
+  it("shows ETF fair, bargain and NAV premium research fields", async () => {
+    apiMock.runInvestmentResearch.mockResolvedValueOnce({
+      ...report,
+      candidates: [{
+        ...report.candidates[0],
+        name: "科创50ETF",
+        code: "588060",
+        security_type: "etf",
+        etf_valuation: {
+          latest_nav: 1.039,
+          nav_as_of: "2026-07-31",
+          nav_market_price: 1.04,
+          nav_premium_pct: 0.096,
+          nav_source: "AKShare/Eastmoney",
+          premium_reliability: "latest_available_nav",
+          reasonable_price_low: 0.98,
+          reasonable_price_high: 1.08,
+          bargain_price_low: 0.88,
+          bargain_price_high: 0.95,
+          deep_value_below: 0.88,
+          historical_price_percentile: 0.52,
+          underlying_valuation_premium_pct: null,
+          valuation_state: "历史合理区间",
+          valuation_method: "近252个交易日市场价格分位（研究筛选口径）",
+          confidence: "screen_grade",
+          price_as_of: "2026-07-31",
+          price_source: "akshare",
+          history_sessions: 252,
+        },
+      }],
+    });
+    render(<InvestmentResearch />);
+    fireEvent.click(screen.getByRole("button", { name: "生成盘后研究" }));
+
+    expect(await screen.findByText("ETF 研究价格区间")).toBeInTheDocument();
+    expect(screen.getByText("0.10%")).toBeInTheDocument();
+    expect(screen.getByText("0.9800 ～ 1.0800")).toBeInTheDocument();
+    expect(screen.getByText("0.8800 ～ 0.9500")).toBeInTheDocument();
   });
 
   it("calls the real Research MVP API only after the user generates a report", async () => {

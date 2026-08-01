@@ -74,6 +74,7 @@ class CandidateObservation:
     market_data_as_of: str | None = None
     market_data_source: str | None = None
     catalyst_evidence: list[str] = field(default_factory=list)
+    etf_valuation: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

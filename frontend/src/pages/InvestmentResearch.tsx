@@ -23,6 +23,39 @@ function formatTurnover(value: number | null) {
   return value === null ? "Data Gap" : `${(value / 100_000_000).toFixed(2)} 亿元`;
 }
 
+function formatPriceRange(low: number | null, high: number | null) {
+  return low === null || high === null ? "Data Gap" : `${low.toFixed(4)} ～ ${high.toFixed(4)}`;
+}
+
+function EtfValuationPanel({ candidate }: { candidate: ResearchMvpCandidate }) {
+  const value = candidate.etf_valuation;
+  if (!value) {
+    return <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">ETF估值 Data Gap：净值与历史价格依据尚未取得。</p>;
+  }
+  return (
+    <section className="mt-4 rounded-lg border bg-background p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="font-semibold">ETF 研究价格区间</h4>
+        <span className="rounded-full border bg-muted px-3 py-1 text-xs font-semibold">{value.valuation_state ?? "Data Gap"}</span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <Metric label="最新单位净值" value={formatNumber(value.latest_nav)} />
+        <Metric label="ETF净值溢价" value={formatNumber(value.nav_premium_pct, "%")} />
+        <Metric label="合理价格区间" value={formatPriceRange(value.reasonable_price_low, value.reasonable_price_high)} />
+        <Metric label="低估关注区间" value={formatPriceRange(value.bargain_price_low, value.bargain_price_high)} />
+        <Metric label="深度低估参考" value={value.deep_value_below === null ? "Data Gap" : `≤ ${value.deep_value_below.toFixed(4)}`} />
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        ETF交易溢价用于比较市价与最新可得净值；指数估值溢价：{formatNumber(value.underlying_valuation_premium_pct, "%")}。
+        区间口径：{value.valuation_method ?? "Data Gap"}；净值日期：{value.nav_as_of ?? "Data Gap"}；置信度：{value.confidence ?? "Data Gap"}。
+      </p>
+      {value.premium_reliability === "limited_qdii_stale_nav" && (
+        <p className="mt-2 text-xs text-amber-700">QDII净值受海外时差、汇率与披露滞后影响，当前溢价仅作研究筛选。</p>
+      )}
+    </section>
+  );
+}
+
 function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -43,6 +76,7 @@ function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
         <Metric label="行业表现" value={formatNumber(candidate.sector_performance_pct, "%")} />
         <Metric label="研究状态" value={candidate.research_status} />
       </div>
+      {candidate.security_type === "etf" && <EtfValuationPanel candidate={candidate} />}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
           <h4 className="text-sm font-semibold">入选原因</h4>

@@ -235,6 +235,54 @@ def _period_return(closes: list[float], sessions: int) -> float | None:
     return round((closes[-1] / closes[-(sessions + 1)] - 1.0) * 100.0, 4)
 
 
+def _percentile(values: list[float], percentile: float) -> float | None:
+    ordered = sorted(value for value in values if value > 0)
+    if not ordered:
+        return None
+    position = (len(ordered) - 1) * percentile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _etf_price_bands(closes: list[float]) -> dict[str, Any]:
+    """Create screen-grade research bands from a trailing 252-session history."""
+    window = closes[-252:]
+    if len(window) < 60:
+        return {}
+    current = window[-1]
+    p10 = _percentile(window, 0.10)
+    p25 = _percentile(window, 0.25)
+    p35 = _percentile(window, 0.35)
+    p65 = _percentile(window, 0.65)
+    if None in {p10, p25, p35, p65}:
+        return {}
+    rank = sum(value <= current for value in window) / len(window)
+    if current <= p10:
+        state = "深度低估研究区"
+    elif current <= p25:
+        state = "低估关注区"
+    elif p35 <= current <= p65:
+        state = "历史合理区间"
+    elif current > p65:
+        state = "高于历史合理区间"
+    else:
+        state = "合理区间下沿"
+    return {
+        "reasonable_price_low": round(float(p35), 4),
+        "reasonable_price_high": round(float(p65), 4),
+        "bargain_price_low": round(float(p10), 4),
+        "bargain_price_high": round(float(p25), 4),
+        "deep_value_below": round(float(p10), 4),
+        "historical_price_percentile": round(rank, 4),
+        "valuation_state": state,
+        "history_sessions": len(window),
+        "valuation_method": "近252个交易日市场价格分位（研究筛选口径）",
+        "confidence": "screen_grade",
+    }
+
+
 def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -351,6 +399,10 @@ class AkshareProvider(ValueHunterProvider):
             cached_symbols = {candidate.symbol for candidate in candidates}
             if cached_symbols != expected_symbols or any(
                 candidate.market_data_as_of is None for candidate in candidates
+                or (
+                    candidate.security_type == "etf"
+                    and not candidate.etf_valuation
+                )
             ):
                 return None
         if stale_date:
@@ -482,6 +534,7 @@ class AkshareProvider(ValueHunterProvider):
         ak = self._ak()
         candidates = self._base_watchlist()
         self._enrich_market_history(candidates)
+        self._enrich_etf_nav(ak, candidates)
         # Financial and historical-valuation endpoints are per issuer. Four
         # workers keep a normal scan practical while avoiding a burst of
         # dozens of simultaneous public-data requests.
@@ -559,8 +612,77 @@ class AkshareProvider(ValueHunterProvider):
                 candidate.relative_to_market_pct = candidate.return_20d_pct - benchmark_return_20d
             candidate.market_data_as_of = through.isoformat()
             candidate.market_data_source = source_by_symbol.get(provider_symbol)
+            if candidate.security_type == "etf":
+                candidate.etf_valuation.update(_etf_price_bands(closes))
+                candidate.etf_valuation.update({
+                    "price_as_of": through.isoformat(),
+                    "price_source": candidate.market_data_source,
+                    "underlying_valuation_premium_pct": None,
+                })
             if "market_data_registry_ohlcv" not in candidate.source_fields:
                 candidate.source_fields.append("market_data_registry_ohlcv")
+
+    @staticmethod
+    def _enrich_etf_nav(ak: Any, candidates: list[CandidateObservation]) -> None:
+        etfs = [item for item in candidates if item.security_type == "etf"]
+        if not etfs:
+            return
+        try:
+            frame = _call_with_timeout(ak.fund_etf_fund_daily_em, 25)
+        except Exception as exc:
+            for candidate in etfs:
+                candidate.warnings.append(
+                    f"ETF单位净值读取失败: {type(exc).__name__}"
+                )
+                candidate.etf_valuation.setdefault("latest_nav", None)
+                candidate.etf_valuation.setdefault("nav_premium_pct", None)
+            return
+
+        if "基金代码" not in frame.columns:
+            for candidate in etfs:
+                candidate.warnings.append("ETF单位净值数据缺少基金代码")
+            return
+        rows = {str(row["基金代码"]).zfill(6): row for _, row in frame.iterrows()}
+        nav_columns = [
+            column for column in frame.columns
+            if isinstance(column, str) and column.endswith("-单位净值")
+        ]
+        for candidate in etfs:
+            row = rows.get(candidate.symbol[:6])
+            if row is None:
+                candidate.warnings.append("ETF单位净值快照缺失")
+                continue
+            latest_nav = None
+            nav_as_of = None
+            for column in nav_columns:
+                value = _number(row.get(column))
+                if value is not None and value > 0:
+                    latest_nav = value
+                    nav_as_of = column.removesuffix("-单位净值")
+                    break
+            market_price = _number(row.get("市价")) or candidate.current_price
+            premium = (
+                (market_price / latest_nav - 1.0) * 100.0
+                if market_price is not None and latest_nav is not None
+                else None
+            )
+            candidate.etf_valuation.update({
+                "latest_nav": round(latest_nav, 4) if latest_nav is not None else None,
+                "nav_as_of": nav_as_of,
+                "nav_market_price": round(market_price, 4) if market_price is not None else None,
+                "nav_premium_pct": round(premium, 3) if premium is not None else None,
+                "nav_source": "AKShare/Eastmoney fund_etf_fund_daily_em",
+                "premium_reliability": (
+                    "limited_qdii_stale_nav"
+                    if candidate.symbol[:6] == "159941"
+                    else "latest_available_nav"
+                ),
+            })
+            candidate.source_fields.append("eastmoney_etf_nav_snapshot")
+            if candidate.symbol[:6] == "159941":
+                candidate.warnings.append(
+                    "QDII ETF净值存在海外时差、汇率与披露滞后，溢价仅作研究筛选"
+                )
 
     @staticmethod
     def _classify_announcement(title: str) -> str | None:

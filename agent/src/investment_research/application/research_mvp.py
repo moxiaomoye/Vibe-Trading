@@ -63,6 +63,15 @@ def _panic_profile(scan: ScanResult, sensitivity: dict[str, Any]) -> dict[str, A
 def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
     observation = candidate.observation
     gaps = list(candidate.missing_fields)
+    if observation.security_type == "etf":
+        issuer_only = {
+            "roe_5y_median_pct",
+            "operating_cashflow_to_profit",
+            "pe_history_percentile",
+            "revenue_growth_pct",
+            "profit_growth_pct",
+        }
+        gaps = [gap for gap in gaps if gap not in issuer_only]
     if observation.current_price is None:
         gaps.append("current_price")
     if observation.relative_to_sector_pct is None:
@@ -80,6 +89,19 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
     ):
         if getattr(observation, field) is None:
             gaps.append(field)
+    etf_valuation = observation.etf_valuation or None
+    if observation.security_type == "etf":
+        for field in (
+            "latest_nav",
+            "nav_premium_pct",
+            "reasonable_price_low",
+            "reasonable_price_high",
+            "bargain_price_low",
+            "bargain_price_high",
+            "underlying_valuation_premium_pct",
+        ):
+            if not etf_valuation or etf_valuation.get(field) is None:
+                gaps.append(f"etf_valuation.{field}")
     observation_conditions = list(candidate.reasons) or [
         "补齐公司质量、财务、估值与价格错位证据后再进一步关注。"
     ]
@@ -146,6 +168,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
             "pe_history_percentile": observation.pe_history_percentile,
             "pe_industry_percentile": observation.pe_industry_percentile,
         },
+        "etf_valuation": etf_valuation,
         "supporting_evidence": list(candidate.reasons),
         "counter_evidence": list(observation.risk_evidence),
         "forward_validation": {"t5": None, "t20": None, "t60": None},
