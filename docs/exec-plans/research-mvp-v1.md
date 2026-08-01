@@ -590,3 +590,45 @@ for the continuation milestones.
 - Browser: the live Investment Research URL was opened in the Codex browser;
   UI tests exercise generate, detail expansion, historical evaluation and
   Feishu preview/confirmation interaction against the real API client surface.
+
+### M12 handoff — panic sensitivity control
+
+- UI: Investment Research now has one 0–100 slider labelled 敏感、平衡、严谨.
+  The selected value is sent with the existing research-run request; no second
+  scanner or market-state system was added.
+- Deterministic mapping: 0–100 interpolates index decline from -1.0% to -3.5%,
+  maximum advancer ratio from 50% to 20%, and minimum limit-down count from 5
+  to 80. Sensitive requires one confirmation, balanced two and strict three.
+- Auditability: every response includes the selected value, resolved thresholds,
+  observed inputs, trigger booleans, confirmation count and config version. The
+  page displays those resolved thresholds beneath the slider.
+- Verification: 19 focused backend tests and four UI tests passed. Production
+  TypeScript/Vite build passed. Local DCO commit: `a4e0791`.
+
+### M13 handoff — ETF research price bands
+
+- Provider reuse: the existing AKShare provider now adds the latest available
+  ETF unit NAV and calculates market-price-to-NAV premium/discount. One shared
+  fund snapshot request covers the five personal-watchlist ETFs.
+- Research bands: reasonable, low-valuation and deep-value reference bands are
+  derived from the trailing 252 observed trading sessions and are explicitly
+  labelled `screen_grade`; they are research breakpoints, not trade commands.
+- Data quality: ETF unit splits/mergers are detected from exceptional one-day
+  price discontinuities and pre-split history is normalized to the current unit
+  basis before returns or price bands are calculated. This prevents fund splits
+  from masquerading as 60–80% drawdowns.
+- Premium definitions: NAV premium is returned when real NAV exists. Underlying
+  index PE/PB valuation premium remains Data Gap until a reliable point-in-time
+  index valuation source is available. QDII 159941 is marked for stale NAV,
+  overseas-session and FX limitations.
+- Runtime: stale ETF valuation cache is refreshed without refetching stock
+  fundamentals. The first real refresh completed in 42.7 seconds; subsequent
+  sensitivity runs completed in 0.02–0.03 seconds.
+- Real acceptance (2026-07-31): balanced sensitivity 50 resolved to NORMAL with
+  0/2 triggers. Candidate 588200 returned price 1.115, NAV 1.1169, NAV premium
+  -0.17%, reasonable band 0.8926–1.0195 and low-valuation band 0.7401–0.8641.
+- Verification: 24 focused backend tests, five Investment Research UI tests and
+  the production frontend build passed. Docker image rebuilt, `/live` is
+  healthy, authenticated real-data API runs passed, and a headless Edge render
+  confirmed the slider layout. Local DCO commits: `c86a8d9`, `b45d8de`,
+  `901a2f6`.
