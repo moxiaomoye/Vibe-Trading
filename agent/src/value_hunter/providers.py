@@ -398,11 +398,12 @@ class AkshareProvider(ValueHunterProvider):
             }
             cached_symbols = {candidate.symbol for candidate in candidates}
             if cached_symbols != expected_symbols or any(
-                candidate.market_data_as_of is None for candidate in candidates
+                candidate.market_data_as_of is None
                 or (
                     candidate.security_type == "etf"
                     and not candidate.etf_valuation
                 )
+                for candidate in candidates
             ):
                 return None
         if stale_date:

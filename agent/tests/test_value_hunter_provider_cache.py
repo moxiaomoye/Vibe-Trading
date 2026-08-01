@@ -111,6 +111,23 @@ def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> N
     assert provider._read_candidate_cache() is None
 
 
+def test_candidate_cache_is_ignored_when_etf_valuation_is_missing(tmp_path) -> None:
+    cache = tmp_path / "akshare-candidates-2026-07-22.json"
+    cache.write_text(
+        '[{"symbol":"588060","name":"ETF","sector":"Index","theme":"Index",'
+        '"security_type":"etf","market_data_as_of":"2026-07-22"}]',
+        encoding="utf-8",
+    )
+    watchlist = tmp_path / "watchlist.csv"
+    watchlist.write_text(
+        "symbol,name,sector,theme\n588060,ETF,Index,Index\n",
+        encoding="utf-8",
+    )
+    provider = AkshareProvider(watchlist_path=watchlist, cache_dir=tmp_path)
+
+    assert provider._read_candidate_cache() is None
+
+
 def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> None:
     def fetcher(**kwargs):
         assert kwargs["source"] == "tushare"
