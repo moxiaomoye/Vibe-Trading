@@ -349,6 +349,7 @@ for the continuation milestones.
 
 #### M9 - Historical validation enrichment
 
+- Status: complete.
 - Persist immutable candidate snapshots through the existing repository path.
 - Calculate matured T+5/T+20/T+60 return, maximum drawdown and benchmark excess
   return; classify each horizon as correct, incorrect or uncertain using
@@ -527,3 +528,21 @@ for the continuation milestones.
   four entitlement-dependent real-Tushare tests were skipped.
 - Next: M9 enrich historical evaluation with drawdown, benchmark excess return
   and outcome classification without changing stored point-in-time snapshots.
+
+### M9 handoff
+
+- Result: historical evaluation still begins only from an immutable stored scan
+  and now calculates T+5/T+20/T+60 return, path maximum drawdown, CSI300 excess
+  return and an outcome for every matured horizon.
+- Versioned interpretation: `正确` requires a positive candidate return and at
+  least +3 percentage points excess; `错误` is a return at or below -10% or
+  excess at or below -3 points; all other or missing cases are `不确定`.
+- Date integrity: calculations require the exact base trading-date close and
+  count observed trading rows, never calendar-day substitutions. Missing base,
+  horizon or benchmark prices remain candidate-level Data Gap.
+- UI: each historical horizon displays return, outcome, benchmark excess and
+  maximum drawdown so the user can judge the method rather than only end price.
+- Tests: four historical/backend tests and three UI tests passed; the production
+  TypeScript/Vite build passed.
+- Next: M10 restrict notification eligibility to PANIC/EXTREME_PANIC plus a
+  high-quality candidate while keeping preview and scheduler defaults off.

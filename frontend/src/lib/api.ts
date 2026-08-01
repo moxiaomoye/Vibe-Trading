@@ -507,6 +507,15 @@ export interface ResearchMvpHistoricalEvaluation {
     t5: number | null;
     t20: number | null;
     t60: number | null;
+    t5_max_drawdown: number | null;
+    t20_max_drawdown: number | null;
+    t60_max_drawdown: number | null;
+    t5_excess: number | null;
+    t20_excess: number | null;
+    t60_excess: number | null;
+    t5_outcome: "正确" | "错误" | "不确定";
+    t20_outcome: "正确" | "错误" | "不确定";
+    t60_outcome: "正确" | "错误" | "不确定";
     data_gaps: string[];
   }>;
   data_gaps: string[];

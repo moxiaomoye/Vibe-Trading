@@ -60,7 +60,14 @@ describe("InvestmentResearch page", () => {
     apiMock.evaluateInvestmentResearchHistory.mockReset();
     apiMock.evaluateInvestmentResearchHistory.mockResolvedValue({
       trade_date: "2025-04-07", market_state: "PANIC",
-      candidates: [{ name: "中芯国际", code: "688981", research_status: "Research", t5: 3.2, t20: 8.1, t60: null, data_gaps: ["t60"] }],
+      candidates: [{
+        name: "中芯国际", code: "688981", research_status: "Research",
+        t5: 3.2, t20: 8.1, t60: null,
+        t5_max_drawdown: -1.2, t20_max_drawdown: -4.5, t60_max_drawdown: null,
+        t5_excess: 2.1, t20_excess: 5.2, t60_excess: null,
+        t5_outcome: "不确定", t20_outcome: "正确", t60_outcome: "不确定",
+        data_gaps: ["t60"],
+      }],
       data_gaps: ["688981.t60"],
     });
     apiMock.previewInvestmentResearchFeishu.mockReset();

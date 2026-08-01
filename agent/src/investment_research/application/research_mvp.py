@@ -175,6 +175,13 @@ def _row_close(row: dict[str, Any]) -> float | None:
 
 
 def _forward_returns(raw_rows: Any, trade_date: date) -> tuple[dict[str, float | None], list[str]]:
+    metrics, gaps = _forward_metrics(raw_rows, trade_date)
+    return {key: value["return_pct"] for key, value in metrics.items()}, gaps
+
+
+def _forward_metrics(
+    raw_rows: Any, trade_date: date
+) -> tuple[dict[str, dict[str, float | None]], list[str]]:
     if isinstance(raw_rows, dict) and isinstance(raw_rows.get("data"), list):
         raw_rows = raw_rows["data"]
     rows = sorted(
@@ -185,18 +192,40 @@ def _forward_returns(raw_rows: Any, trade_date: date) -> tuple[dict[str, float |
     start_index = next((index for index, (row_date, _) in enumerate(rows) if row_date == trade_date), None)
     gaps: list[str] = []
     if start_index is None:
-        return {"t5": None, "t20": None, "t60": None}, ["base_trade_date_price"]
+        return {
+            f"t{horizon}": {"return_pct": None, "max_drawdown_pct": None}
+            for horizon in (5, 20, 60)
+        }, ["base_trade_date_price"]
     base_close = rows[start_index][1]
-    returns: dict[str, float | None] = {}
+    metrics: dict[str, dict[str, float | None]] = {}
     for horizon in (5, 20, 60):
         target_index = start_index + horizon
         key = f"t{horizon}"
         if target_index >= len(rows):
-            returns[key] = None
+            metrics[key] = {"return_pct": None, "max_drawdown_pct": None}
             gaps.append(key)
         else:
-            returns[key] = round((rows[target_index][1] / base_close - 1.0) * 100.0, 2)
-    return returns, gaps
+            path = [close for _, close in rows[start_index:target_index + 1]]
+            peak = path[0]
+            max_drawdown = 0.0
+            for close in path:
+                peak = max(peak, close)
+                max_drawdown = min(max_drawdown, (close / peak - 1.0) * 100.0)
+            metrics[key] = {
+                "return_pct": round((path[-1] / base_close - 1.0) * 100.0, 2),
+                "max_drawdown_pct": round(max_drawdown, 2),
+            }
+    return metrics, gaps
+
+
+def _classify_outcome(return_pct: float | None, excess_pct: float | None) -> str:
+    if return_pct is None or excess_pct is None:
+        return "不确定"
+    if return_pct > 0 and excess_pct >= 3:
+        return "正确"
+    if return_pct <= -10 or excess_pct <= -3:
+        return "错误"
+    return "不确定"
 
 
 def build_historical_evaluation(
@@ -219,30 +248,51 @@ def build_historical_evaluation(
     raw_candidates = snapshot.get("candidates", [])[:5]
     symbols = [item.get("observation", {}).get("symbol") for item in raw_candidates]
     symbols = [symbol for symbol in symbols if symbol]
+    benchmark_symbol = "000300.SH"
+    requested_symbols = list(dict.fromkeys([*symbols, benchmark_symbol]))
     price_data = market_fetcher(
-        codes=symbols,
+        codes=requested_symbols,
         start_date=trade_date.isoformat(),
         end_date=(trade_date + timedelta(days=100)).isoformat(),
         source="auto",
         interval="1D",
         max_rows=0,
     ) if symbols else {}
+    benchmark_metrics, benchmark_gaps = _forward_metrics(
+        price_data.get(benchmark_symbol, []), trade_date
+    )
     candidates: list[dict[str, Any]] = []
     gaps: list[str] = []
     for item in raw_candidates:
         observation = item.get("observation", {})
         symbol = observation.get("symbol", "")
-        returns, return_gaps = _forward_returns(price_data.get(symbol, []), trade_date)
+        metrics, return_gaps = _forward_metrics(price_data.get(symbol, []), trade_date)
+        horizon_payload: dict[str, Any] = {}
+        for key in ("t5", "t20", "t60"):
+            value = metrics[key]
+            benchmark_return = benchmark_metrics[key]["return_pct"]
+            excess = (
+                round(value["return_pct"] - benchmark_return, 2)
+                if value["return_pct"] is not None and benchmark_return is not None
+                else None
+            )
+            horizon_payload[key] = value["return_pct"]
+            horizon_payload[f"{key}_max_drawdown"] = value["max_drawdown_pct"]
+            horizon_payload[f"{key}_excess"] = excess
+            horizon_payload[f"{key}_outcome"] = _classify_outcome(
+                value["return_pct"], excess
+            )
+        candidate_gaps = list(return_gaps)
+        for gap in benchmark_gaps:
+            candidate_gaps.append(f"benchmark.{gap}")
         candidates.append({
             "name": observation.get("name", symbol),
             "code": symbol,
             "research_status": item.get("status", "Research Candidate"),
-            "t5": returns["t5"],
-            "t20": returns["t20"],
-            "t60": returns["t60"],
-            "data_gaps": return_gaps,
+            **horizon_payload,
+            "data_gaps": candidate_gaps,
         })
-        gaps.extend(f"{symbol}.{gap}" for gap in return_gaps)
+        gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
     return {
         "trade_date": trade_date.isoformat(),
         "market_state": _market_state(float(snapshot.get("market", {}).get("score", 0.0))),

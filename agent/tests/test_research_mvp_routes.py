@@ -78,6 +78,9 @@ def test_historical_evaluation_uses_stored_snapshot_and_trading_session_horizons
     assert result["candidates"][0]["t5"] == 5.0
     assert result["candidates"][0]["t20"] == 20.0
     assert result["candidates"][0]["t60"] == 60.0
+    assert result["candidates"][0]["t20_max_drawdown"] == 0.0
+    assert result["candidates"][0]["t20_excess"] == 0.0
+    assert result["candidates"][0]["t20_outcome"] == "不确定"
 
 
 def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) -> None:

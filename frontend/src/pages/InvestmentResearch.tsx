@@ -285,7 +285,17 @@ export function InvestmentResearch() {
                 <table className="w-full text-left text-sm">
                   <thead><tr className="border-b"><th className="p-2">候选</th><th className="p-2">T+5</th><th className="p-2">T+20</th><th className="p-2">T+60</th></tr></thead>
                   <tbody>{history.candidates.map((candidate) => (
-                    <tr key={candidate.code} className="border-b"><td className="p-2">{candidate.name} ({candidate.code})</td><td className="p-2">{formatNumber(candidate.t5, "%")}</td><td className="p-2">{formatNumber(candidate.t20, "%")}</td><td className="p-2">{formatNumber(candidate.t60, "%")}</td></tr>
+                    <tr key={candidate.code} className="border-b">
+                      <td className="p-2">{candidate.name} ({candidate.code})</td>
+                      {([5, 20, 60] as const).map((horizon) => (
+                        <td key={horizon} className="p-2">
+                          <div>{formatNumber(candidate[`t${horizon}`], "%")}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {candidate[`t${horizon}_outcome`]} · 超额 {formatNumber(candidate[`t${horizon}_excess`], "%")} · 回撤 {formatNumber(candidate[`t${horizon}_max_drawdown`], "%")}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
                   ))}</tbody>
                 </table>
               </div>
