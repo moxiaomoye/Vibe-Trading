@@ -188,6 +188,13 @@ class AkshareProvider(ValueHunterProvider):
             path = available[0]
             stale_date = path.stem.removeprefix("akshare-candidates-")
         candidates = [CandidateObservation(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
+        if self.watchlist_path and self.watchlist_path.exists():
+            expected_symbols = {
+                candidate.symbol for candidate in load_watchlist_csv(self.watchlist_path)
+            }
+            cached_symbols = {candidate.symbol for candidate in candidates}
+            if cached_symbols != expected_symbols:
+                return None
         if stale_date:
             for candidate in candidates:
                 candidate.warnings.append(

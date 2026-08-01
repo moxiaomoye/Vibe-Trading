@@ -57,6 +57,22 @@ def test_candidate_cache_uses_latest_available_file_and_marks_staleness(tmp_path
     assert "2026-07-22" in candidates[0].warnings[0]
 
 
+def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> None:
+    cache = tmp_path / "akshare-candidates-2026-07-22.json"
+    cache.write_text(
+        '[{"symbol":"688981","name":"SMIC","sector":"Semiconductor","theme":"Foundry"}]',
+        encoding="utf-8",
+    )
+    watchlist = tmp_path / "watchlist.csv"
+    watchlist.write_text(
+        "symbol,name,sector,theme\n600522,ZTT,Telecom,Cable\n",
+        encoding="utf-8",
+    )
+    provider = AkshareProvider(watchlist_path=watchlist, cache_dir=tmp_path)
+
+    assert provider._read_candidate_cache() is None
+
+
 def test_latest_complete_weekday_skips_weekend_and_pre_close_session() -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     assert _latest_complete_weekday(datetime(2026, 8, 1, 16, 0, tzinfo=timezone)).isoformat() == "2026-07-31"
