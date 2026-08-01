@@ -340,6 +340,7 @@ for the continuation milestones.
 
 #### M8 - ETF support
 
+- Status: complete.
 - Use fund-specific OHLCV and metadata paths; do not call issuer-only financial
   endpoints for ETFs. ETF quality/valuation fields use fund/index evidence or
   remain explicit Data Gap.
@@ -510,3 +511,19 @@ for the continuation milestones.
   the production TypeScript/Vite build passed.
 - Next: M8 verify fund-specific behavior for every ETF in the personal universe
   and add the requested broad-market ETF coverage through the same config.
+
+### M8 handoff
+
+- Result: ETF symbols use the registry's fund OHLCV path and are explicitly
+  prevented from calling stock issuer valuation and financial endpoints.
+- Honest gaps: issuer ROE, issuer PE and company financial fields stay Data Gap
+  for ETFs. The report still supplies price, 1/20/60-session change, volume,
+  drawdown and benchmark-relative performance when fund data is available.
+- Universe decision: the user's later instruction to research only the supplied
+  nine securities takes precedence over adding more candidate symbols. The five
+  ETFs in that personal universe cover 科创宽基、半导体主题与纳指100；broad-market
+  indices remain benchmark inputs, not extra candidates.
+- Tests: 112 provider, registry, Tushare, ETF and Research MVP tests passed;
+  four entitlement-dependent real-Tushare tests were skipped.
+- Next: M9 enrich historical evaluation with drawdown, benchmark excess return
+  and outcome classification without changing stored point-in-time snapshots.

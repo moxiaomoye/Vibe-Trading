@@ -595,6 +595,12 @@ class AkshareProvider(ValueHunterProvider):
 
     @staticmethod
     def _enrich_candidate(ak: Any, candidate: CandidateObservation) -> None:
+        candidate.security_type = security_type_for_symbol(candidate.symbol)
+        if candidate.security_type == "etf":
+            candidate.warnings.append(
+                "ETF不适用发行人ROE、PE与公司财务接口；相关字段保留Data Gap"
+            )
+            return
         code = candidate.symbol[:6]
         try:
             values = ak.stock_value_em(symbol=code)

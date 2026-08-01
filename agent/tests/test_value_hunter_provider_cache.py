@@ -149,6 +149,20 @@ def test_yaml_watchlist_keeps_the_personal_stock_and_etf_universe() -> None:
     assert {item.security_type for item in candidates} == {"stock", "etf"}
 
 
+def test_etf_skips_stock_only_fundamental_endpoints() -> None:
+    class RejectStockEndpoints:
+        def __getattr__(self, name):
+            raise AssertionError(f"stock-only endpoint called for ETF: {name}")
+
+    candidate = CandidateObservation("588060", "科创50ETF", "科创板", "宽基")
+
+    AkshareProvider._enrich_candidate(RejectStockEndpoints(), candidate)
+
+    assert candidate.security_type == "etf"
+    assert candidate.pe_ttm is None
+    assert any("ETF" in warning for warning in candidate.warnings)
+
+
 def test_latest_complete_weekday_skips_weekend_and_pre_close_session() -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     assert _latest_complete_weekday(datetime(2026, 8, 1, 16, 0, tzinfo=timezone)).isoformat() == "2026-07-31"
