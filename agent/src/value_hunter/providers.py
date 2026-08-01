@@ -84,11 +84,17 @@ class DemoProvider(ValueHunterProvider):
                 "688001.SH", "示例芯片龙头", "半导体", "国产芯片", 2200, 2, True,
                 17.2, 1.12, 28.0, 3.2, 0.14, 0.22, 25.0, 31.0, -43.0, -18.0, 0.86,
                 source_fields=["point_in_time_financials", "daily_basic", "price_history"],
+                daily_return_pct=-4.5, return_20d_pct=-18.0, return_60d_pct=-28.0,
+                relative_to_market_pct=6.0,
+                catalyst_evidence=["产能利用率改善待验证", "下一期财报利润率待验证"],
             ),
             CandidateObservation(
                 "300001.SZ", "示例光模块成长", "通信设备", "光模块", 1700, 3, True,
                 15.1, 0.92, 39.0, 7.0, 0.33, 0.40, 42.0, 55.0, -31.0, -9.0, 0.91,
                 source_fields=["point_in_time_financials", "daily_basic", "price_history"],
+                daily_return_pct=-3.0, return_20d_pct=-12.0, return_60d_pct=-20.0,
+                relative_to_market_pct=4.0,
+                catalyst_evidence=["订单增长待下一期报告验证"],
             ),
             CandidateObservation(
                 "002001.SZ", "示例情绪标的", "软件", "AI应用", 530, 5, False,

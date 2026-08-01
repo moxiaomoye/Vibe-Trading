@@ -309,6 +309,7 @@ for the continuation milestones.
 
 #### M4 - Single Panic Value Hunter score
 
+- Status: complete.
 - Replace the current research rank with one configurable score:
   mispricing 30%, quality 30%, valuation 20%, relative strength 10%,
   catalyst 10%.
@@ -436,3 +437,22 @@ for the continuation milestones.
   TypeScript/Vite build passed. The existing bundle-size warning is unchanged.
 - Next: M4 align the one candidate score to the requested 30/30/20/10/10 Panic
   Value Hunter method, then externalize its thresholds and weights in M5.
+
+### M4 handoff
+
+- Result: all candidates now use one `Panic Value Hunter` method. The previous
+  value/growth/sentiment buckets were removed from new results.
+- Score: market mispricing 30, company quality 30, valuation 20, relative
+  strength 10 and catalyst 10. Each component is bounded and the total is 100.
+- Risk boundary: investigation, qualified audit, fraud, delisting and negative
+  equity remain hard rejection conditions; a high factor score cannot offset
+  them. Lesser risks remain report evidence rather than a hidden score bonus.
+- Data integrity: catalyst points require recorded catalyst evidence. Missing
+  relative-strength or catalyst evidence is surfaced in candidate Data Gap and
+  receives zero points rather than an invented neutral score.
+- Compatibility: the existing Value Hunter page reads new score fields while
+  retaining display fallbacks for already-stored legacy scans.
+- Tests: 26 focused backend tests and five frontend tests passed; the production
+  TypeScript/Vite build passed.
+- Next: M5 move these weights and user thresholds into one validated YAML
+  configuration while preserving the current defaults.

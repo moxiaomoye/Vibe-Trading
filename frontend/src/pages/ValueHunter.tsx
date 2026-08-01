@@ -30,9 +30,9 @@ function CandidateCard({ candidate }: { candidate: ValueHunterCandidate }) {
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
         {[
-          ["质量", candidate.score.quality], ["估值", candidate.score.valuation],
-          ["基本面", candidate.score.fundamentals], ["错杀", candidate.score.dislocation],
-          ["风险洁净", candidate.score.risk_cleanliness],
+          ["市场错杀", candidate.score.mispricing ?? candidate.score.dislocation ?? 0], ["公司质量", candidate.score.quality],
+          ["估值", candidate.score.valuation], ["相对强弱", candidate.score.relative_strength ?? 0],
+          ["催化剂", candidate.score.catalyst ?? 0],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-md bg-muted/60 p-2">
             <p className="text-muted-foreground">{label}</p><p className="font-semibold">{Number(value).toFixed(1)}</p>

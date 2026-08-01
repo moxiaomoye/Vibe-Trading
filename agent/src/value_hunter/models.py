@@ -73,24 +73,25 @@ class CandidateObservation:
     relative_to_market_pct: float | None = None
     market_data_as_of: str | None = None
     market_data_source: str | None = None
+    catalyst_evidence: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class ScoreBreakdown:
+    mispricing: float
     quality: float
     valuation: float
-    fundamentals: float
-    dislocation: float
-    risk_cleanliness: float
+    relative_strength: float
+    catalyst: float
 
     @property
     def total(self) -> float:
         return round(
-            self.quality
+            self.mispricing
+            + self.quality
             + self.valuation
-            + self.fundamentals
-            + self.dislocation
-            + self.risk_cleanliness,
+            + self.relative_strength
+            + self.catalyst,
             1,
         )
 

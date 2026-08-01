@@ -103,100 +103,107 @@ def score_market(market: MarketObservation) -> MarketResult:
 def _quality(c: CandidateObservation) -> tuple[float, list[str]]:
     score, reasons = 0.0, []
     if c.industry_market_cap_rank is not None and c.industry_market_cap_rank <= 3:
-        score += 8
+        score += 6
         reasons.append(f"行业市值排名第{c.industry_market_cap_rank}")
     elif c.industry_market_cap_rank is not None and c.industry_market_cap_rank <= 5:
-        score += 5
-    if c.important_index_member:
         score += 4
+    if c.important_index_member:
+        score = max(score, 5)
     elif c.market_cap_billion is not None:
-        # Scale/liquidity evidence is weaker than verified index membership or
-        # an industry rank, but still helps distinguish established issuers.
-        score += 4 if c.market_cap_billion >= 100 else 2 if c.market_cap_billion >= 30 else 0
+        score += 3 if c.market_cap_billion >= 100 else 1 if c.market_cap_billion >= 30 else 0
     if c.roe_5y_median_pct is not None:
-        score += 8 if c.roe_5y_median_pct >= 15 else 5 if c.roe_5y_median_pct >= 10 else 1 if c.roe_5y_median_pct > 0 else 0
+        score += 10 if c.roe_5y_median_pct >= 15 else 7 if c.roe_5y_median_pct >= 10 else 2 if c.roe_5y_median_pct > 0 else 0
         if c.roe_5y_median_pct >= 12:
             reasons.append(f"五年ROE中位数{c.roe_5y_median_pct:.1f}%")
     if c.operating_cashflow_to_profit is not None:
-        score += 5 if c.operating_cashflow_to_profit >= 0.9 else 3 if c.operating_cashflow_to_profit >= 0.6 else 0
-    return min(25.0, score), reasons
+        score += 7 if c.operating_cashflow_to_profit >= 0.9 else 4 if c.operating_cashflow_to_profit >= 0.6 else 0
+    growth_points = 0.0
+    if c.revenue_growth_pct is not None:
+        growth_points += 3.5 if c.revenue_growth_pct >= 10 else 1.5 if c.revenue_growth_pct >= 0 else 0
+    if c.profit_growth_pct is not None:
+        growth_points += 3.5 if c.profit_growth_pct >= 10 else 1.5 if c.profit_growth_pct >= 0 else 0
+    score += growth_points
+    if growth_points >= 7:
+        reasons.append("收入与利润保持正增长")
+    return min(30.0, score), reasons
 
 
 def _valuation(c: CandidateObservation) -> tuple[float, list[str]]:
     score, reasons = 0.0, []
     if c.pe_ttm is not None and c.pe_ttm > 0:
-        score += 4
+        score += 3
     if c.pe_history_percentile is not None:
-        score += 10 if c.pe_history_percentile <= 0.2 else 7 if c.pe_history_percentile <= 0.35 else 3 if c.pe_history_percentile <= 0.5 else 0
+        score += 9 if c.pe_history_percentile <= 0.2 else 6 if c.pe_history_percentile <= 0.35 else 3 if c.pe_history_percentile <= 0.5 else 0
         if c.pe_history_percentile <= 0.35:
             reasons.append(f"PE处于自身历史{c.pe_history_percentile:.0%}分位")
     if c.pe_industry_percentile is not None:
-        score += 8 if c.pe_industry_percentile <= 0.3 else 5 if c.pe_industry_percentile <= 0.5 else 0
+        score += 6 if c.pe_industry_percentile <= 0.3 else 4 if c.pe_industry_percentile <= 0.5 else 0
     if c.profit_growth_pct is not None and c.pe_ttm is not None and c.pe_ttm > 0 and c.profit_growth_pct > 0:
         peg = c.pe_ttm / max(c.profit_growth_pct, 1)
-        score += 3 if peg <= 1.0 else 1 if peg <= 1.5 else 0
-    return min(25.0, score), reasons
-
-
-def _fundamentals(c: CandidateObservation) -> tuple[float, list[str]]:
-    score, reasons = 0.0, []
-    if c.revenue_growth_pct is not None:
-        score += 7 if c.revenue_growth_pct >= 20 else 5 if c.revenue_growth_pct >= 10 else 2 if c.revenue_growth_pct >= 0 else 0
-    if c.profit_growth_pct is not None:
-        score += 8 if c.profit_growth_pct >= 25 else 6 if c.profit_growth_pct >= 10 else 2 if c.profit_growth_pct >= 0 else 0
-    if c.operating_cashflow_to_profit is not None:
-        score += 5 if c.operating_cashflow_to_profit >= 1 else 3 if c.operating_cashflow_to_profit >= 0.7 else 0
-    if (c.revenue_growth_pct or 0) >= 10 and (c.profit_growth_pct or 0) >= 10:
-        reasons.append("收入与利润保持正增长")
+        score += 2 if peg <= 1.0 else 1 if peg <= 1.5 else 0
     return min(20.0, score), reasons
 
 
-def _dislocation(c: CandidateObservation) -> tuple[float, list[str]]:
+def _mispricing(c: CandidateObservation) -> tuple[float, list[str]]:
     score, reasons = 0.0, []
     if c.drawdown_252_pct is not None:
         dd = abs(min(0.0, c.drawdown_252_pct))
-        score += 8 if dd >= 40 else 6 if dd >= 30 else 3 if dd >= 20 else 0
+        score += 12 if dd >= 40 else 9 if dd >= 30 else 5 if dd >= 20 else 0
         if dd >= 30:
             reasons.append(f"距一年高点回撤{dd:.1f}%")
+    if c.daily_return_pct is not None:
+        fall = abs(min(0.0, c.daily_return_pct))
+        score += 4 if fall >= 7 else 3 if fall >= 4 else 1 if fall >= 2 else 0
+    if c.return_20d_pct is not None:
+        fall = abs(min(0.0, c.return_20d_pct))
+        score += 5 if fall >= 20 else 3 if fall >= 10 else 1 if fall >= 5 else 0
+    if c.return_60d_pct is not None:
+        fall = abs(min(0.0, c.return_60d_pct))
+        score += 4 if fall >= 30 else 2 if fall >= 15 else 0
     if c.relative_to_sector_pct is not None:
         under = abs(min(0.0, c.relative_to_sector_pct))
-        score += 5 if under >= 15 else 3 if under >= 8 else 0
-    if c.turnover_percentile is not None and c.turnover_percentile >= 0.8:
+        score += 3 if under >= 15 else 2 if under >= 8 else 0
+    if c.volume_ratio_20d is not None and c.volume_ratio_20d >= 1.5:
         score += 2
-    return min(15.0, score), reasons
+    return min(30.0, score), reasons
 
 
-def _risk_cleanliness(c: CandidateObservation) -> tuple[float, list[str]]:
-    if not c.risk_flags:
-        return 15.0, ["未发现已录入的重大风险标签"]
-    severe = {"investigation", "qualified_audit", "fraud", "delisting", "negative_equity"}
-    severe_count = sum(flag in severe for flag in c.risk_flags)
-    score = max(0.0, 15.0 - severe_count * 15.0 - (len(c.risk_flags) - severe_count) * 4.0)
-    return score, []
+def _relative_strength(c: CandidateObservation) -> tuple[float, list[str]]:
+    relative = c.relative_to_market_pct
+    label = "大盘"
+    if relative is None:
+        relative = c.relative_to_sector_pct
+        label = "行业"
+    if relative is None:
+        return 0.0, []
+    score = 10.0 if relative >= 5 else 7.0 if relative >= 0 else 4.0 if relative >= -5 else 0.0
+    reasons = [f"20日表现相对{label}{relative:+.1f}%"] if score >= 7 else []
+    return score, reasons
+
+
+def _catalyst(c: CandidateObservation) -> tuple[float, list[str]]:
+    if len(c.catalyst_evidence) >= 2:
+        return 10.0, [f"已记录{len(c.catalyst_evidence)}项可验证催化剂"]
+    if c.catalyst_evidence:
+        return 6.0, ["已记录1项可验证催化剂"]
+    return 0.0, []
 
 
 def score_candidate(c: CandidateObservation) -> CandidateResult:
+    mispricing, m_reasons = _mispricing(c)
     quality, q_reasons = _quality(c)
     valuation, v_reasons = _valuation(c)
-    fundamentals, f_reasons = _fundamentals(c)
-    dislocation, d_reasons = _dislocation(c)
-    risk, r_reasons = _risk_cleanliness(c)
-    breakdown = ScoreBreakdown(quality, valuation, fundamentals, dislocation, risk)
-    missing = [field for field in _REQUIRED_RESEARCH_FIELDS if getattr(c, field) is None]
-
-    leadership = (
-        (c.industry_market_cap_rank or 999) <= 5
-        or c.important_index_member
-        or (c.market_cap_billion or 0) >= 100
+    relative_strength, rs_reasons = _relative_strength(c)
+    catalyst, c_reasons = _catalyst(c)
+    breakdown = ScoreBreakdown(
+        mispricing, quality, valuation, relative_strength, catalyst
     )
-    if valuation >= 16 and quality >= 15 and dislocation >= 8 and risk >= 11:
-        bucket = "价值错杀"
-    elif fundamentals >= 13 and quality >= 15 and risk >= 11:
-        bucket = "优质成长"
-    elif leadership and (c.turnover_percentile or 0) >= 0.8:
-        bucket = "情绪龙头"
-    else:
-        bucket = "普通观察"
+    missing = [field for field in _REQUIRED_RESEARCH_FIELDS if getattr(c, field) is None]
+    if c.relative_to_market_pct is None:
+        missing.append("relative_to_market_pct")
+    if not c.catalyst_evidence:
+        missing.append("catalyst_evidence")
+    bucket = "Panic Value Hunter"
 
     severe = any(flag in {"investigation", "qualified_audit", "fraud", "delisting", "negative_equity"} for flag in c.risk_flags)
     if severe:
@@ -221,7 +228,7 @@ def score_candidate(c: CandidateObservation) -> CandidateResult:
         score=breakdown,
         bucket=bucket,
         status=status,
-        reasons=(q_reasons + v_reasons + f_reasons + d_reasons + r_reasons)[:6],
+        reasons=(m_reasons + q_reasons + v_reasons + rs_reasons + c_reasons)[:6],
         first_rejection=first_rejection,
         missing_fields=missing,
     )

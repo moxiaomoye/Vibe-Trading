@@ -287,7 +287,11 @@ export interface ValueHunterCandidate {
     market_cap_billion?: number | null; pe_ttm?: number | null; pb?: number | null;
     drawdown_252_pct?: number | null; warnings: string[];
   };
-  score: { quality: number; valuation: number; fundamentals: number; dislocation: number; risk_cleanliness: number; total: number };
+  score: {
+    mispricing?: number; quality: number; valuation: number;
+    relative_strength?: number; catalyst?: number; total: number;
+    dislocation?: number; fundamentals?: number; risk_cleanliness?: number;
+  };
   bucket: string; status: string; reasons: string[]; first_rejection: string; missing_fields: string[];
 }
 

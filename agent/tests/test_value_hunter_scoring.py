@@ -45,7 +45,7 @@ def test_market_missing_breadth_is_not_labeled_normal():
 def test_complete_value_dislocation_advances():
     candidate = DemoProvider().load_candidates()[0]
     result = score_candidate(candidate)
-    assert result.bucket == "价值错杀"
+    assert result.bucket == "Panic Value Hunter"
     assert result.status == "A - 深入研究"
     assert result.score.total >= 80
     assert result.missing_fields == []
@@ -56,7 +56,7 @@ def test_severe_risk_flag_rejects_even_when_other_scores_are_strong():
     candidate.risk_flags = ["investigation"]
     result = score_candidate(candidate)
     assert result.status == "Reject"
-    assert result.score.risk_cleanliness == 0
+    assert result.score.total >= 80
 
 
 def test_missing_point_in_time_fields_never_advance():
@@ -70,7 +70,25 @@ def test_missing_point_in_time_fields_never_advance():
     assert "roe_5y_median_pct" in result.missing_fields
 
 
-def test_sentiment_leader_is_not_mislabeled_as_value():
+def test_all_candidates_use_the_single_panic_value_hunter_method():
     result = score_candidate(DemoProvider().load_candidates()[2])
-    assert result.bucket == "情绪龙头"
+    assert result.bucket == "Panic Value Hunter"
     assert result.status.startswith("C")
+
+
+def test_score_breakdown_uses_requested_30_30_20_10_10_weights():
+    result = score_candidate(DemoProvider().load_candidates()[0])
+
+    assert 0 <= result.score.mispricing <= 30
+    assert 0 <= result.score.quality <= 30
+    assert 0 <= result.score.valuation <= 20
+    assert 0 <= result.score.relative_strength <= 10
+    assert 0 <= result.score.catalyst <= 10
+    assert result.score.total == round(
+        result.score.mispricing
+        + result.score.quality
+        + result.score.valuation
+        + result.score.relative_strength
+        + result.score.catalyst,
+        1,
+    )

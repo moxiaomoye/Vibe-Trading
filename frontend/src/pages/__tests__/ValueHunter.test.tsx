@@ -18,7 +18,7 @@ const scan: ValueHunterScan = {
   },
   candidates: [{
     observation: { symbol: "688001", name: "示例芯片龙头", sector: "半导体", theme: "国产芯片", warnings: [] },
-    score: { quality: 22, valuation: 20, fundamentals: 18, dislocation: 13, risk_cleanliness: 15, total: 88 },
+    score: { mispricing: 26, quality: 28, valuation: 18, relative_strength: 8, catalyst: 8, total: 88 },
     bucket: "价值错杀", status: "A - 深入研究", reasons: ["行业龙头", "估值历史低位"],
     first_rejection: "验证盈利持续性", missing_fields: [],
   }],
