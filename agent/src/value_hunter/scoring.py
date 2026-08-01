@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from statistics import median
 
+from .config import PanicValueMethodConfig
 from .models import (
     CandidateObservation,
     CandidateResult,
@@ -27,8 +28,11 @@ def _median_index_value(market: MarketObservation, name: str) -> float:
     return median(values) if values else 0.0
 
 
-def score_market(market: MarketObservation) -> MarketResult:
+def score_market(
+    market: MarketObservation, method: PanicValueMethodConfig | None = None
+) -> MarketResult:
     """Score observable market stress from 0 to 100."""
+    method = method or PanicValueMethodConfig()
     reasons: list[str] = []
 
     below_ma = sum(item.below_ma250 for item in market.indices)
@@ -56,8 +60,8 @@ def score_market(market: MarketObservation) -> MarketResult:
 
     breadth = 0.0
     if market.advancer_ratio is not None:
-        breadth += 15.0 if market.advancer_ratio <= 0.2 else 8.0 if market.advancer_ratio <= 0.35 else 0.0
-        if market.advancer_ratio <= 0.35:
+        breadth += 15.0 if market.advancer_ratio <= 0.2 else 8.0 if market.advancer_ratio <= method.max_advancer_ratio else 0.0
+        if market.advancer_ratio <= method.max_advancer_ratio:
             reasons.append(f"上涨家数占比仅{market.advancer_ratio:.0%}")
     if market.above_ma60_ratio is not None:
         breadth += 10.0 if market.above_ma60_ratio <= 0.2 else 5.0 if market.above_ma60_ratio <= 0.35 else 0.0
@@ -65,11 +69,11 @@ def score_market(market: MarketObservation) -> MarketResult:
 
     panic = 0.0
     if market.limit_down_count is not None:
-        panic += 12.0 if market.limit_down_count >= 100 else 8.0 if market.limit_down_count >= 50 else 4.0 if market.limit_down_count >= 20 else 0.0
-        if market.limit_down_count >= 20:
+        panic += 12.0 if market.limit_down_count >= 100 else 8.0 if market.limit_down_count >= 50 else 4.0 if market.limit_down_count >= method.min_limit_down_count else 0.0
+        if market.limit_down_count >= method.min_limit_down_count:
             reasons.append(f"跌停数量达到{market.limit_down_count}家")
     daily_return = _median_index_value(market, "daily_return_pct")
-    panic += 8.0 if daily_return <= -4 else 4.0 if daily_return <= -2 else 0.0
+    panic += 8.0 if daily_return <= 2 * method.index_daily_return_pct else 4.0 if daily_return <= method.index_daily_return_pct else 0.0
     if market.turnover_zscore is not None and market.turnover_zscore >= 1.5:
         panic = min(20.0, panic + 3.0)
         reasons.append("成交额显著高于近期均值")
@@ -189,14 +193,21 @@ def _catalyst(c: CandidateObservation) -> tuple[float, list[str]]:
     return 0.0, []
 
 
-def score_candidate(c: CandidateObservation) -> CandidateResult:
+def score_candidate(
+    c: CandidateObservation, method: PanicValueMethodConfig | None = None
+) -> CandidateResult:
+    method = method or PanicValueMethodConfig()
     mispricing, m_reasons = _mispricing(c)
     quality, q_reasons = _quality(c)
     valuation, v_reasons = _valuation(c)
     relative_strength, rs_reasons = _relative_strength(c)
     catalyst, c_reasons = _catalyst(c)
     breakdown = ScoreBreakdown(
-        mispricing, quality, valuation, relative_strength, catalyst
+        mispricing / 30.0 * method.mispricing_weight,
+        quality / 30.0 * method.quality_weight,
+        valuation / 20.0 * method.valuation_weight,
+        relative_strength / 10.0 * method.relative_strength_weight,
+        catalyst / 10.0 * method.catalyst_weight,
     )
     missing = [field for field in _REQUIRED_RESEARCH_FIELDS if getattr(c, field) is None]
     if c.relative_to_market_pct is None:
@@ -206,10 +217,22 @@ def score_candidate(c: CandidateObservation) -> CandidateResult:
     bucket = "Panic Value Hunter"
 
     severe = any(flag in {"investigation", "qualified_audit", "fraud", "delisting", "negative_equity"} for flag in c.risk_flags)
+    filter_rejections: list[str] = []
+    if c.roe_5y_median_pct is not None and c.roe_5y_median_pct < method.min_roe_pct:
+        filter_rejections.append("ROE低于配置下限")
+    if c.pe_ttm is not None and c.pe_ttm > method.max_pe:
+        filter_rejections.append("PE高于配置上限")
+    if c.daily_return_pct is not None and c.daily_return_pct < -method.max_daily_decline_pct:
+        filter_rejections.append("单日跌幅超过配置上限")
+    if c.market_cap_billion is not None and c.market_cap_billion < method.min_market_cap_billion:
+        filter_rejections.append("市值低于配置下限")
     if severe:
         status = "Reject"
         evidence = c.risk_evidence[0] if c.risk_evidence else "需先核实公告和监管事项"
         first_rejection = f"存在重大风险标签：{evidence}"
+    elif filter_rejections:
+        status = "Reject"
+        first_rejection = filter_rejections[0]
     elif missing:
         status = "C - 数据不足"
         first_rejection = f"缺少{len(missing)}项关键时点数据"

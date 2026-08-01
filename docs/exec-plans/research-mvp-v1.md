@@ -317,6 +317,7 @@ for the continuation milestones.
 
 #### M5 - Configuration
 
+- Status: complete.
 - Add one versioned `config/panic_value_config.yaml` with current-compatible
   defaults for panic gates, filters and score weights.
 - Validate weights and thresholds at startup; invalid configuration fails
@@ -456,3 +457,21 @@ for the continuation milestones.
   TypeScript/Vite build passed.
 - Next: M5 move these weights and user thresholds into one validated YAML
   configuration while preserving the current defaults.
+
+### M5 handoff
+
+- Result: `config/panic_value_config.yaml` is the single editable method file
+  for panic thresholds, stock filters and 30/30/20/10/10 score weights.
+- Validation: weights must be non-negative and total 100; breadth thresholds
+  are range checked. Invalid configuration fails clearly during service setup.
+- Runtime: the existing Value Hunter service injects the loaded method into
+  market and candidate scoring. Optional `PANIC_VALUE_CONFIG_PATH` supports a
+  local override without adding an administration backend.
+- Compatibility: permissive stock-filter defaults retain the current universe;
+  missing filter inputs remain Data Gap, while present values that violate a
+  configured threshold become an explicit research rejection.
+- Docker: the same versioned config directory is copied into builder and runtime
+  images, so local and container scoring use the same method definition.
+- Tests: 19 focused configuration, scoring and service tests passed.
+- Next: M6 consolidate stock and ETF watchlists on this existing loader and
+  preserve the user's nine-security scope.

@@ -1,0 +1,21 @@
+version: 1
+
+market_panic:
+  index_daily_return_pct: -2.0
+  max_advancer_ratio: 0.35
+  min_limit_down_count: 20
+
+stock_filters:
+  # Permissive defaults preserve the current research universe. Tighten these
+  # locally only when missing values should remain Data Gap rather than reject.
+  min_roe_pct: -100.0
+  max_pe: 10000.0
+  max_daily_decline_pct: 100.0
+  min_market_cap_billion: 0.0
+
+score_weights:
+  mispricing: 30.0
+  quality: 30.0
+  valuation: 20.0
+  relative_strength: 10.0
+  catalyst: 10.0

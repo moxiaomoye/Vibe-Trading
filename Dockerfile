@@ -40,6 +40,7 @@ RUN pip install --no-cache-dir -r agent/requirements.txt
 # re-creates the same /app/agent source tree the .pth file points at).
 COPY pyproject.toml LICENSE README.md ./
 COPY agent/ agent/
+COPY config/ config/
 RUN pip install --no-cache-dir -e ".[feishu]"
 
 # ============================================================================
@@ -83,6 +84,7 @@ COPY --from=builder /opt/venv /opt/venv
 # built frontend static assets.
 COPY pyproject.toml LICENSE README.md ./
 COPY agent/ agent/
+COPY config/ config/
 COPY --from=frontend-build /app/frontend/dist frontend/dist
 
 # Runtime should not run as root. `vibe` owns the writable app-data dirs so

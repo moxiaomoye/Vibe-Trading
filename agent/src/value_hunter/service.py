@@ -39,8 +39,11 @@ class ValueHunterService:
             raise RuntimeError("Value Hunter扫描正在运行")
         try:
             started = datetime.now(timezone.utc).isoformat()
-            market = score_market(self.provider.load_market())
-            scored = [score_candidate(item) for item in self.provider.load_candidates()]
+            market = score_market(self.provider.load_market(), self.config.method)
+            scored = [
+                score_candidate(item, self.config.method)
+                for item in self.provider.load_candidates()
+            ]
             eligible = [
                 item for item in scored
                 if item.status in {"A - 深入研究", "B - 观察名单"}
