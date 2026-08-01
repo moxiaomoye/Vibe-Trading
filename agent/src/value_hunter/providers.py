@@ -235,6 +235,27 @@ def _period_return(closes: list[float], sessions: int) -> float | None:
     return round((closes[-1] / closes[-(sessions + 1)] - 1.0) * 100.0, 4)
 
 
+def _normalize_etf_split_history(closes: list[float]) -> tuple[list[float], int]:
+    """Put pre-split ETF prices onto the latest share basis.
+
+    A-share ETF daily moves beyond 30% are treated as unit splits/mergers for
+    this screen. The adjustment is explicit in the valuation payload so the
+    result is never confused with exchange-provided adjusted history.
+    """
+    adjusted = list(closes)
+    split_count = 0
+    for index in range(1, len(closes)):
+        previous = closes[index - 1]
+        if previous <= 0:
+            continue
+        ratio = closes[index] / previous
+        if ratio < 0.70 or ratio > (1 / 0.70):
+            for prior in range(index):
+                adjusted[prior] *= ratio
+            split_count += 1
+    return adjusted, split_count
+
+
 def _percentile(values: list[float], percentile: float) -> float | None:
     ordered = sorted(value for value in values if value > 0)
     if not ordered:
@@ -398,12 +419,7 @@ class AkshareProvider(ValueHunterProvider):
             }
             cached_symbols = {candidate.symbol for candidate in candidates}
             if cached_symbols != expected_symbols or any(
-                candidate.market_data_as_of is None
-                or (
-                    candidate.security_type == "etf"
-                    and not candidate.etf_valuation
-                )
-                for candidate in candidates
+                candidate.market_data_as_of is None for candidate in candidates
             ):
                 return None
         if stale_date:
@@ -531,6 +547,16 @@ class AkshareProvider(ValueHunterProvider):
     def load_candidates(self) -> list[CandidateObservation]:
         cached = self._read_candidate_cache()
         if cached is not None:
+            stale_etfs = [
+                item for item in cached
+                if item.security_type == "etf"
+                and (item.etf_valuation or {}).get("calculation_version") != 2
+            ]
+            if stale_etfs:
+                ak = self._ak()
+                self._enrich_market_history(stale_etfs)
+                self._enrich_etf_nav(ak, stale_etfs)
+                self._write_cache("candidates", cached)
             return cached
         ak = self._ak()
         candidates = self._base_watchlist()
@@ -595,6 +621,13 @@ class AkshareProvider(ValueHunterProvider):
                 candidate.warnings.append(f"market_data.{provider_symbol}.price_history")
                 continue
 
+            split_adjustments = 0
+            if candidate.security_type == "etf":
+                closes, split_adjustments = _normalize_etf_split_history(closes)
+                if split_adjustments:
+                    candidate.warnings.append(
+                        f"ETF历史价格检测到{split_adjustments}次份额拆分跳变，已归一到当前份额口径"
+                    )
             candidate.current_price = closes[-1]
             candidate.daily_return_pct = _period_return(closes, 1)
             candidate.return_20d_pct = _period_return(closes, 20)
@@ -619,6 +652,8 @@ class AkshareProvider(ValueHunterProvider):
                     "price_as_of": through.isoformat(),
                     "price_source": candidate.market_data_source,
                     "underlying_valuation_premium_pct": None,
+                    "split_adjustments": split_adjustments,
+                    "calculation_version": 2,
                 })
             if "market_data_registry_ohlcv" not in candidate.source_fields:
                 candidate.source_fields.append("market_data_registry_ohlcv")

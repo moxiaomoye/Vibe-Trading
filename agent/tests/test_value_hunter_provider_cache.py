@@ -12,6 +12,8 @@ from src.value_hunter.models import CandidateObservation, IndexObservation, Mark
 from src.value_hunter.providers import (
     AkshareProvider,
     _etf_price_bands,
+    _normalize_etf_split_history,
+    _period_return,
     _frame_on_or_before,
     _call_with_timeout,
     _latest_complete_weekday,
@@ -111,7 +113,7 @@ def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> N
     assert provider._read_candidate_cache() is None
 
 
-def test_candidate_cache_is_ignored_when_etf_valuation_is_missing(tmp_path) -> None:
+def test_candidate_cache_with_missing_etf_valuation_is_loaded_for_targeted_refresh(tmp_path) -> None:
     cache = tmp_path / "akshare-candidates-2026-07-22.json"
     cache.write_text(
         '[{"symbol":"588060","name":"ETF","sector":"Index","theme":"Index",'
@@ -125,7 +127,7 @@ def test_candidate_cache_is_ignored_when_etf_valuation_is_missing(tmp_path) -> N
     )
     provider = AkshareProvider(watchlist_path=watchlist, cache_dir=tmp_path)
 
-    assert provider._read_candidate_cache() is None
+    assert provider._read_candidate_cache() is not None
 
 
 def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> None:
@@ -182,6 +184,16 @@ def test_etf_price_bands_are_derived_from_observed_history() -> None:
     assert bands["deep_value_below"] == bands["bargain_price_low"]
     assert bands["history_sessions"] == 252
     assert bands["confidence"] == "screen_grade"
+
+
+def test_etf_split_history_is_normalized_to_current_share_basis() -> None:
+    closes = [3.0, 3.1, 3.2, 1.08, 1.10, 1.12]
+
+    normalized, count = _normalize_etf_split_history(closes)
+
+    assert count == 1
+    assert max(normalized) / min(normalized) < 1.15
+    assert _period_return(normalized, 3) > -5
 
 
 def test_etf_nav_snapshot_calculates_market_premium_and_marks_qdii_limit() -> None:
