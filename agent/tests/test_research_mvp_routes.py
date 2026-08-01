@@ -38,4 +38,7 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     assert len(body["candidates"]) == 2
     assert body["candidates"][0]["code"] == "688001.SH"
     assert "relative_to_market_pct" in body["candidates"][0]["data_gaps"]
+    assert set(body["candidates"][0]["research_plan"]) == {
+        "observation_conditions", "risk_conditions", "validation_conditions"
+    }
     assert service.history(1)[0]["mode"] == "demo"

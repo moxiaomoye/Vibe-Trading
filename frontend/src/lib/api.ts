@@ -448,6 +448,11 @@ export interface ResearchMvpCandidate {
   valuation: Record<string, number | null>;
   supporting_evidence: string[];
   counter_evidence: string[];
+  research_plan: {
+    observation_conditions: string[];
+    risk_conditions: string[];
+    validation_conditions: string[];
+  };
 }
 
 export interface ResearchMvpRun {

@@ -25,6 +25,14 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         gaps.append("current_price")
     if observation.relative_to_sector_pct is None:
         gaps.append("relative_to_sector_pct")
+    observation_conditions = list(candidate.reasons) or [
+        "补齐公司质量、财务、估值与价格错位证据后再进一步关注。"
+    ]
+    risk_conditions = list(observation.risk_evidence) or [candidate.first_rejection]
+    validation_conditions = [
+        "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+        "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。",
+    ]
     return {
         "name": observation.name,
         "code": observation.symbol,
@@ -56,6 +64,11 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         },
         "supporting_evidence": list(candidate.reasons),
         "counter_evidence": list(observation.risk_evidence),
+        "research_plan": {
+            "observation_conditions": observation_conditions,
+            "risk_conditions": risk_conditions,
+            "validation_conditions": validation_conditions,
+        },
     }
 
 

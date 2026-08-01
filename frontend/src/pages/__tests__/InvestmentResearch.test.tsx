@@ -37,6 +37,11 @@ const report: ResearchMvpRun = {
     valuation: { pe_ttm: 28 },
     supporting_evidence: ["距一年高点回撤31.5%"],
     counter_evidence: [],
+    research_plan: {
+      observation_conditions: ["收入与利润趋势保持稳定"],
+      risk_conditions: ["现金流持续恶化"],
+      validation_conditions: ["下一次定期报告后复核"],
+    },
   }],
   data_gaps: [],
 };
@@ -59,5 +64,14 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("4210.00")).toBeInTheDocument();
     expect(screen.getByText("Top 5 Research Candidate")).toBeInTheDocument();
     expect(screen.getByText(/Data Gap：relative_to_market_pct/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "查看研究详情" }));
+    expect(screen.getByText("公司质量")).toBeInTheDocument();
+    expect(screen.getByText("支持证据")).toBeInTheDocument();
+    expect(screen.getByText("反方证据")).toBeInTheDocument();
+    expect(screen.getByText("Research Plan")).toBeInTheDocument();
+    expect(screen.getByText("观察条件：什么情况下值得进一步关注")).toBeInTheDocument();
+    expect(screen.getByText("风险条件：什么情况下判断错误")).toBeInTheDocument();
+    expect(screen.getByText("验证条件：未来如何验证判断")).toBeInTheDocument();
   });
 });

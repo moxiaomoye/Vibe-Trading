@@ -20,6 +20,7 @@ function formatBreadth(value: number | null) {
 }
 
 function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <article className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -60,7 +61,60 @@ function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
           Data Gap：{candidate.data_gaps.join("、")}
         </p>
       )}
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="mt-4 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+      >
+        {expanded ? "收起研究详情" : "查看研究详情"}
+      </button>
+      {expanded && (
+        <div className="mt-4 space-y-5 border-t pt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailMetrics title="公司质量" values={candidate.quality} />
+            <DetailMetrics title="财务信息" values={candidate.financials} />
+            <DetailMetrics title="估值信息" values={candidate.valuation} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DetailList title="支持证据" items={candidate.supporting_evidence} />
+            <DetailList title="反方证据" items={candidate.counter_evidence} />
+            <DetailList title="潜在风险" items={candidate.risks} />
+          </div>
+          <section className="rounded-lg border bg-background p-4">
+            <h4 className="font-semibold">Research Plan</h4>
+            <div className="mt-3 grid gap-4 lg:grid-cols-3">
+              <DetailList title="观察条件：什么情况下值得进一步关注" items={candidate.research_plan.observation_conditions} />
+              <DetailList title="风险条件：什么情况下判断错误" items={candidate.research_plan.risk_conditions} />
+              <DetailList title="验证条件：未来如何验证判断" items={candidate.research_plan.validation_conditions} />
+            </div>
+          </section>
+        </div>
+      )}
     </article>
+  );
+}
+
+function DetailList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+        {items.length > 0 ? items.map((item) => <li key={item}>· {item}</li>) : <li>· Data Gap</li>}
+      </ul>
+    </div>
+  );
+}
+
+function DetailMetrics({ title, values }: { title: string; values: Record<string, number | null> }) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
+        {Object.entries(values).map(([key, value]) => (
+          <div key={key} className="flex justify-between gap-3"><dt>{key}</dt><dd>{value ?? "Data Gap"}</dd></div>
+        ))}
+      </dl>
+    </div>
   );
 }
 

@@ -84,6 +84,7 @@ accepted as an M0 capability.
 
 ### M3 - Candidate detail and Research Plan
 
+- Status: complete.
 - Add a candidate detail interaction on the existing page.
 - Show quality, financials, valuation, support/counter evidence, risks, gaps,
   and the three-part Research Plan.
@@ -150,3 +151,15 @@ accepted as an M0 capability.
 - Boundary: zero candidates is displayed honestly; there is no mock fallback,
   order action, position advice, scheduler, or notification send.
 - Next: M3 candidate detail interaction and three-part Research Plan.
+
+### M3 handoff
+
+- Result: each candidate now opens an inline detail view on the same page.
+- Detail contract: company quality, financials, valuation, supporting evidence,
+  counter evidence, potential risks, candidate Data Gap, and a three-part
+  Research Plan covering observation, error/risk, and future validation.
+- Tests: backend contract test and frontend interaction test passed; Python
+  compile, production frontend build, and `git diff --check` passed.
+- Boundary: Research Plan contains verification conditions only and introduces
+  no transaction, position, scheduler, or notification behavior.
+- Next: M4 requested-date point-in-time replay and T+5/T+20/T+60 outcomes.
