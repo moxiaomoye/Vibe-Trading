@@ -238,3 +238,23 @@ def get_loader_cls_with_fallback(source: str) -> Type[Any]:
     raise NoAvailableSourceError(
         f"Data source '{source}' is unavailable and no fallback found."
     )
+
+
+def get_loader_cls_exact(source: str) -> Type[Any]:
+    """Return exactly *source* when it is available, without implicit fallback.
+
+    Callers that own an explicit priority chain use this resolver so provenance
+    records the loader that actually served the data instead of the originally
+    requested loader name.
+    """
+    _ensure_registered()
+    loader_cls = LOADER_REGISTRY.get(source)
+    if loader_cls is None:
+        raise NoAvailableSourceError(f"Unknown data source: {source}")
+    try:
+        instance = loader_cls()
+    except Exception as exc:
+        raise NoAvailableSourceError(f"Data source '{source}' is unavailable: {exc}") from exc
+    if not instance.is_available():
+        raise NoAvailableSourceError(f"Data source '{source}' is unavailable")
+    return loader_cls

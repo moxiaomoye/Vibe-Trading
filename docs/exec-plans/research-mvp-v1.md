@@ -294,6 +294,7 @@ for the continuation milestones.
 
 #### M2 - Tushare-first provider
 
+- Status: complete.
 - Add a Value Hunter provider implementation/facade that prefers Tushare when
   a usable token exists, then AKShare, then existing public loader fallbacks.
 - Reuse existing Tushare stock/fund/index loaders and fundamentals provider.
@@ -397,3 +398,23 @@ for the continuation milestones.
   TestClient deprecation warnings are unchanged.
 - Next: M2 select Tushare first when its token is usable, preserve registry
   fallbacks, and expose actual source provenance without leaking credentials.
+
+### M2 handoff
+
+- Result: the existing market-data registry now supports exact loader
+  resolution, allowing Research MVP to enforce Tushare -> AKShare -> existing
+  public-source fallbacks without changing fallback behavior for other callers.
+- Partial-source behavior: successful symbols are retained while only missing
+  symbols continue through the chain. Candidate payloads expose the actual
+  source used per symbol instead of labeling a fallback result as Tushare.
+- Real-data verification: the configured Tushare credential was detected but
+  its current entitlements rejected stock, fund and index daily endpoints. The
+  same request then resolved an ETF through AKShare and the stock/index through
+  Tencent, with all requested symbols receiving real dated OHLCV rows.
+- Data integrity: no credential value is logged or returned. Exhausted symbols
+  remain unresolved and surface as Data Gap; no fabricated observations are
+  introduced.
+- Tests: 152 focused provider, registry, Tushare, Value Hunter and Research MVP
+  tests passed; four entitlement-dependent real-Tushare tests were skipped.
+- Next: M3 add turnover and same-session consistency to the existing market
+  snapshot and expose the completed summary through Research MVP.

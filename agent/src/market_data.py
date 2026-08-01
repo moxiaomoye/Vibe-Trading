@@ -100,6 +100,7 @@ def fetch_market_data(
     loader_resolver: Callable[[str], type] = get_loader,
     fallback_chain_provider: Callable[[str], list[str]] | None = None,
     max_fallback_attempts: int = 3,
+    include_metadata: bool = False,
 ) -> dict[str, Any]:
     """Fetch normalized OHLCV data through the repository loader layer.
 
@@ -113,6 +114,7 @@ def fetch_market_data(
     from backtest.loaders.registry import FALLBACK_CHAINS
 
     results: dict[str, Any] = {}
+    source_by_symbol: dict[str, str] = {}
     result_aliases = {
         code: code.split(":", 1)[1]
         if code.lower().startswith("local:")
@@ -152,9 +154,12 @@ def fetch_market_data(
         attempts = attempts[: max(1, max_fallback_attempts)]
 
         data_map: dict[str, Any] = {}
-        used_source: str | None = None
+        remaining_codes = list(src_codes)
+        used_sources: list[str] = []
         last_exc: Exception | None = None
         for attempt_src in attempts:
+            if not remaining_codes:
+                break
             try:
                 loader_cls = loader_resolver(attempt_src)
             except NoAvailableSourceError as exc:
@@ -167,10 +172,19 @@ def fetch_market_data(
                 continue
             try:
                 loader = loader_cls()
-                data_map = loader.fetch(src_codes, start_date, end_date, interval=interval)
-                used_source = attempt_src
-                if data_map:
-                    break
+                attempt_data = loader.fetch(
+                    remaining_codes, start_date, end_date, interval=interval
+                )
+                if not attempt_data:
+                    continue
+                data_map.update(attempt_data)
+                used_sources.append(attempt_src)
+                for symbol in attempt_data:
+                    source_by_symbol[symbol] = attempt_src
+                remaining_codes = [
+                    code for code in remaining_codes
+                    if code not in attempt_data and result_aliases[code] not in attempt_data
+                ]
             except Exception as exc:  # noqa: BLE001 — contained per-symbol fallback
                 last_exc = exc
                 logger.error(
@@ -179,10 +193,11 @@ def fetch_market_data(
                 )
                 continue
 
-        if used_source and used_source != src:
+        fallback_sources = [used for used in used_sources if used != src]
+        if fallback_sources:
             logger.info(
-                "market-data source %r unavailable for %s; fell back to %r",
-                src, src_codes, used_source,
+                "market-data source %r incomplete for %s; used fallbacks %s",
+                src, src_codes, fallback_sources,
             )
 
         for symbol, df in data_map.items():
@@ -199,6 +214,8 @@ def fetch_market_data(
     ]
     if unresolved:
         results["_unresolved"] = unresolved
+    if include_metadata:
+        results["_metadata"] = {"source_by_symbol": source_by_symbol}
 
     return results
 

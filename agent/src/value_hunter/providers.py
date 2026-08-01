@@ -18,12 +18,23 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from backtest.loaders._symbol_utils import _is_etf_listed
+from backtest.loaders.registry import get_loader_cls_exact
 from src.market_data import fetch_market_data
 
 from .models import CandidateObservation, IndexObservation, MarketObservation
 
 
 MarketFetcher = Callable[..., dict[str, Any]]
+
+RESEARCH_MARKET_DATA_FALLBACK_CHAIN: tuple[str, ...] = (
+    "tushare",
+    "akshare",
+    "tencent",
+    "mootdx",
+    "eastmoney",
+    "baostock",
+    "local",
+)
 
 
 class ValueHunterProvider(ABC):
@@ -392,9 +403,13 @@ class AkshareProvider(ValueHunterProvider):
                 codes=codes,
                 start_date=start.isoformat(),
                 end_date=through.isoformat(),
-                source="auto",
+                source="tushare",
                 interval="1D",
                 max_rows=0,
+                loader_resolver=get_loader_cls_exact,
+                fallback_chain_provider=lambda _: list(RESEARCH_MARKET_DATA_FALLBACK_CHAIN),
+                max_fallback_attempts=len(RESEARCH_MARKET_DATA_FALLBACK_CHAIN),
+                include_metadata=True,
             )
         except Exception as exc:  # noqa: BLE001 - provider gaps belong on observations
             for candidate in candidates:
@@ -405,6 +420,7 @@ class AkshareProvider(ValueHunterProvider):
             return
 
         benchmark_rows = _market_rows(payload.get(benchmark_symbol), through=through)
+        source_by_symbol = (payload.get("_metadata") or {}).get("source_by_symbol") or {}
         benchmark_closes = [
             close for row in benchmark_rows if (close := _series_number(row, "close")) is not None
         ]
@@ -436,6 +452,7 @@ class AkshareProvider(ValueHunterProvider):
             if candidate.return_20d_pct is not None and benchmark_return_20d is not None:
                 candidate.relative_to_market_pct = candidate.return_20d_pct - benchmark_return_20d
             candidate.market_data_as_of = through.isoformat()
+            candidate.market_data_source = source_by_symbol.get(provider_symbol)
             if "market_data_registry_ohlcv" not in candidate.source_fields:
                 candidate.source_fields.append("market_data_registry_ohlcv")
 

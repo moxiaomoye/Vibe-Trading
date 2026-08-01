@@ -451,6 +451,7 @@ export interface ResearchMvpCandidate {
   drawdown_pct: number | null;
   relative_to_market_pct: number | null;
   market_data_as_of: string | null;
+  market_data_source: string | null;
   sector: string;
   sector_performance_pct: number | null;
   selection_reasons: string[];

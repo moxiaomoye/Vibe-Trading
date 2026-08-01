@@ -12,6 +12,7 @@ from backtest.loaders.registry import (
     LOADER_REGISTRY,
     VALID_SOURCES,
     get_loader_cls_with_fallback,
+    get_loader_cls_exact,
     register,
     resolve_loader,
 )
@@ -106,7 +107,18 @@ class TestRegisterDecorator:
     def test_register_returns_class_unchanged(self) -> None:
         with patch.dict(LOADER_REGISTRY, {}, clear=True):
             result = register(_FakeAvailableLoader)
-            assert result is _FakeAvailableLoader
+        assert result is _FakeAvailableLoader
+
+
+class TestExactLoaderResolution:
+    def test_returns_only_requested_available_loader(self) -> None:
+        with patch.dict(LOADER_REGISTRY, {"fake_available": _FakeAvailableLoader}, clear=False):
+            assert get_loader_cls_exact("fake_available") is _FakeAvailableLoader
+
+    def test_does_not_implicitly_fallback(self) -> None:
+        with patch.dict(LOADER_REGISTRY, {"fake_unavailable": _FakeUnavailableLoader}, clear=False):
+            with pytest.raises(NoAvailableSourceError, match="unavailable"):
+                get_loader_cls_exact("fake_unavailable")
 
 
 # ---------------------------------------------------------------------------

@@ -76,7 +76,9 @@ def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> N
 
 def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> None:
     def fetcher(**kwargs):
-        assert kwargs["source"] == "auto"
+        assert kwargs["source"] == "tushare"
+        assert kwargs["include_metadata"] is True
+        assert kwargs["fallback_chain_provider"]("tushare")[:2] == ["tushare", "akshare"]
         assert set(kwargs["codes"]) == {"600522.SH", "159516.SZ", "000300.SH"}
         result = {}
         for symbol, step in (("600522.SH", 1.0), ("159516.SZ", 0.5), ("000300.SH", 0.25)):
@@ -88,6 +90,13 @@ def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> No
                 }
                 for index in range(61)
             ]
+        result["_metadata"] = {
+            "source_by_symbol": {
+                "600522.SH": "tushare",
+                "159516.SZ": "akshare",
+                "000300.SH": "tushare",
+            }
+        }
         return result
 
     candidates = [
@@ -106,6 +115,8 @@ def test_market_history_enrichment_uses_normalized_stock_and_etf_symbols() -> No
     assert candidates[0].volume_ratio_20d is not None
     assert candidates[0].relative_to_market_pct is not None
     assert candidates[0].market_data_as_of is not None
+    assert candidates[0].market_data_source == "tushare"
+    assert candidates[1].market_data_source == "akshare"
     assert "market_data_registry_ohlcv" in candidates[0].source_fields
 
 

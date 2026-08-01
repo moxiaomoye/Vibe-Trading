@@ -38,6 +38,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         "volume_ratio_20d",
         "relative_to_market_pct",
         "market_data_as_of",
+        "market_data_source",
     ):
         if getattr(observation, field) is None:
             gaps.append(field)
@@ -61,6 +62,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
         "drawdown_pct": observation.drawdown_252_pct,
         "relative_to_market_pct": observation.relative_to_market_pct,
         "market_data_as_of": observation.market_data_as_of,
+        "market_data_source": observation.market_data_source,
         "sector": observation.sector,
         "sector_performance_pct": observation.relative_to_sector_pct,
         "selection_reasons": list(candidate.reasons),

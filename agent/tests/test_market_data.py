@@ -269,9 +269,70 @@ def test_fetch_missing_symbol_listed_as_unresolved() -> None:
         end_date="2026-01-02",
         source="yahoo",
         loader_resolver=lambda src: _PartialLoader,
+        max_fallback_attempts=1,
     )
     assert "A.US" in out
     assert out["_unresolved"] == ["B.US"]
+
+
+def test_partial_source_continues_fallback_for_only_missing_symbols() -> None:
+    seen: list[tuple[str, list[str]]] = []
+
+    class FirstLoader:
+        def fetch(self, codes, start_date, end_date, interval="1D"):
+            seen.append(("tushare", list(codes)))
+            idx = pd.to_datetime(["2026-01-01"])
+            idx.name = "trade_date"
+            return {codes[0]: pd.DataFrame({"close": [1.0]}, index=idx)}
+
+    class SecondLoader:
+        def fetch(self, codes, start_date, end_date, interval="1D"):
+            seen.append(("akshare", list(codes)))
+            idx = pd.to_datetime(["2026-01-01"])
+            idx.name = "trade_date"
+            return {code: pd.DataFrame({"close": [2.0]}, index=idx) for code in codes}
+
+    out = fetch_market_data(
+        codes=["600522.SH", "588060.SH"],
+        start_date="2026-01-01",
+        end_date="2026-01-02",
+        source="tushare",
+        loader_resolver=lambda source: FirstLoader if source == "tushare" else SecondLoader,
+        fallback_chain_provider=lambda _: ["tushare", "akshare"],
+        max_fallback_attempts=2,
+        include_metadata=True,
+    )
+
+    assert seen == [
+        ("tushare", ["600522.SH", "588060.SH"]),
+        ("akshare", ["588060.SH"]),
+    ]
+    assert out["_metadata"]["source_by_symbol"] == {
+        "600522.SH": "tushare",
+        "588060.SH": "akshare",
+    }
+    assert "_unresolved" not in out
+
+
+def test_fetch_metadata_reports_actual_fallback_source() -> None:
+    def resolver(source: str):
+        if source == "tushare":
+            raise RuntimeError("token unavailable")
+        assert source == "akshare"
+        return _StubLoader
+
+    out = fetch_market_data(
+        codes=["600522.SH"],
+        start_date="2026-01-01",
+        end_date="2026-01-02",
+        source="tushare",
+        loader_resolver=resolver,
+        fallback_chain_provider=lambda _: ["tushare", "akshare"],
+        max_fallback_attempts=2,
+        include_metadata=True,
+    )
+
+    assert out["_metadata"]["source_by_symbol"] == {"600522.SH": "akshare"}
 
 
 def test_fetch_local_result_alias_is_not_unresolved() -> None:

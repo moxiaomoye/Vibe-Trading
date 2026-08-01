@@ -72,6 +72,7 @@ class CandidateObservation:
     volume_ratio_20d: float | None = None
     relative_to_market_pct: float | None = None
     market_data_as_of: str | None = None
+    market_data_source: str | None = None
 
 
 @dataclass(slots=True)
