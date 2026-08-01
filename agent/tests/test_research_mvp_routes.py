@@ -38,6 +38,8 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     assert body["trade_date"] == "2024-02-05"
     assert body["market_state"] == "EXTREME_PANIC"
     assert body["market_summary"]["limit_down"] == 170
+    assert "turnover_amount" in body["market_summary"]
+    assert "market_summary.turnover_amount" in body["data_gaps"]
     assert len(body["candidates"]) == 3
     assert body["candidates"][0]["code"] == "688001.SH"
     assert "relative_to_market_pct" in body["candidates"][0]["data_gaps"]

@@ -19,6 +19,10 @@ function formatBreadth(value: number | null) {
   return value === null ? "Data Gap" : `${(value * 100).toFixed(2)}%`;
 }
 
+function formatTurnover(value: number | null) {
+  return value === null ? "Data Gap" : `${(value / 100_000_000).toFixed(2)} 亿元`;
+}
+
 function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -204,7 +208,7 @@ export function InvestmentResearch() {
 
       {report && (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
             <Metric label="交易日" value={report.trade_date} />
             <div className="rounded-lg bg-muted/60 p-3">
               <p className="text-xs text-muted-foreground">市场状态</p>
@@ -214,6 +218,7 @@ export function InvestmentResearch() {
             <Metric label="下跌家数" value={formatNumber(report.market_summary.decliners)} />
             <Metric label="涨停数量" value={formatNumber(report.market_summary.limit_up)} />
             <Metric label="跌停数量" value={formatNumber(report.market_summary.limit_down)} />
+            <Metric label="成交额" value={formatTurnover(report.market_summary.turnover_amount)} />
           </section>
 
           <section className="rounded-xl border bg-card p-5">

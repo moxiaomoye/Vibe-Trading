@@ -107,10 +107,14 @@ def build_research_run(service: ValueHunterService) -> dict[str, Any]:
         "limit_up": observation.limit_up_count,
         "limit_down": observation.limit_down_count,
         "breadth": observation.advancer_ratio,
+        "turnover_amount": observation.turnover_amount,
         "panic_reasons": list(scan.market.reasons),
         "source": observation.source,
     }
-    for field in ("advancers", "decliners", "limit_up", "limit_down", "breadth"):
+    for field in (
+        "advancers", "decliners", "limit_up", "limit_down", "breadth",
+        "turnover_amount",
+    ):
         if summary_fields[field] is None:
             gaps.append(f"market_summary.{field}")
     candidates = [_candidate_payload(item) for item in scan.candidates[:5]]

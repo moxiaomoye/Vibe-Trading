@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+
+from src.value_hunter import providers as provider_module
 from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
-from src.value_hunter.providers import AkshareProvider, _latest_complete_weekday
+from src.value_hunter.providers import (
+    AkshareProvider,
+    _frame_on_or_before,
+    _latest_complete_weekday,
+)
 from src.value_hunter.providers import normalize_ashare_symbol, security_type_for_symbol
 
 
@@ -132,6 +139,57 @@ def test_latest_complete_weekday_skips_weekend_and_pre_close_session() -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     assert _latest_complete_weekday(datetime(2026, 8, 1, 16, 0, tzinfo=timezone)).isoformat() == "2026-07-31"
     assert _latest_complete_weekday(datetime(2026, 7, 31, 14, 0, tzinfo=timezone)).isoformat() == "2026-07-30"
+
+
+def test_market_frame_is_cut_to_a_confirmed_common_session() -> None:
+    frame = pd.DataFrame({
+        "date": ["2026-07-30", "2026-07-31", "2026-08-03"],
+        "close": [100.0, 101.0, 999.0],
+    })
+
+    selected, as_of = _frame_on_or_before(frame, date(2026, 7, 31))
+
+    assert as_of is not None and as_of.isoformat() == "2026-07-31"
+    assert selected["close"].tolist() == [100.0, 101.0]
+
+
+def test_live_market_snapshot_includes_breadth_and_turnover(monkeypatch) -> None:
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 8, 1, 16, 0, tzinfo=tz)
+
+    monkeypatch.setattr(provider_module, "datetime", FixedDateTime)
+    dates = pd.bdate_range(end="2026-07-31", periods=260)
+    index_frame = pd.DataFrame({
+        "date": dates.strftime("%Y-%m-%d"),
+        "close": [3000.0 + index for index in range(260)],
+    })
+    spot_frame = pd.DataFrame({
+        "涨跌幅": [1.2, -2.1, 10.0, -10.0, 0.0],
+        "成交额": [100.0, 200.0, 300.0, 400.0, None],
+    })
+
+    class FakeAkshare:
+        @staticmethod
+        def stock_zh_index_daily_em(symbol):
+            return index_frame
+
+        @staticmethod
+        def stock_zh_a_spot_em():
+            return spot_frame
+
+    monkeypatch.setattr(AkshareProvider, "_ak", staticmethod(lambda: FakeAkshare()))
+
+    market = AkshareProvider().load_market()
+
+    assert market.as_of == "2026-07-31"
+    assert len(market.indices) == 5
+    assert market.advancer_count == 2
+    assert market.decliner_count == 2
+    assert market.limit_up_count == 1
+    assert market.limit_down_count == 1
+    assert market.turnover_amount == 1000.0
 
 
 def test_announcement_classifier_marks_severe_and_soft_risks():

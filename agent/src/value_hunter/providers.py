@@ -179,6 +179,30 @@ def _market_rows(raw: Any, *, through: date) -> list[dict[str, Any]]:
     return [row for _, row in sorted(dated, key=lambda item: item[0])]
 
 
+def _frame_on_or_before(frame: Any, through: date) -> tuple[Any, date | None]:
+    """Return chronologically ordered rows through a confirmed market date."""
+    date_values: list[Any] | None = None
+    for column in ("date", "trade_date", "日期"):
+        if column in frame.columns:
+            date_values = list(frame[column])
+            break
+    if date_values is None:
+        date_values = list(frame.index)
+
+    dated_positions: list[tuple[date, int]] = []
+    for position, value in enumerate(date_values):
+        try:
+            row_date = date.fromisoformat(str(value)[:10])
+        except (TypeError, ValueError):
+            continue
+        if row_date <= through:
+            dated_positions.append((row_date, position))
+    if not dated_positions:
+        return frame.iloc[0:0], None
+    dated_positions.sort(key=lambda item: item[0])
+    return frame.iloc[[position for _, position in dated_positions]], dated_positions[-1][0]
+
+
 def _series_number(row: dict[str, Any], key: str) -> float | None:
     try:
         return float(row[key])
@@ -306,6 +330,8 @@ class AkshareProvider(ValueHunterProvider):
         ak = self._ak()
         observations: list[IndexObservation] = []
         warnings: list[str] = []
+        market_as_of: date | None = None
+        latest_candidate = _latest_complete_weekday()
         for symbol, name in self._INDEX_MAP.items():
             try:
                 try:
@@ -315,6 +341,20 @@ class AkshareProvider(ValueHunterProvider):
                     # Docker networks; Tencent provides the same OHLC history.
                     frame = ak.stock_zh_index_daily_tx(symbol=symbol)
                     warnings.append(f"{name}使用腾讯备用行情")
+                frame, index_as_of = _frame_on_or_before(
+                    frame, market_as_of or latest_candidate
+                )
+                if index_as_of is None:
+                    warnings.append(f"{name}缺少可确认交易日期的行情")
+                    continue
+                if market_as_of is None:
+                    market_as_of = index_as_of
+                elif index_as_of != market_as_of:
+                    warnings.append(
+                        f"{name}行情日期{index_as_of.isoformat()}与市场日期"
+                        f"{market_as_of.isoformat()}不一致"
+                    )
+                    continue
                 closes = frame["close"].astype(float).tail(300)
                 close = float(closes.iloc[-1])
                 prev = float(closes.iloc[-2])
@@ -335,7 +375,11 @@ class AkshareProvider(ValueHunterProvider):
         advancer_count = None
         decliner_count = None
         limit_up_count = None
+        turnover_amount = None
         try:
+            current = datetime.now(ZoneInfo("Asia/Shanghai"))
+            if current.weekday() < 5 and current.time() < time(15, 5):
+                raise RuntimeError("current A-share session is not complete")
             try:
                 spot = ak.stock_zh_a_spot_em()
             except Exception:
@@ -350,16 +394,25 @@ class AkshareProvider(ValueHunterProvider):
             # Approximation handles main board and 20% boards without claiming exact exchange stats.
             limit_up_count = int((changes >= 9.8).sum())
             limit_down_count = int((changes <= -9.8).sum())
+            turnover_column = next(
+                (column for column in ("成交额", "amount") if column in spot.columns),
+                None,
+            )
+            if turnover_column is not None:
+                amounts = [_number(value) for value in spot[turnover_column]]
+                valid_amounts = [value for value in amounts if value is not None]
+                if valid_amounts:
+                    turnover_amount = float(sum(valid_amounts))
         except Exception as exc:
             warnings.append(f"市场宽度读取失败: {type(exc).__name__}")
 
         result = MarketObservation(
-            as_of=_latest_complete_weekday().isoformat(), indices=observations,
+            as_of=(market_as_of or latest_candidate).isoformat(), indices=observations,
             advancer_ratio=advancer_ratio, above_ma60_ratio=None,
             limit_down_count=limit_down_count, turnover_zscore=None,
             source="AKShare/Eastmoney", coverage=["indices", "spot_breadth"], warnings=warnings,
             advancer_count=advancer_count, decliner_count=decliner_count,
-            limit_up_count=limit_up_count,
+            limit_up_count=limit_up_count, turnover_amount=turnover_amount,
         )
         self._write_cache("market", result)
         return result

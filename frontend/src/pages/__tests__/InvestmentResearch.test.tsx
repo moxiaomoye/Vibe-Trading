@@ -17,6 +17,7 @@ const report: ResearchMvpRun = {
     limit_up: 31,
     limit_down: 106,
     breadth: 0.1084,
+    turnover_amount: 1_234_000_000_000,
     panic_reasons: ["市场宽度显著收缩"],
     source: "AKShare/Eastmoney",
   },

@@ -481,6 +481,7 @@ export interface ResearchMvpRun {
     limit_up: number | null;
     limit_down: number | null;
     breadth: number | null;
+    turnover_amount: number | null;
     panic_reasons: string[];
     source: string;
   };

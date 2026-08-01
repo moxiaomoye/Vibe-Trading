@@ -302,6 +302,7 @@ for the continuation milestones.
 
 #### M3 - Complete market snapshot
 
+- Status: complete.
 - Populate index moves, A-share advancers/decliners, limit up/down, turnover,
   breadth and panic reasons for the latest complete trade date.
 - Never combine mismatched trade dates without surfacing a gap.
@@ -418,3 +419,20 @@ for the continuation milestones.
   tests passed; four entitlement-dependent real-Tushare tests were skipped.
 - Next: M3 add turnover and same-session consistency to the existing market
   snapshot and expose the completed summary through Research MVP.
+
+### M3 handoff
+
+- Result: the existing AKShare market adapter now selects index rows on one
+  confirmed completed A-share session, rejects mismatched index dates, and uses
+  the first available broad index to resolve exchange holidays safely.
+- Breadth: advancers, decliners, approximate limit-up/limit-down counts,
+  advancer ratio and total A-share turnover are returned in `market_summary`.
+  Turnover is stored in source currency units and displayed in 100-million CNY.
+- Date safety: weekday pre-close spot data is not used as a completed snapshot;
+  it becomes an explicit market-width Data Gap. No future index row is consumed.
+- UI: the Investment Research summary now includes turnover alongside market
+  state and breadth metrics.
+- Tests: 23 focused backend tests and three UI tests passed; the production
+  TypeScript/Vite build passed. The existing bundle-size warning is unchanged.
+- Next: M4 align the one candidate score to the requested 30/30/20/10/10 Panic
+  Value Hunter method, then externalize its thresholds and weights in M5.
