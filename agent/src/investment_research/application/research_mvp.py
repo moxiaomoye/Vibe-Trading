@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 from src.value_hunter.models import CandidateResult, ScanResult
 from src.value_hunter.service import ValueHunterService
+from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
+from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
+from uuid import NAMESPACE_URL, uuid5
 
 MarketFetcher = Callable[..., dict[str, Any]]
 
@@ -197,3 +200,64 @@ def build_historical_evaluation(
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
     }
+
+
+def render_feishu_preview(report: dict[str, Any]) -> str:
+    summary = report.get("market_summary", {})
+    lines = [
+        f"Vibe-Trading 盘后研究 | {report.get('trade_date', 'Data Gap')}",
+        f"市场状态：{report.get('market_state', 'Data Gap')}",
+        f"上涨/下跌：{summary.get('advancers')} / {summary.get('decliners')}",
+        f"涨停/跌停：{summary.get('limit_up')} / {summary.get('limit_down')}",
+        "",
+        "Research Candidate：",
+    ]
+    for index, candidate in enumerate(report.get("candidates", [])[:5], 1):
+        reasons = "；".join(candidate.get("selection_reasons", [])[:2]) or "Data Gap"
+        lines.append(f"{index}. {candidate.get('name')} ({candidate.get('code')})：{reasons}")
+    if not report.get("candidates"):
+        lines.append("当前无候选；零候选是有效研究结果。")
+    lines.extend(("", "仅供研究验证，不含交易指令、仓位建议或自动交易。"))
+    return "\n".join(lines)
+
+
+def prepare_feishu_delivery(
+    report: dict[str, Any],
+    repository: SQLiteOperationsRepository,
+    *,
+    send: bool = False,
+    confirmed: bool = False,
+) -> dict[str, Any]:
+    preview = render_feishu_preview(report)
+    result: dict[str, Any] = {
+        "preview": preview,
+        "send": send,
+        "confirmed": confirmed,
+        "scheduler": False,
+        "status": "preview",
+    }
+    if not send:
+        return result
+    if not confirmed:
+        raise ValueError("confirmed=true is required when send=true")
+    now = datetime.now(timezone.utc)
+    trade_date = str(report.get("trade_date", "unknown"))
+    key = f"research-mvp:{trade_date}:feishu"
+    message = OutboxMessage(
+        message_id=str(uuid5(NAMESPACE_URL, key)),
+        idempotency_key=key,
+        channel=DeliveryChannel.FEISHU,
+        message_type="research_mvp",
+        subject=f"Vibe-Trading 盘后研究 {trade_date}",
+        body=preview,
+        source_id=trade_date,
+        status=OutboxStatus.PENDING,
+        attempt_count=0,
+        available_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    inserted = repository.enqueue(message)
+    result["status"] = "queued" if inserted else "already_queued"
+    result["message_id"] = message.message_id
+    return result

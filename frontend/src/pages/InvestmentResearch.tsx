@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, BarChart3, BookOpenCheck, DatabaseZap, RefreshCw } from "lucide-react";
 
-import { api, type ResearchMvpCandidate, type ResearchMvpHistoricalEvaluation, type ResearchMvpRun } from "@/lib/api";
+import { api, type ResearchMvpCandidate, type ResearchMvpFeishuPreview, type ResearchMvpHistoricalEvaluation, type ResearchMvpRun } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const MARKET_TONE: Record<ResearchMvpRun["market_state"], string> = {
@@ -134,6 +134,7 @@ export function InvestmentResearch() {
   const [historyDate, setHistoryDate] = useState("2025-04-07");
   const [history, setHistory] = useState<ResearchMvpHistoricalEvaluation | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [feishu, setFeishu] = useState<ResearchMvpFeishuPreview | null>(null);
 
   const generate = async () => {
     setLoading(true);
@@ -157,6 +158,16 @@ export function InvestmentResearch() {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const previewFeishu = async () => {
+    if (!report) return;
+    setFeishu(await api.previewInvestmentResearchFeishu(report));
+  };
+
+  const confirmFeishu = async () => {
+    if (!report) return;
+    setFeishu(await api.previewInvestmentResearchFeishu(report, true, true));
   };
 
   return (
@@ -225,6 +236,19 @@ export function InvestmentResearch() {
             {report.candidates.length > 0
               ? report.candidates.map((candidate) => <CandidateCard key={candidate.code} candidate={candidate} />)
               : <div className="rounded-xl border p-5 text-sm text-muted-foreground">当前没有候选；零候选是有效研究结果。</div>}
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="font-semibold">飞书通知 Preview</h2>
+            <p className="mt-1 text-sm text-muted-foreground">默认 send=false、scheduler=false；确认后仅加入既有通知发件箱。</p>
+            <button type="button" onClick={() => void previewFeishu()} className="mt-3 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">生成飞书 Preview</button>
+            {feishu && (
+              <div className="mt-3 space-y-3">
+                <pre className="whitespace-pre-wrap rounded-lg bg-muted p-4 text-xs">{feishu.preview}</pre>
+                {feishu.status === "preview" && <button type="button" onClick={() => void confirmFeishu()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">确认加入飞书发件箱</button>}
+                {feishu.status !== "preview" && <p className="text-sm text-emerald-700">飞书状态：{feishu.status}</p>}
+              </div>
+            )}
           </section>
         </>
       )}

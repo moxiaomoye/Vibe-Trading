@@ -3,7 +3,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ResearchMvpRun } from "@/lib/api";
 import { InvestmentResearch } from "../InvestmentResearch";
 
-const apiMock = vi.hoisted(() => ({ runInvestmentResearch: vi.fn(), evaluateInvestmentResearchHistory: vi.fn() }));
+const apiMock = vi.hoisted(() => ({
+  runInvestmentResearch: vi.fn(), evaluateInvestmentResearchHistory: vi.fn(), previewInvestmentResearchFeishu: vi.fn(),
+}));
 vi.mock("@/lib/api", () => ({ api: apiMock }));
 
 const report: ResearchMvpRun = {
@@ -56,6 +58,10 @@ describe("InvestmentResearch page", () => {
       candidates: [{ name: "中芯国际", code: "688981", research_status: "Research", t5: 3.2, t20: 8.1, t60: null, data_gaps: ["t60"] }],
       data_gaps: ["688981.t60"],
     });
+    apiMock.previewInvestmentResearchFeishu.mockReset();
+    apiMock.previewInvestmentResearchFeishu
+      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: false, confirmed: false, scheduler: false, status: "preview" })
+      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "queued", message_id: "message-1" });
   });
 
   it("calls the real Research MVP API only after the user generates a report", async () => {
@@ -88,5 +94,17 @@ describe("InvestmentResearch page", () => {
     expect(apiMock.evaluateInvestmentResearchHistory).toHaveBeenCalledWith("2025-04-07");
     expect(screen.getByText("3.20%")).toBeInTheDocument();
     expect(screen.getAllByText("Data Gap").length).toBeGreaterThan(0);
+  });
+
+  it("previews before an explicit Feishu outbox confirmation", async () => {
+    render(<InvestmentResearch />);
+    fireEvent.click(screen.getByRole("button", { name: "生成盘后研究" }));
+    await screen.findByText("中芯国际");
+    fireEvent.click(screen.getByRole("button", { name: "生成飞书 Preview" }));
+    expect(await screen.findByText("盘后研究 Preview")).toBeInTheDocument();
+    expect(apiMock.previewInvestmentResearchFeishu).toHaveBeenLastCalledWith(report);
+    fireEvent.click(screen.getByRole("button", { name: "确认加入飞书发件箱" }));
+    expect(await screen.findByText("飞书状态：queued")).toBeInTheDocument();
+    expect(apiMock.previewInvestmentResearchFeishu).toHaveBeenLastCalledWith(report, true, true);
   });
 });

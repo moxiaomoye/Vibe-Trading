@@ -100,6 +100,7 @@ accepted as an M0 capability.
 
 ### M5 - Feishu preview
 
+- Status: complete.
 - Generate a preview from the research result.
 - Require explicit user confirmation before any send path.
 - Keep `send=false` and `scheduler=false` by default; do not send during tests.
@@ -182,3 +183,18 @@ accepted as an M0 capability.
   that date. The local Value Hunter database had no such row during M0/M4, so
   that date correctly returns Data Gap rather than a reconstructed claim.
 - Next: M5 preview-first Feishu flow with send and scheduler disabled by default.
+
+### M5 handoff
+
+- Result: added a Feishu preview API and UI flow that renders the generated
+  research report before any delivery action.
+- Confirmation boundary: defaults are `send=false`, `confirmed=false`, and
+  `scheduler=false`. Only an explicit second confirmation with `send=true`
+  creates an idempotent message in the existing Investment Research outbox.
+- Delivery posture: this milestone did not perform a network send and did not
+  start a scheduler. The existing outbox/Feishu transport remains the sole
+  delivery mechanism.
+- Tests: eight backend Research MVP/outbox tests and three frontend interaction
+  tests passed. Preview, confirmation gate, and duplicate suppression are
+  covered without external delivery.
+- Next: M6 Docker build, loopback runtime, real-data API, and browser acceptance.

@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from src.api import research_mvp_routes
 from src.investment_research.application.research_mvp import build_historical_evaluation
+from src.investment_research.application.research_mvp import prepare_feishu_delivery
+from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
 from src.value_hunter.config import ValueHunterConfig
 from src.value_hunter.providers import DemoProvider
 from src.value_hunter.service import ValueHunterService
@@ -78,3 +80,19 @@ def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) 
     assert result["market_state"] is None
     assert result["candidates"] == []
     assert "point-in-time" in result["data_gaps"][0]
+
+
+def test_feishu_preview_defaults_to_no_send_and_confirmation_queues_once(tmp_path) -> None:
+    repository = SQLiteOperationsRepository(tmp_path / "outbox.sqlite3")
+    report = {"trade_date": "2026-07-24", "market_state": "PANIC", "market_summary": {}, "candidates": []}
+
+    preview = prepare_feishu_delivery(report, repository)
+    assert preview["status"] == "preview"
+    assert preview["send"] is False
+    assert preview["scheduler"] is False
+
+    queued = prepare_feishu_delivery(report, repository, send=True, confirmed=True)
+    duplicate = prepare_feishu_delivery(report, repository, send=True, confirmed=True)
+    assert queued["status"] == "queued"
+    assert duplicate["status"] == "already_queued"
+    assert repository.get_message(queued["message_id"]).body == preview["preview"]

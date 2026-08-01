@@ -194,6 +194,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ trade_date: tradeDate }),
     }),
+  previewInvestmentResearchFeishu: (report: ResearchMvpRun, send = false, confirmed = false) =>
+    request<ResearchMvpFeishuPreview>("/investment-research/feishu-preview", {
+      method: "POST",
+      body: JSON.stringify({ report, send, confirmed }),
+    }),
   listInvestmentResearchEvidenceInbox: (status?: InvestmentResearchEvidenceInboxStatus, limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (status) params.set("status", status);
@@ -489,6 +494,15 @@ export interface ResearchMvpHistoricalEvaluation {
     data_gaps: string[];
   }>;
   data_gaps: string[];
+}
+
+export interface ResearchMvpFeishuPreview {
+  preview: string;
+  send: boolean;
+  confirmed: boolean;
+  scheduler: false;
+  status: "preview" | "queued" | "already_queued";
+  message_id?: string;
 }
 
 // --- Swarm types ---
