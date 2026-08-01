@@ -306,6 +306,9 @@ register_value_hunter_routes(app, require_auth)
 from src.api.investment_research_routes import register_investment_research_routes  # noqa: E402
 register_investment_research_routes(app, require_auth)
 
+from src.api.research_mvp_routes import register_research_mvp_routes  # noqa: E402
+register_research_mvp_routes(app, require_auth)
+
 from src.api.scheduled_routes import (  # noqa: E402, F401
     CreateScheduledRunRequest,
     ScheduledRunResponse,

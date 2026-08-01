@@ -67,6 +67,7 @@ accepted as an M0 capability.
 
 ### M1 - Unified research entry
 
+- Status: complete.
 - Add or complete `POST /investment-research/research-run`.
 - Return `trade_date`, `market_state`, `market_summary`, `candidates`, and
   `data_gaps`.
@@ -120,3 +121,17 @@ accepted as an M0 capability.
   returned as Data Gap. Existing uncommitted trial code requires careful
   reconciliation and remains unstaged until reviewed.
 - Next: M1 unified POST endpoint and targeted backend contract tests.
+
+### M1 handoff
+
+- Result: added the unified POST route through a thin Investment Research
+  adapter over `ValueHunterService.run(notify=False)`; no market scanner was
+  duplicated and no notification was sent.
+- Contract: trade date, four-state market classification, breadth summary,
+  Top 5 maximum candidates, and explicit top-level/candidate Data Gaps.
+- Provider reuse improvement: existing observations now retain breadth counts
+  and candidate current price already present in the provider response.
+- Tests: 17 targeted Research MVP and Value Hunter tests passed; Python compile
+  and `git diff --check` passed.
+- Safety: no scheduler, Feishu send, order path, dependency, or database change.
+- Next: M2 replace the incomplete trial UI contract with the real POST response.

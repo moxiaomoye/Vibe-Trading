@@ -217,6 +217,9 @@ class AkshareProvider(ValueHunterProvider):
 
         advancer_ratio = None
         limit_down_count = None
+        advancer_count = None
+        decliner_count = None
+        limit_up_count = None
         try:
             try:
                 spot = ak.stock_zh_a_spot_em()
@@ -226,8 +229,11 @@ class AkshareProvider(ValueHunterProvider):
                 spot = ak.stock_zh_a_spot()
                 warnings.append("市场宽度使用新浪备用行情（读取较慢）")
             changes = spot["涨跌幅"].astype(float)
-            advancer_ratio = float((changes > 0).sum() / max(len(changes), 1))
+            advancer_count = int((changes > 0).sum())
+            decliner_count = int((changes < 0).sum())
+            advancer_ratio = float(advancer_count / max(len(changes), 1))
             # Approximation handles main board and 20% boards without claiming exact exchange stats.
+            limit_up_count = int((changes >= 9.8).sum())
             limit_down_count = int((changes <= -9.8).sum())
         except Exception as exc:
             warnings.append(f"市场宽度读取失败: {type(exc).__name__}")
@@ -237,6 +243,8 @@ class AkshareProvider(ValueHunterProvider):
             advancer_ratio=advancer_ratio, above_ma60_ratio=None,
             limit_down_count=limit_down_count, turnover_zscore=None,
             source="AKShare/Eastmoney", coverage=["indices", "spot_breadth"], warnings=warnings,
+            advancer_count=advancer_count, decliner_count=decliner_count,
+            limit_up_count=limit_up_count,
         )
         self._write_cache("market", result)
         return result
@@ -330,6 +338,7 @@ class AkshareProvider(ValueHunterProvider):
                 candidate.pe_history_percentile = float((pe <= current_pe).sum() / len(pe))
             closes = values["当日收盘价"].astype(float).tail(252)
             if not closes.empty:
+                candidate.current_price = float(closes.iloc[-1])
                 candidate.drawdown_252_pct = (float(closes.iloc[-1]) / float(closes.max()) - 1) * 100
             candidate.pb = _number(values["市净率"].iloc[-1])
             market_cap = _number(values["总市值"].iloc[-1])

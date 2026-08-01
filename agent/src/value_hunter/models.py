@@ -34,6 +34,9 @@ class MarketObservation:
     source: str
     coverage: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    advancer_count: int | None = None
+    decliner_count: int | None = None
+    limit_up_count: int | None = None
 
 
 @dataclass(slots=True)
@@ -60,6 +63,7 @@ class CandidateObservation:
     risk_evidence: list[str] = field(default_factory=list)
     source_fields: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    current_price: float | None = None
 
 
 @dataclass(slots=True)
