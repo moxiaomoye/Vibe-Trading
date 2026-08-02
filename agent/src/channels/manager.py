@@ -431,11 +431,15 @@ class ChannelManager:
         for attempt in range(max_attempts):
             try:
                 await self._send_once(channel, msg)
+                self._status.setdefault(msg.channel, {})["delivery_error"] = ""
                 return
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 if attempt == max_attempts - 1:
+                    self._status.setdefault(msg.channel, {})["delivery_error"] = (
+                        f"{type(e).__name__}: {e}"
+                    )
                     logger.exception(
                         "Failed to send to %s after %d attempts",
                         msg.channel, max_attempts,

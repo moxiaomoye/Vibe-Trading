@@ -1622,20 +1622,16 @@ class FeishuChannel(BaseChannel):
             )
             response = self._client.im.v1.message.create(request)
             if not response.success():
-                self.logger.error(
-                    "Failed to send {} message: code={}, msg={}, log_id={}",
-                    msg_type,
-                    response.code,
-                    response.msg,
-                    response.get_log_id(),
+                raise RuntimeError(
+                    f"Feishu send rejected: code={response.code}, msg={response.msg}, "
+                    f"log_id={response.get_log_id()}"
                 )
-                return None
             msg_id = getattr(response.data, "message_id", None)
             self.logger.debug("{} message sent to {}: {}", msg_type, receive_id, msg_id)
             return msg_id
         except Exception:
             self.logger.exception("Error sending {} message", msg_type)
-            return None
+            raise
 
     def _create_streaming_card_sync(
         self,

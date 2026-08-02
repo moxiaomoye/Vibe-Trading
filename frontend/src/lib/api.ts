@@ -585,9 +585,10 @@ export interface ResearchMvpFeishuPreview {
   send: boolean;
   confirmed: boolean;
   scheduler: false;
-  status: "preview" | "queued" | "already_queued";
+  status: "preview" | "queued" | "already_queued" | "sending" | "delivered" | "failed" | "configuration_missing";
   eligible: boolean;
   message_id?: string;
+  delivery_error?: string;
 }
 
 // --- Swarm types ---

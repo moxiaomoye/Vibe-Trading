@@ -82,3 +82,28 @@ def test_dry_run_transport_never_requires_external_configuration(tmp_path) -> No
     transport = DryRunTransport()
     assert OutboxDispatcher(repository, {DeliveryChannel.FEISHU: transport}).dispatch_due(NOW) == (1, 0)
     assert transport.delivered_count == 1
+
+
+def test_dispatch_message_only_sends_explicitly_confirmed_message(tmp_path) -> None:
+    repository, planner, report = _planner(tmp_path)
+    planner.enqueue(report, (DeliveryChannel.FEISHU, DeliveryChannel.EMAIL), NOW)
+    transport = FixtureTransport()
+    feishu_id = next(
+        message.message_id
+        for message in repository.claim_due(NOW, limit=1)
+    )
+    claimed = repository.get_message(feishu_id)
+    assert claimed.channel == DeliveryChannel.FEISHU
+    repository.finish_message(
+        claimed.message_id,
+        False,
+        NOW,
+        "retry fixture",
+        retry_at=NOW + timedelta(minutes=15),
+    )
+    dispatcher = OutboxDispatcher(repository, {DeliveryChannel.FEISHU: transport})
+
+    assert dispatcher.dispatch_message(feishu_id, NOW) == (1, 0)
+    assert transport.sent == 1
+    assert repository.get_message(feishu_id).status == OutboxStatus.DELIVERED
+    assert len(repository.claim_due(NOW)) == 1

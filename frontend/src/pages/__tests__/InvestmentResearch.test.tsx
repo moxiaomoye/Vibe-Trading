@@ -85,7 +85,7 @@ describe("InvestmentResearch page", () => {
     apiMock.previewInvestmentResearchFeishu.mockReset();
     apiMock.previewInvestmentResearchFeishu
       .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: false, confirmed: false, scheduler: false, status: "preview", eligible: true })
-      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "queued", message_id: "message-1", eligible: true });
+      .mockResolvedValueOnce({ preview: "盘后研究 Preview", send: true, confirmed: true, scheduler: false, status: "delivered", message_id: "message-1", eligible: true });
   });
 
   it("shows ETF fair, bargain and NAV premium research fields", async () => {
@@ -184,8 +184,8 @@ describe("InvestmentResearch page", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成飞书 Preview" }));
     expect(await screen.findByText("盘后研究 Preview")).toBeInTheDocument();
     expect(apiMock.previewInvestmentResearchFeishu).toHaveBeenLastCalledWith(report);
-    fireEvent.click(screen.getByRole("button", { name: "确认加入飞书发件箱" }));
-    expect(await screen.findByText("飞书状态：queued")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认并发送飞书" }));
+    expect(await screen.findByText("飞书状态：已发送")).toBeInTheDocument();
     expect(apiMock.previewInvestmentResearchFeishu).toHaveBeenLastCalledWith(report, true, true);
   });
 });

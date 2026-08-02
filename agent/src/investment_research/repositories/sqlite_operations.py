@@ -172,6 +172,36 @@ class SQLiteOperationsRepository:
             connection.commit()
         return tuple(self.get_message(message_id) for message_id in ids)
 
+    def claim_message(self, message_id: str, now: datetime, max_attempts: int = 5) -> OutboxMessage | None:
+        """Claim one explicitly confirmed message without consuming unrelated outbox work."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("now must be timezone-aware")
+        if max_attempts < 1:
+            raise ValueError("maximum attempts must be positive")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT message_id FROM notification_outbox
+                WHERE message_id = ? AND status IN (?, ?) AND attempt_count < ?""",
+                (
+                    message_id,
+                    OutboxStatus.PENDING.value,
+                    OutboxStatus.FAILED.value,
+                    max_attempts,
+                ),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            connection.execute(
+                """UPDATE notification_outbox
+                SET status = ?, attempt_count = attempt_count + 1, updated_at = ?, last_error = NULL
+                WHERE message_id = ?""",
+                (OutboxStatus.SENDING.value, now.isoformat(), message_id),
+            )
+            connection.commit()
+        return self.get_message(message_id)
+
     def finish_message(
         self,
         message_id: str,

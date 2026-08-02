@@ -174,3 +174,40 @@ def test_feishu_confirmation_rejects_non_panic_or_low_quality_report(tmp_path) -
     assert preview["eligible"] is False
     with pytest.raises(ValueError, match="PANIC"):
         prepare_feishu_delivery(report, repository, send=True, confirmed=True)
+
+
+def test_feishu_confirmation_dispatches_the_confirmed_outbox_message(tmp_path, monkeypatch) -> None:
+    repository = SQLiteOperationsRepository(tmp_path / "outbox.sqlite3")
+    report = {
+        "trade_date": "2026-07-24", "market_state": "PANIC", "market_summary": {},
+        "candidates": [{"score": 82, "research_status": "A - 深入研究"}],
+    }
+    dispatched: list[tuple[str, str]] = []
+    monkeypatch.setattr(research_mvp_routes, "get_research_outbox_repository", lambda: repository)
+    monkeypatch.setattr(
+        research_mvp_routes,
+        "get_research_feishu_webhook_url",
+        lambda: "https://open.feishu.cn/open-apis/bot/v2/hook/fixture",
+    )
+
+    def dispatch(_repository, message_id, webhook_url):
+        dispatched.append((message_id, webhook_url))
+        return {"status": "delivered"}
+
+    monkeypatch.setattr(research_mvp_routes, "dispatch_feishu_message", dispatch)
+    app = FastAPI()
+    research_mvp_routes.register_research_mvp_routes(app, lambda: None)
+
+    response = TestClient(app).post(
+        "/investment-research/feishu-preview",
+        json={"report": report, "send": True, "confirmed": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "delivered"
+    assert dispatched == [
+        (
+            response.json()["message_id"],
+            "https://open.feishu.cn/open-apis/bot/v2/hook/fixture",
+        )
+    ]

@@ -673,3 +673,26 @@ for the continuation milestones.
   real-Tushare tests skipped, five Investment Research UI tests passed, and the
   production TypeScript/Vite build passed. Notifications and schedulers stayed
   off; no delivery or trading action was exercised.
+
+### M15 handoff — Feishu bot and Webhook repair
+
+- Root cause: the long-connection bot was online, but outbound OpenAPI failures
+  were swallowed by the Feishu adapter. Research confirmation only queued an
+  Outbox record, and its dedicated Webhook variable was empty even though the
+  existing Value Hunter Webhook was configured.
+- Bot repair: Feishu send rejection now reaches the existing retry policy. The
+  channel status exposes the latest delivery error and clears it after a
+  successful send. No second bot or notification runtime was introduced.
+- Webhook repair: Research delivery prefers its dedicated Webhook and falls back
+  to the existing Value Hunter robot. User confirmation atomically claims and
+  dispatches only the selected Outbox message; duplicate confirmation remains
+  idempotent, while failed attempts retain their retry record and visible error.
+- UX: the action now reads `确认并发送飞书`, successful delivery displays `已发送`,
+  and configuration or transport failures are shown on the page. Preview stays
+  `send=false`, scheduler stays disabled, and no automatic notification was
+  enabled.
+- Verification: 13 focused backend tests and five Investment Research UI tests
+  passed. The production Docker image rebuilt and is healthy. Live checks
+  confirmed the research Webhook fallback, Outbox `delivered` status, Feishu
+  WebSocket connection, Bot Info access and proactive bot send with Feishu
+  `code=0`.

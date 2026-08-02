@@ -360,14 +360,15 @@ export function InvestmentResearch() {
 
           <section className="rounded-xl border bg-card p-5">
             <h2 className="font-semibold">飞书通知 Preview</h2>
-            <p className="mt-1 text-sm text-muted-foreground">默认 send=false、scheduler=false；确认后仅加入既有通知发件箱。</p>
+            <p className="mt-1 text-sm text-muted-foreground">默认 send=false、scheduler=false；确认后通过既有通知发件箱立即投递一次。</p>
             <button type="button" onClick={() => void previewFeishu()} className="mt-3 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">生成飞书 Preview</button>
             {feishu && (
               <div className="mt-3 space-y-3">
                 <pre className="whitespace-pre-wrap rounded-lg bg-muted p-4 text-xs">{feishu.preview}</pre>
-                {feishu.status === "preview" && feishu.eligible && <button type="button" onClick={() => void confirmFeishu()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">确认加入飞书发件箱</button>}
+                {feishu.status === "preview" && feishu.eligible && <button type="button" onClick={() => void confirmFeishu()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">确认并发送飞书</button>}
                 {feishu.status === "preview" && !feishu.eligible && <p className="text-xs text-muted-foreground">仅 PANIC/EXTREME_PANIC 且存在高质量候选时可加入发件箱。</p>}
-                {feishu.status !== "preview" && <p className="text-sm text-emerald-700">飞书状态：{feishu.status}</p>}
+                {feishu.status !== "preview" && <p className={cn("text-sm", feishu.status === "delivered" ? "text-emerald-700" : "text-red-700")}>飞书状态：{feishu.status === "delivered" ? "已发送" : feishu.status}</p>}
+                {feishu.delivery_error && <p className="text-xs text-red-700">{feishu.delivery_error}</p>}
               </div>
             )}
           </section>

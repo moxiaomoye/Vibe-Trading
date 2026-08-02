@@ -121,16 +121,29 @@ class OutboxDispatcher:
     def dispatch_due(self, now: datetime, limit: int = 20) -> tuple[int, int]:
         delivered = failed = 0
         for message in self.repository.claim_due(now, limit, self.max_attempts):
-            transport = self.transports.get(message.channel)
-            try:
-                if transport is None:
-                    raise RuntimeError(f"no transport configured for {message.channel.value}")
-                transport.send(message)
-                self.repository.finish_message(message.message_id, True, now)
+            if self._dispatch_claimed(message, now):
                 delivered += 1
-            except Exception as exc:  # transport boundary must preserve every failure for retry
-                self.repository.finish_message(
-                    message.message_id, False, now, str(exc), retry_at=now + self.retry_delay
-                )
+            else:
                 failed += 1
         return delivered, failed
+
+    def dispatch_message(self, message_id: str, now: datetime) -> tuple[int, int]:
+        """Dispatch only the message explicitly selected by a user confirmation."""
+        message = self.repository.claim_message(message_id, now, self.max_attempts)
+        if message is None:
+            return 0, 0
+        return (1, 0) if self._dispatch_claimed(message, now) else (0, 1)
+
+    def _dispatch_claimed(self, message: OutboxMessage, now: datetime) -> bool:
+        transport = self.transports.get(message.channel)
+        try:
+            if transport is None:
+                raise RuntimeError(f"no transport configured for {message.channel.value}")
+            transport.send(message)
+            self.repository.finish_message(message.message_id, True, now)
+            return True
+        except Exception as exc:  # transport boundary must preserve every failure for retry
+            self.repository.finish_message(
+                message.message_id, False, now, str(exc), retry_at=now + self.retry_delay
+            )
+            return False
