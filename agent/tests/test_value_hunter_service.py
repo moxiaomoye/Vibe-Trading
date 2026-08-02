@@ -47,6 +47,8 @@ def test_service_persists_scan_and_sends_only_once(tmp_path):
 
     assert first.notification_required is True
     assert len(first.candidates) == 2
+    assert len(first.universe) == 4
+    assert len(store.history()[0]["universe"]) == 4
     assert notifier.calls == 1
     assert store.latest()["run_id"] == second.run_id
     assert len(store.history()) == 2
@@ -131,3 +133,18 @@ def test_research_queue_can_include_incomplete_candidates_without_notification(t
 
     assert len(result.candidates) == 3
     assert result.notification_required is False
+
+
+def test_scan_payload_can_persist_versioned_research_context(tmp_path):
+    cfg = config(tmp_path)
+    store = ValueHunterStore(cfg.database_path)
+    service = ValueHunterService(cfg, DemoProvider(), store)
+
+    result = service.run(notify=False)
+    result.research_context = {
+        "schema_version": 1,
+        "panic_sensitivity": {"value": 50, "config_version": 2},
+    }
+    store.save_scan(result.to_dict())
+
+    assert store.latest()["research_context"]["panic_sensitivity"]["value"] == 50

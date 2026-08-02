@@ -17,6 +17,7 @@ from src.value_hunter.providers import (
     _frame_on_or_before,
     _call_with_timeout,
     _latest_complete_weekday,
+    _completed_weekdays_between,
     load_watchlist,
 )
 from src.value_hunter.providers import normalize_ashare_symbol, security_type_for_symbol
@@ -24,8 +25,9 @@ from src.value_hunter.providers import normalize_ashare_symbol, security_type_fo
 
 def test_akshare_daily_cache_round_trip(tmp_path):
     provider = AkshareProvider(cache_dir=tmp_path)
+    complete_date = _latest_complete_weekday().isoformat()
     market = MarketObservation(
-        as_of="2026-07-20",
+        as_of=complete_date,
         indices=[IndexObservation("sh000300", "沪深300", 4000, -1.2, -12.0, True, False)],
         advancer_ratio=0.25,
         above_ma60_ratio=None,
@@ -83,7 +85,11 @@ def test_public_provider_call_has_a_bounded_timeout() -> None:
 
 
 def test_candidate_cache_uses_latest_available_file_and_marks_staleness(tmp_path) -> None:
-    cache = tmp_path / "akshare-candidates-2026-07-22.json"
+    latest = _latest_complete_weekday()
+    stale = latest
+    while stale.weekday() >= 5 or stale == latest:
+        stale = stale.fromordinal(stale.toordinal() - 1)
+    cache = tmp_path / f"akshare-candidates-{stale.isoformat()}.json"
     cache.write_text(
         '[{"symbol":"688981","name":"SMIC","sector":"Semiconductor","theme":"Foundry"}]',
         encoding="utf-8",
@@ -94,7 +100,24 @@ def test_candidate_cache_uses_latest_available_file_and_marks_staleness(tmp_path
 
     assert candidates is not None
     assert candidates[0].symbol == "688981"
-    assert "2026-07-22" in candidates[0].warnings[0]
+    assert stale.isoformat() in candidates[0].warnings[0]
+
+
+def test_candidate_cache_older_than_freshness_window_is_ignored(tmp_path) -> None:
+    latest = _latest_complete_weekday()
+    stale = latest.fromordinal(latest.toordinal() - 10)
+    cache = tmp_path / f"akshare-candidates-{stale.isoformat()}.json"
+    cache.write_text(
+        '[{"symbol":"688981","name":"SMIC","sector":"Semiconductor","theme":"Foundry"}]',
+        encoding="utf-8",
+    )
+
+    assert AkshareProvider(cache_dir=tmp_path)._read_candidate_cache() is None
+
+
+def test_completed_weekday_freshness_guard_ignores_weekends() -> None:
+    assert _completed_weekdays_between(date(2026, 7, 31), date(2026, 8, 2)) == 0
+    assert _completed_weekdays_between(date(2026, 7, 30), date(2026, 8, 3)) == 2
 
 
 def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> None:
@@ -114,10 +137,11 @@ def test_candidate_cache_is_ignored_when_watchlist_symbols_change(tmp_path) -> N
 
 
 def test_candidate_cache_with_missing_etf_valuation_is_loaded_for_targeted_refresh(tmp_path) -> None:
-    cache = tmp_path / "akshare-candidates-2026-07-22.json"
+    complete_date = _latest_complete_weekday().isoformat()
+    cache = tmp_path / f"akshare-candidates-{complete_date}.json"
     cache.write_text(
         '[{"symbol":"588060","name":"ETF","sector":"Index","theme":"Index",'
-        '"security_type":"etf","market_data_as_of":"2026-07-22"}]',
+        f'"security_type":"etf","market_data_as_of":"{complete_date}"}}]',
         encoding="utf-8",
     )
     watchlist = tmp_path / "watchlist.csv"
@@ -221,6 +245,39 @@ def test_etf_nav_snapshot_calculates_market_premium_and_marks_qdii_limit() -> No
     assert candidates[1].etf_valuation["nav_as_of"] == "2026-07-30"
     assert candidates[1].etf_valuation["premium_reliability"] == "limited_qdii_stale_nav"
     assert any("QDII" in warning for warning in candidates[1].warnings)
+
+
+def test_etf_underlying_index_valuation_uses_observed_csindex_rows() -> None:
+    frame = pd.DataFrame({
+        "日期": ["2026-07-29", "2026-07-30", "2026-07-31"],
+        "市盈率1": [20.0, 10.0, 30.0],
+        "股息率1": [0.3, 0.4, 0.2],
+    })
+
+    class FakeAkshare:
+        @staticmethod
+        def stock_zh_index_value_csindex(symbol):
+            assert symbol == "000688"
+            return frame
+
+    domestic = CandidateObservation(
+        "588060", "科创50ETF", "科创板", "宽基", security_type="etf"
+    )
+    qdii = CandidateObservation(
+        "159941", "纳指ETF", "海外", "纳指", security_type="etf"
+    )
+
+    AkshareProvider._enrich_etf_index_valuation(FakeAkshare(), [domestic, qdii])
+
+    valuation = domestic.etf_valuation
+    assert valuation["underlying_index_code"] == "000688"
+    assert valuation["underlying_pe"] == 30.0
+    assert valuation["underlying_valuation_percentile"] == 1.0
+    assert valuation["underlying_valuation_premium_pct"] == 50.0
+    assert valuation["underlying_history_sessions"] == 3
+    assert qdii.etf_valuation["underlying_index_code"] == "NDX"
+    assert qdii.etf_valuation["underlying_valuation_premium_pct"] is None
+    assert any("Data Gap" in warning for warning in qdii.warnings)
 
 
 def test_symbol_normalization_and_security_type() -> None:

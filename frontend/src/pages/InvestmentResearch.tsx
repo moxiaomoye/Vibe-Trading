@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, BarChart3, BookOpenCheck, DatabaseZap, RefreshCw } from "lucide-react";
 
-import { api, type ResearchMvpCandidate, type ResearchMvpFeishuPreview, type ResearchMvpHistoricalEvaluation, type ResearchMvpRun } from "@/lib/api";
+import { api, AUTH_REQUIRED_MESSAGE, type ResearchMvpCandidate, type ResearchMvpFeishuPreview, type ResearchMvpHistoricalEvaluation, type ResearchMvpRun } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const MARKET_TONE: Record<ResearchMvpRun["market_state"], string> = {
@@ -27,6 +27,22 @@ function formatPriceRange(low: number | null, high: number | null) {
   return low === null || high === null ? "Data Gap" : `${low.toFixed(4)} ～ ${high.toFixed(4)}`;
 }
 
+function DataGapSummary({ gaps, className = "" }: { gaps: string[]; className?: string }) {
+  if (gaps.length === 0) return null;
+  const blockingPattern = /price|nav|trade_date|market_summary|base_trade_date|行情|净值/i;
+  const qualityPattern = /valuation|roe|cashflow|profit|revenue|pe_|pb|relative|sector|估值|财务|行业/i;
+  const groups = [
+    { label: "阻断判断", items: gaps.filter((gap) => blockingPattern.test(gap)) },
+    { label: "降低可信度", items: gaps.filter((gap) => !blockingPattern.test(gap) && qualityPattern.test(gap)) },
+    { label: "补充信息", items: gaps.filter((gap) => !blockingPattern.test(gap) && !qualityPattern.test(gap)) },
+  ].filter((group) => group.items.length > 0);
+  return (
+    <div className={cn("space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800", className)}>
+      {groups.map((group) => <p key={group.label}><span className="font-semibold">{group.label}：</span>{group.items.join("、")}</p>)}
+    </div>
+  );
+}
+
 function EtfValuationPanel({ candidate }: { candidate: ResearchMvpCandidate }) {
   const value = candidate.etf_valuation;
   if (!value) {
@@ -46,9 +62,13 @@ function EtfValuationPanel({ candidate }: { candidate: ResearchMvpCandidate }) {
         <Metric label="深度低估参考" value={value.deep_value_below === null ? "Data Gap" : `≤ ${value.deep_value_below.toFixed(4)}`} />
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        ETF交易溢价用于比较市价与最新可得净值；指数估值溢价：{formatNumber(value.underlying_valuation_premium_pct, "%")}。
+        ETF交易溢价用于比较市价与最新可得净值；底层指数：{value.underlying_index_name ?? "Data Gap"}（{value.underlying_index_code ?? "Data Gap"}）；
+        PE：{formatNumber(value.underlying_pe ?? null)}；指数估值相对近期中位数：{formatNumber(value.underlying_valuation_premium_pct, "%")}（{value.underlying_valuation_state ?? "Data Gap"}）。
         区间口径：{value.valuation_method ?? "Data Gap"}；净值日期：{value.nav_as_of ?? "Data Gap"}；置信度：{value.confidence ?? "Data Gap"}。
       </p>
+      {value.underlying_history_sessions != null && (
+        <p className="mt-2 text-xs text-muted-foreground">底层估值样本：{value.underlying_history_sessions}个可得交易日，截至{value.underlying_valuation_as_of ?? "Data Gap"}；短样本仅作筛选，不等同内在价值。</p>
+      )}
       {value.premium_reliability === "limited_qdii_stale_nav" && (
         <p className="mt-2 text-xs text-amber-700">QDII净值受海外时差、汇率与披露滞后影响，当前溢价仅作研究筛选。</p>
       )}
@@ -94,11 +114,7 @@ function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
           </ul>
         </div>
       </div>
-      {candidate.data_gaps.length > 0 && (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          Data Gap：{candidate.data_gaps.join("、")}
-        </p>
-      )}
+      <DataGapSummary gaps={candidate.data_gaps} className="mt-4" />
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -183,6 +199,7 @@ export function InvestmentResearch() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [feishu, setFeishu] = useState<ResearchMvpFeishuPreview | null>(null);
   const [panicSensitivity, setPanicSensitivity] = useState(50);
+  const watchlistScan = report?.market_summary.watchlist_scan ?? [];
 
   const generate = async () => {
     setLoading(true);
@@ -269,7 +286,12 @@ export function InvestmentResearch() {
         )}
       </section>
 
-      {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>}
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p>{error}</p>
+          {error === AUTH_REQUIRED_MESSAGE && <a href="/settings" className="mt-3 inline-block rounded-md border border-destructive/30 px-3 py-2 font-medium hover:bg-destructive/10">前往设置</a>}
+        </div>
+      )}
 
       {!report && !error && (
         <section className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
@@ -302,7 +324,7 @@ export function InvestmentResearch() {
             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
               {report.market_summary.panic_reasons.map((reason) => <li key={reason}>· {reason}</li>)}
             </ul>
-            {report.data_gaps.length > 0 && <p className="mt-3 text-xs text-amber-700">Data Gap：{report.data_gaps.join("、")}</p>}
+            <DataGapSummary gaps={report.data_gaps} className="mt-3" />
           </section>
 
           <section className="space-y-4">
@@ -313,6 +335,27 @@ export function InvestmentResearch() {
             {report.candidates.length > 0
               ? report.candidates.map((candidate) => <CandidateCard key={candidate.code} candidate={candidate} />)
               : <div className="rounded-xl border p-5 text-sm text-muted-foreground">当前没有候选；零候选是有效研究结果。</div>}
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="font-semibold">观察池扫描结果</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              共扫描 {watchlistScan.length} 只；Top 5 之外仍保留未入选原因和数据日期。
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b"><th className="p-2">标的</th><th className="p-2">评分</th><th className="p-2">结果</th><th className="p-2">数据状态</th><th className="p-2">说明</th></tr></thead>
+                <tbody>{watchlistScan.map((item) => (
+                  <tr key={item.code} className="border-b align-top">
+                    <td className="p-2"><div>{item.name}</div><div className="font-mono text-xs text-muted-foreground">{item.code} · {item.security_type.toUpperCase()}</div></td>
+                    <td className="p-2">{item.score.toFixed(1)}</td>
+                    <td className="p-2">{item.selected ? "Top 5" : item.research_status}</td>
+                    <td className="p-2"><div>{item.data_status === "available" ? "可用" : item.data_status === "stale" ? "陈旧" : "缺失"}</div><div className="text-xs text-muted-foreground">{item.data_as_of ?? "Data Gap"} · {item.data_source ?? "Data Gap"}</div></td>
+                    <td className="p-2 text-xs text-muted-foreground">{item.exclusion_reason ?? "已进入 Research Candidate"}{item.data_gaps.length > 0 ? `；Data Gap ${item.data_gaps.length} 项` : ""}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           </section>
 
           <section className="rounded-xl border bg-card p-5">
@@ -343,6 +386,9 @@ export function InvestmentResearch() {
         {history && (
           <div className="mt-4">
             <p className="text-sm">当时市场状态：{history.market_state ?? "Data Gap"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              当时恐慌标准：{history.panic_sensitivity ? `${history.panic_sensitivity.label} · ${history.panic_sensitivity.value}（触发 ${history.panic_sensitivity.trigger_count}/${history.panic_sensitivity.required_confirmations}）` : "Data Gap"}
+            </p>
             {history.data_gaps.length > 0 && <p className="mt-2 text-xs text-amber-700">Data Gap：{history.data_gaps.join("、")}</p>}
             {history.candidates.length > 0 && (
               <div className="mt-3 overflow-x-auto">

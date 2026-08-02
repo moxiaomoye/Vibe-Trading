@@ -46,6 +46,8 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     assert body["panic_sensitivity"]["trigger_count"] == 3
     assert body["market_summary"]["limit_down"] == 170
     assert "turnover_amount" in body["market_summary"]
+    assert len(body["market_summary"]["watchlist_scan"]) == 4
+    assert sum(item["selected"] for item in body["market_summary"]["watchlist_scan"]) == 3
     assert "market_summary.turnover_amount" in body["data_gaps"]
     assert len(body["candidates"]) == 3
     assert body["candidates"][0]["code"] == "688001.SH"
@@ -59,6 +61,9 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
         "t5": None, "t20": None, "t60": None,
     }
     assert service.history(1)[0]["mode"] == "demo"
+    stored_profile = service.history(1)[0]["research_context"]["panic_sensitivity"]
+    assert stored_profile["value"] == 50
+    assert stored_profile["trigger_count"] == 3
 
 
 def test_research_run_applies_requested_panic_sensitivity(tmp_path, monkeypatch) -> None:
@@ -117,6 +122,8 @@ def test_historical_evaluation_uses_stored_snapshot_and_trading_session_horizons
     result = build_historical_evaluation(service, __import__("datetime").date(2024, 2, 5), prices)
 
     assert result["market_state"] == "EXTREME_PANIC"
+    assert result["panic_sensitivity"] is None
+    assert "panic_sensitivity_snapshot" in result["data_gaps"]
     assert result["candidates"][0]["t5"] == 5.0
     assert result["candidates"][0]["t20"] == 20.0
     assert result["candidates"][0]["t60"] == 60.0
@@ -130,6 +137,7 @@ def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) 
         _service(tmp_path), __import__("datetime").date(2025, 4, 7), lambda **_: {}
     )
     assert result["market_state"] is None
+    assert result["panic_sensitivity"] is None
     assert result["candidates"] == []
     assert "point-in-time" in result["data_gaps"][0]
 

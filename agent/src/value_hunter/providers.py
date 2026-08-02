@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from statistics import median
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -35,6 +36,15 @@ RESEARCH_MARKET_DATA_FALLBACK_CHAIN: tuple[str, ...] = (
     "baostock",
     "local",
 )
+MAX_STALE_COMPLETED_WEEKDAYS = 1
+
+ETF_TRACKED_INDEX: dict[str, tuple[str, str]] = {
+    "588060": ("000688", "上证科创板50成份指数"),
+    "588170": ("950125", "上证科创板半导体材料设备主题指数"),
+    "588200": ("000685", "上证科创板芯片指数"),
+    "159516": ("931743", "中证半导体材料设备主题指数"),
+    "159941": ("NDX", "纳斯达克100指数"),
+}
 
 
 def _call_with_timeout(call: Callable[[], Any], seconds: float) -> Any:
@@ -68,6 +78,24 @@ def _latest_complete_weekday(now: datetime | None = None) -> date:
     while resolved.weekday() >= 5:
         resolved -= timedelta(days=1)
     return resolved
+
+
+def _completed_weekdays_between(older: date, newer: date) -> int:
+    """Count completed weekdays after ``older`` through ``newer``.
+
+    This is deliberately a conservative freshness guard rather than a trading
+    calendar. Public-provider holidays may therefore trigger a refresh, which
+    is preferable to silently presenting an old close as current.
+    """
+    if older >= newer:
+        return 0
+    cursor = older + timedelta(days=1)
+    count = 0
+    while cursor <= newer:
+        if cursor.weekday() < 5:
+            count += 1
+        cursor += timedelta(days=1)
+    return count
 
 
 class DemoProvider(ValueHunterProvider):
@@ -395,6 +423,8 @@ class AkshareProvider(ValueHunterProvider):
         if any(field not in data for field in required_summary):
             return None
         cached_date = date.fromisoformat(data["as_of"])
+        if _completed_weekdays_between(cached_date, _latest_complete_weekday()) > MAX_STALE_COMPLETED_WEEKDAYS:
+            return None
         if cached_date.weekday() >= 5:
             data["as_of"] = _latest_complete_weekday().isoformat()
         data["indices"] = [IndexObservation(**item) for item in data["indices"]]
@@ -412,6 +442,15 @@ class AkshareProvider(ValueHunterProvider):
                 return None
             path = available[0]
             stale_date = path.stem.removeprefix("akshare-candidates-")
+            try:
+                cached_on = date.fromisoformat(stale_date)
+            except ValueError:
+                return None
+            if (
+                _completed_weekdays_between(cached_on, _latest_complete_weekday())
+                > MAX_STALE_COMPLETED_WEEKDAYS
+            ):
+                return None
         candidates = [CandidateObservation(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
         if self.watchlist_path and self.watchlist_path.exists():
             expected_symbols = {
@@ -425,7 +464,7 @@ class AkshareProvider(ValueHunterProvider):
         if stale_date:
             for candidate in candidates:
                 candidate.warnings.append(
-                    f"Using latest available candidate cache from {stale_date}; current-day enrichment is a Data Gap."
+                    f"候选缓存数据截至{stale_date}，不是当前交易日数据；当前价格与溢价判断属于 Data Gap。"
                 )
         return candidates
 
@@ -550,18 +589,20 @@ class AkshareProvider(ValueHunterProvider):
             stale_etfs = [
                 item for item in cached
                 if item.security_type == "etf"
-                and (item.etf_valuation or {}).get("calculation_version") != 2
+                and (item.etf_valuation or {}).get("calculation_version") != 3
             ]
             if stale_etfs:
                 ak = self._ak()
                 self._enrich_market_history(stale_etfs)
                 self._enrich_etf_nav(ak, stale_etfs)
+                self._enrich_etf_index_valuation(ak, stale_etfs)
                 self._write_cache("candidates", cached)
             return cached
         ak = self._ak()
         candidates = self._base_watchlist()
         self._enrich_market_history(candidates)
         self._enrich_etf_nav(ak, candidates)
+        self._enrich_etf_index_valuation(ak, candidates)
         # Financial and historical-valuation endpoints are per issuer. Four
         # workers keep a normal scan practical while avoiding a burst of
         # dozens of simultaneous public-data requests.
@@ -653,7 +694,7 @@ class AkshareProvider(ValueHunterProvider):
                     "price_source": candidate.market_data_source,
                     "underlying_valuation_premium_pct": None,
                     "split_adjustments": split_adjustments,
-                    "calculation_version": 2,
+                    "calculation_version": 3,
                 })
             if "market_data_registry_ohlcv" not in candidate.source_fields:
                 candidate.source_fields.append("market_data_registry_ohlcv")
@@ -719,6 +760,83 @@ class AkshareProvider(ValueHunterProvider):
                 candidate.warnings.append(
                     "QDII ETF净值存在海外时差、汇率与披露滞后，溢价仅作研究筛选"
                 )
+
+    @staticmethod
+    def _enrich_etf_index_valuation(ak: Any, candidates: list[CandidateObservation]) -> None:
+        etfs = [item for item in candidates if item.security_type == "etf"]
+        domestic: dict[str, list[CandidateObservation]] = {}
+        for candidate in etfs:
+            code, name = ETF_TRACKED_INDEX.get(candidate.symbol[:6], ("", ""))
+            candidate.etf_valuation.update({
+                "underlying_index_code": code or None,
+                "underlying_index_name": name or None,
+            })
+            if code == "NDX":
+                candidate.etf_valuation.setdefault("underlying_valuation_premium_pct", None)
+                candidate.warnings.append("纳斯达克100历史估值数据源尚未接入，底层指数估值为 Data Gap")
+            elif code:
+                domestic.setdefault(code, []).append(candidate)
+
+        def fetch_index(code: str) -> Any:
+            return _call_with_timeout(
+                lambda: ak.stock_zh_index_value_csindex(symbol=code),
+                25,
+            )
+
+        frames: dict[str, Any] = {}
+        with ThreadPoolExecutor(max_workers=min(4, len(domestic) or 1), thread_name_prefix="etf-index-value") as pool:
+            futures = {pool.submit(fetch_index, code): code for code in domestic}
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    frames[code] = future.result()
+                except Exception as exc:
+                    for candidate in domestic[code]:
+                        candidate.warnings.append(
+                            f"底层指数{code}估值读取失败: {type(exc).__name__}"
+                        )
+
+        for code, grouped_candidates in domestic.items():
+            frame = frames.get(code)
+            rows: list[tuple[str, float, float | None]] = []
+            if frame is not None and not frame.empty:
+                for _, row in frame.iterrows():
+                    pe = _number(row.get("市盈率1"))
+                    if pe is None or pe <= 0:
+                        continue
+                    rows.append((
+                        str(row.get("日期", ""))[:10],
+                        pe,
+                        _number(row.get("股息率1")),
+                    ))
+            rows.sort(key=lambda item: item[0])
+            if not rows:
+                for candidate in grouped_candidates:
+                    candidate.warnings.append(f"底层指数{code}估值历史为空")
+                continue
+            latest_date, latest_pe, latest_dividend = rows[-1]
+            pe_values = [row[1] for row in rows]
+            pe_median = median(pe_values)
+            premium = (latest_pe / pe_median - 1.0) * 100.0 if pe_median > 0 else None
+            percentile = sum(value <= latest_pe for value in pe_values) / len(pe_values)
+            state = (
+                "近期低估" if percentile <= 0.25
+                else "近期合理" if percentile <= 0.75
+                else "近期偏贵"
+            )
+            for candidate in grouped_candidates:
+                candidate.etf_valuation.update({
+                    "underlying_pe": round(latest_pe, 3),
+                    "underlying_dividend_yield_pct": round(latest_dividend, 3) if latest_dividend is not None else None,
+                    "underlying_valuation_as_of": latest_date,
+                    "underlying_valuation_percentile": round(percentile, 4),
+                    "underlying_valuation_premium_pct": round(premium, 3) if premium is not None else None,
+                    "underlying_valuation_state": state,
+                    "underlying_valuation_method": "中证指数PE相对当前可得历史中位数（screen_grade）",
+                    "underlying_history_sessions": len(pe_values),
+                    "underlying_valuation_source": "AKShare/中证指数 stock_zh_index_value_csindex",
+                })
+                candidate.source_fields.append("csindex_underlying_valuation")
 
     @staticmethod
     def _classify_announcement(title: str) -> str | None:

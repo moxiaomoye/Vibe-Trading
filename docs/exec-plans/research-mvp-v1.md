@@ -632,3 +632,44 @@ for the continuation milestones.
   healthy, authenticated real-data API runs passed, and a headless Edge render
   confirmed the slider layout. Local DCO commits: `c86a8d9`, `b45d8de`,
   `901a2f6`.
+
+### M14 handoff — research data credibility convergence
+
+- Single entry point: the uncommitted `trial-daily-watchlist` route and its
+  fixed two-symbol implementation were removed. Research remains on the sole
+  `/investment-research/research-run` path and contains no entry-zone or shadow
+  position language.
+- Auditable sensitivity: each Research MVP run now saves a versioned research
+  context in the existing scan JSON. Historical evaluation shows the original
+  slider value, resolved thresholds, observed checks and trigger count. Legacy
+  snapshots expose `panic_sensitivity_snapshot` as Data Gap and are not
+  rewritten.
+- Full watchlist visibility: the scan snapshot retains all scored observations,
+  while the main report still selects Top 5. The page displays all nine personal
+  watchlist symbols with score, selection state, exclusion reason, data source,
+  data date and available/stale/missing status.
+- Freshness: candidate caches older than one completed weekday are rejected and
+  refreshed. Weekend transitions do not age Friday data. Stale fallback text
+  explicitly prevents old prices or premiums from appearing current.
+- Provider fallback latency: Tushare entitlement errors now trip an endpoint-
+  scoped circuit breaker for the current loader run. A failed `fund_daily`,
+  `daily` or `index_daily` entitlement is attempted once; unrelated endpoints
+  and transient network failures keep their normal behavior, and unresolved
+  symbols continue through the existing fallback chain.
+- ETF underlying evidence: official tracked-index mappings are recorded for
+  588060/000688, 588170/950125, 588200/000685 and 159516/931743. The existing
+  AKShare provider adds observed CSIndex PE, dividend yield, available-history
+  percentile, median premium, date, source and sample count. The UI labels this
+  short-history measure `screen_grade`; 159941/NDX remains an explicit Data Gap.
+- UX: Data Gap is grouped into blocking, research-quality and supplementary
+  categories. Local 401/403 errors now explain that the backend API key must be
+  entered in Settings and link directly there.
+- Real acceptance: Docker is healthy on `127.0.0.1:8899`; the page returned 200.
+  An authenticated real run for 2026-07-31 returned NORMAL, five candidates and
+  all nine watchlist rows. ETF 588200 returned tracked index 000685, PE 140.92
+  and 20 available valuation sessions. Historical evaluation read slider value
+  50 and threshold -2.25% from the saved point-in-time snapshot.
+- Verification: 93 focused backend tests passed, four entitlement-dependent
+  real-Tushare tests skipped, five Investment Research UI tests passed, and the
+  production TypeScript/Vite build passed. Notifications and schedulers stayed
+  off; no delivery or trading action was exercised.

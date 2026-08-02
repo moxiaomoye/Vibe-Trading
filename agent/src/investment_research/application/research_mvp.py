@@ -180,6 +180,43 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
     }
 
 
+def _watchlist_scan_payload(
+    universe: list[CandidateResult],
+    selected: list[CandidateResult],
+) -> list[dict[str, Any]]:
+    selected_symbols = {item.observation.symbol for item in selected}
+    rows: list[dict[str, Any]] = []
+    for candidate in universe:
+        observation = candidate.observation
+        gaps = _candidate_payload(candidate)["data_gaps"]
+        stale = any("不是当前交易日数据" in warning for warning in observation.warnings)
+        selected_for_research = observation.symbol in selected_symbols
+        if selected_for_research:
+            exclusion_reason = None
+        elif candidate.status == "Reject":
+            exclusion_reason = candidate.first_rejection or "未通过既有筛选条件"
+        else:
+            exclusion_reason = "按既有评分排序未进入 Top 5"
+        rows.append({
+            "code": observation.symbol,
+            "name": observation.name,
+            "security_type": observation.security_type,
+            "score": candidate.score.total,
+            "research_status": candidate.status,
+            "selected": selected_for_research,
+            "data_status": (
+                "missing" if observation.market_data_as_of is None
+                else "stale" if stale
+                else "available"
+            ),
+            "data_as_of": observation.market_data_as_of,
+            "data_source": observation.market_data_source,
+            "exclusion_reason": exclusion_reason,
+            "data_gaps": gaps,
+        })
+    return rows
+
+
 def build_research_run(
     service: ValueHunterService,
     panic_sensitivity: int = 50,
@@ -192,6 +229,11 @@ def build_research_run(
         method_override=method,
     )
     panic_profile = _panic_profile(scan, resolved.to_dict())
+    scan.research_context = {
+        "schema_version": 1,
+        "panic_sensitivity": panic_profile,
+    }
+    service.store.save_scan(scan.to_dict())
     observation = scan.market.observation
     gaps = list(observation.warnings)
     summary_fields = {
@@ -211,6 +253,10 @@ def build_research_run(
         if summary_fields[field] is None:
             gaps.append(f"market_summary.{field}")
     candidates = [_candidate_payload(item) for item in scan.candidates[:5]]
+    summary_fields["watchlist_scan"] = _watchlist_scan_payload(
+        scan.universe or scan.candidates,
+        scan.candidates[:5],
+    )
     for item in scan.candidates[:5]:
         gaps.extend(item.observation.warnings)
     if not candidates:
@@ -315,9 +361,11 @@ def build_historical_evaluation(
         return {
             "trade_date": trade_date.isoformat(),
             "market_state": None,
+            "panic_sensitivity": None,
             "candidates": [],
             "data_gaps": ["No point-in-time Value Hunter snapshot exists for the selected date."],
         }
+    stored_profile = snapshot.get("research_context", {}).get("panic_sensitivity")
     raw_candidates = snapshot.get("candidates", [])[:5]
     symbols = [item.get("observation", {}).get("symbol") for item in raw_candidates]
     symbols = [symbol for symbol in symbols if symbol]
@@ -336,6 +384,8 @@ def build_historical_evaluation(
     )
     candidates: list[dict[str, Any]] = []
     gaps: list[str] = []
+    if not stored_profile:
+        gaps.append("panic_sensitivity_snapshot")
     for item in raw_candidates:
         observation = item.get("observation", {})
         symbol = observation.get("symbol", "")
@@ -366,9 +416,15 @@ def build_historical_evaluation(
             "data_gaps": candidate_gaps,
         })
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
+    market_score = float(snapshot.get("market", {}).get("score", 0.0))
     return {
         "trade_date": trade_date.isoformat(),
-        "market_state": _market_state(float(snapshot.get("market", {}).get("score", 0.0))),
+        "market_state": _market_state(
+            market_score,
+            stored_profile.get("trigger_count") if stored_profile else None,
+            stored_profile.get("required_confirmations") if stored_profile else None,
+        ),
+        "panic_sensitivity": stored_profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
     }

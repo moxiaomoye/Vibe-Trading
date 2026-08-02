@@ -20,6 +20,7 @@ from backtest.loaders.tushare import (
     _is_hk_equity,
     _is_index,
     _is_us_equity,
+    _is_entitlement_error,
 )
 
 
@@ -196,6 +197,28 @@ class TestFetchDailyFrameRouting:
         loader.api.daily.return_value = pd.DataFrame()
         result = loader._fetch_daily_frame("600519.SH", "20250102", "20250110")
         assert result is None
+
+
+def test_entitlement_error_classifier_is_narrow() -> None:
+    assert _is_entitlement_error(RuntimeError("抱歉，您没有访问该接口的权限"))
+    assert not _is_entitlement_error(TimeoutError("upstream timed out"))
+
+
+def test_fetch_circuits_only_the_failed_tushare_endpoint() -> None:
+    loader = object.__new__(DataLoader)
+    loader.api = MagicMock()
+    loader.api.fund_daily.side_effect = RuntimeError("抱歉，您没有访问该接口的权限")
+    loader.api.daily.return_value = _make_ohlcv_df()
+
+    result = loader.fetch(
+        ["510050.SH", "159915.SZ", "600519.SH"],
+        "2025-01-02",
+        "2025-01-10",
+    )
+
+    assert loader.api.fund_daily.call_count == 1
+    loader.api.daily.assert_called_once()
+    assert "600519.SH" in result
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ export class ApiError extends Error {
 }
 
 export const AUTH_REQUIRED_MESSAGE =
-  "Remote API access requires an API key. Add it in Settings, or run the backend on localhost for local-only use.";
+  "后端已启用 API 密钥验证，请在设置中填写与后端 API_AUTH_KEY 相同的密钥。";
 
 export function isAuthRequiredError(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
@@ -487,6 +487,16 @@ export interface ResearchMvpCandidate {
     deep_value_below: number | null;
     historical_price_percentile: number | null;
     underlying_valuation_premium_pct: number | null;
+    underlying_index_code?: string | null;
+    underlying_index_name?: string | null;
+    underlying_pe?: number | null;
+    underlying_dividend_yield_pct?: number | null;
+    underlying_valuation_as_of?: string | null;
+    underlying_valuation_percentile?: number | null;
+    underlying_valuation_state?: string | null;
+    underlying_valuation_method?: string | null;
+    underlying_history_sessions?: number | null;
+    underlying_valuation_source?: string | null;
     valuation_state: string | null;
     valuation_method: string | null;
     confidence: string | null;
@@ -527,6 +537,19 @@ export interface ResearchMvpRun {
     turnover_amount: number | null;
     panic_reasons: string[];
     source: string;
+    watchlist_scan?: Array<{
+      code: string;
+      name: string;
+      security_type: "stock" | "etf";
+      score: number;
+      research_status: string;
+      selected: boolean;
+      data_status: "available" | "stale" | "missing";
+      data_as_of: string | null;
+      data_source: string | null;
+      exclusion_reason: string | null;
+      data_gaps: string[];
+    }>;
   };
   candidates: ResearchMvpCandidate[];
   data_gaps: string[];
@@ -535,6 +558,7 @@ export interface ResearchMvpRun {
 export interface ResearchMvpHistoricalEvaluation {
   trade_date: string;
   market_state: ResearchMvpRun["market_state"] | null;
+  panic_sensitivity: ResearchMvpRun["panic_sensitivity"] | null;
   candidates: Array<{
     name: string;
     code: string;

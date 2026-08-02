@@ -139,7 +139,10 @@ describe("InvestmentResearch page", () => {
     expect(screen.getByText("PANIC")).toBeInTheDocument();
     expect(screen.getByText("4210.00")).toBeInTheDocument();
     expect(screen.getByText("Top 5 Research Candidate")).toBeInTheDocument();
-    expect(screen.getByText(/Data Gap：relative_to_market_pct/)).toBeInTheDocument();
+    expect(screen.getByText((_, element) => (
+      element?.tagName === "P"
+      && element.textContent?.includes("降低可信度：relative_to_market_pct") === true
+    ))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "查看研究详情" }));
     expect(screen.getByText("公司质量")).toBeInTheDocument();

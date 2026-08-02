@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 TUSHARE_TOKEN_PLACEHOLDERS = {"", "your-tushare-token"}
 
 
+def _is_entitlement_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in (
+        "没有访问该接口的权限",
+        "无权限",
+        "permission denied",
+        "insufficient permission",
+        "积分",
+    ))
+
+
 def _is_index(code: str) -> bool:
     """Detect A-share index symbols (000xxx.SH, 000300.SH, 399xxx.SZ)."""
     upper = code.upper()
@@ -100,11 +111,21 @@ class DataLoader:
         ed = end_date.replace("-", "")
         cache_fields = list(fields or [])
         result: Dict[str, pd.DataFrame] = {}
+        disabled_endpoints: set[str] = set()
 
         # Every code goes through the opt-in cache helper, which is a direct
         # passthrough when the cache is disabled. Fundamentals are merged inside
         # the cached unit so a cached entry already carries its extra columns.
         for code in codes:
+            endpoint_name = self._daily_endpoint_name(code)
+            if endpoint_name in disabled_endpoints:
+                logger.info(
+                    "skipping tushare %s for %s after an entitlement failure earlier in this run",
+                    endpoint_name,
+                    code,
+                )
+                continue
+
             def _fetch_one(code: str = code) -> Optional[pd.DataFrame]:
                 try:
                     df = self._fetch_daily_frame(code, sd, ed)
@@ -115,6 +136,12 @@ class DataLoader:
                     )
                     return merged.get(code)
                 except Exception as exc:
+                    if endpoint_name and _is_entitlement_error(exc):
+                        disabled_endpoints.add(endpoint_name)
+                        logger.warning(
+                            "tushare endpoint %s unavailable for this run due to entitlement; remaining matching symbols will use fallback providers",
+                            endpoint_name,
+                        )
                     logger.warning("failed to fetch %s: %s", code, exc)
                     return None
 
@@ -132,6 +159,18 @@ class DataLoader:
 
         return result
 
+    @staticmethod
+    def _daily_endpoint_name(code: str) -> str | None:
+        if _is_us_equity(code) or _is_crypto(code):
+            return None
+        if _is_etf_listed(code):
+            return "fund_daily"
+        if _is_index(code):
+            return "index_daily"
+        if _is_hk_equity(code):
+            return "hk_daily"
+        return "daily"
+
     def _fetch_daily_frame(
         self,
         code: str,
@@ -143,17 +182,14 @@ class DataLoader:
             logger.warning("tushare does not support %s (US/crypto); skipping", code)
             return None
 
-        if _is_etf_listed(code):
-            endpoint_name = "fund_daily"
+        endpoint_name = self._daily_endpoint_name(code)
+        if endpoint_name == "fund_daily":
             df = self.api.fund_daily(ts_code=code, start_date=start_date, end_date=end_date)
-        elif _is_index(code):
-            endpoint_name = "index_daily"
+        elif endpoint_name == "index_daily":
             df = self.api.index_daily(ts_code=code, start_date=start_date, end_date=end_date)
-        elif _is_hk_equity(code):
-            endpoint_name = "hk_daily"
+        elif endpoint_name == "hk_daily":
             df = self.api.hk_daily(ts_code=code, start_date=start_date, end_date=end_date)
         else:
-            endpoint_name = "daily"
             df = self.api.daily(ts_code=code, start_date=start_date, end_date=end_date)
 
         if df is None or df.empty:

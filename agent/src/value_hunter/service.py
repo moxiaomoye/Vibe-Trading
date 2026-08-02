@@ -71,6 +71,7 @@ class ValueHunterService:
                 completed_at=datetime.now(timezone.utc).isoformat(),
                 mode=self.provider.name, market=market, candidates=selected,
                 notification_required=required, notification_reason=reason,
+                universe=scored,
             )
             payload = result.to_dict()
             self.store.save_scan(payload)

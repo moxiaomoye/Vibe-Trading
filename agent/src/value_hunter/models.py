@@ -142,6 +142,8 @@ class ScanResult:
     notification_required: bool
     notification_reason: str
     errors: list[str] = field(default_factory=list)
+    research_context: dict[str, Any] = field(default_factory=dict)
+    universe: list[CandidateResult] = field(default_factory=list)
 
     @classmethod
     def started(cls, run_id: str, mode: str, market: MarketResult) -> "ScanResult":
@@ -159,4 +161,6 @@ class ScanResult:
             "notification_required": self.notification_required,
             "notification_reason": self.notification_reason,
             "errors": self.errors,
+            "research_context": self.research_context,
+            "universe": [item.to_dict() for item in self.universe],
         }
