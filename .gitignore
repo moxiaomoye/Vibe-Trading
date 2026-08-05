@@ -92,3 +92,13 @@ AGENTS.md
 # Alpha Zoo wiki artifacts (generated, not source)
 wiki/alpha-library/manifest.json
 wiki/alpha-library/content/
+
+# Local secrets and runtime artifacts (added by ProxyGuard session)
+.env.market-data.local
+.env.*.local
+server_out.txt
+server_err.txt
+agent/server_out.txt
+agent/server_err.txt
+work/
+хннЯ.txt
