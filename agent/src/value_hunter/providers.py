@@ -405,6 +405,7 @@ class AkshareProvider(ValueHunterProvider):
         self.watchlist_path = watchlist_path
         self.cache_dir = cache_dir
         self.market_fetcher = market_fetcher
+        self._history_payload: tuple[date, dict[str, Any]] | None = None
 
     def _cache_path(self, kind: str) -> Path | None:
         if self.cache_dir is None:
@@ -484,15 +485,15 @@ class AkshareProvider(ValueHunterProvider):
             raise RuntimeError("AKShare未安装，无法使用实时数据模式") from exc
         return ak
 
-    def load_market(self) -> MarketObservation:
+    def load_market(self, through: date | None = None) -> MarketObservation:
         cached = self._read_market_cache()
-        if cached is not None:
+        if cached is not None and through is None:
             return cached
         ak = self._ak()
         observations: list[IndexObservation] = []
         warnings: list[str] = []
         market_as_of: date | None = None
-        latest_candidate = _latest_complete_weekday()
+        latest_candidate = through or _latest_complete_weekday()
         for symbol, name in self._INDEX_MAP.items():
             try:
                 try:
@@ -537,45 +538,87 @@ class AkshareProvider(ValueHunterProvider):
         decliner_count = None
         limit_up_count = None
         turnover_amount = None
-        try:
-            current = datetime.now(ZoneInfo("Asia/Shanghai"))
-            if current.weekday() < 5 and current.time() < time(15, 5):
-                raise RuntimeError("current A-share session is not complete")
-            try:
-                spot = _call_with_timeout(ak.stock_zh_a_spot_em, 30)
-            except Exception:
-                # Sina's paginated endpoint is slower but independent of the
-                # Eastmoney route and supplies the breadth fields we need.
-                spot = _call_with_timeout(ak.stock_zh_a_spot, 60)
-                warnings.append("市场宽度使用新浪备用行情（读取较慢）")
-            changes = spot["涨跌幅"].astype(float)
-            advancer_count = int((changes > 0).sum())
-            decliner_count = int((changes < 0).sum())
-            advancer_ratio = float(advancer_count / max(len(changes), 1))
-            # Approximation handles main board and 20% boards without claiming exact exchange stats.
-            limit_up_count = int((changes >= 9.8).sum())
-            limit_down_count = int((changes <= -9.8).sum())
-            turnover_column = next(
-                (column for column in ("成交额", "amount") if column in spot.columns),
-                None,
+        above_ma60_ratio = None
+        if through is not None:
+            # Historical mode: current-only spot endpoints must not leak into
+            # a past trade date. Breadth is rebuilt from the research universe
+            # bars that were actually published through the target date, and is
+            # labelled as watchlist-only so it is never mistaken for market stats.
+            payload = self._fetch_history_payload(through)
+            self._history_payload = (through, payload)
+            universe = self._base_watchlist()
+            changes: list[float] = []
+            closes_by_symbol: dict[str, list[float]] = {}
+            for item in universe:
+                provider_symbol = normalize_ashare_symbol(item.symbol)
+                rows = _market_rows(payload.get(provider_symbol), through=through)
+                closes = [
+                    close for row in rows if (close := _series_number(row, "close")) is not None
+                ]
+                if not closes:
+                    continue
+                closes_by_symbol[provider_symbol] = closes
+                if len(closes) >= 2:
+                    changes.append((closes[-1] / closes[-2] - 1.0) * 100.0)
+            if changes:
+                advancer_count = int(sum(value > 0 for value in changes))
+                decliner_count = int(sum(value <= 0 for value in changes))
+                advancer_ratio = float(advancer_count / len(changes))
+            ma60_values = [
+                closes[-1] / (sum(closes[-60:]) / 60.0)
+                for closes in closes_by_symbol.values()
+                if len(closes) >= 60
+            ]
+            above_ma60_ratio = (
+                float(sum(value >= 1.0 for value in ma60_values) / len(ma60_values))
+                if ma60_values
+                else None
             )
-            if turnover_column is not None:
-                amounts = [_number(value) for value in spot[turnover_column]]
-                valid_amounts = [value for value in amounts if value is not None]
-                if valid_amounts:
-                    turnover_amount = float(sum(valid_amounts))
-        except Exception as exc:
-            warnings.append(f"市场宽度读取失败: {type(exc).__name__}")
+            warnings.append(
+                f"历史回溯：市场宽度基于研究标的池（{len(changes)}只有效标的）计算，非全市场统计"
+            )
+            warnings.append("历史回溯：跌停/涨停数量与成交额分位暂未接入历史数据，为Data Gap")
+        else:
+            try:
+                current = datetime.now(ZoneInfo("Asia/Shanghai"))
+                if current.weekday() < 5 and current.time() < time(15, 5):
+                    raise RuntimeError("current A-share session is not complete")
+                try:
+                    spot = _call_with_timeout(ak.stock_zh_a_spot_em, 30)
+                except Exception:
+                    # Sina's paginated endpoint is slower but independent of the
+                    # Eastmoney route and supplies the breadth fields we need.
+                    spot = _call_with_timeout(ak.stock_zh_a_spot, 60)
+                    warnings.append("市场宽度使用新浪备用行情（读取较慢）")
+                changes = spot["涨跌幅"].astype(float)
+                advancer_count = int((changes > 0).sum())
+                decliner_count = int((changes < 0).sum())
+                advancer_ratio = float(advancer_count / max(len(changes), 1))
+                # Approximation handles main board and 20% boards without claiming exact exchange stats.
+                limit_up_count = int((changes >= 9.8).sum())
+                limit_down_count = int((changes <= -9.8).sum())
+                turnover_column = next(
+                    (column for column in ("成交额", "amount") if column in spot.columns),
+                    None,
+                )
+                if turnover_column is not None:
+                    amounts = [_number(value) for value in spot[turnover_column]]
+                    valid_amounts = [value for value in amounts if value is not None]
+                    if valid_amounts:
+                        turnover_amount = float(sum(valid_amounts))
+            except Exception as exc:
+                warnings.append(f"市场宽度读取失败: {type(exc).__name__}")
 
         result = MarketObservation(
             as_of=(market_as_of or latest_candidate).isoformat(), indices=observations,
-            advancer_ratio=advancer_ratio, above_ma60_ratio=None,
+            advancer_ratio=advancer_ratio, above_ma60_ratio=above_ma60_ratio,
             limit_down_count=limit_down_count, turnover_zscore=None,
             source="AKShare/Eastmoney", coverage=["indices", "spot_breadth"], warnings=warnings,
             advancer_count=advancer_count, decliner_count=decliner_count,
             limit_up_count=limit_up_count, turnover_amount=turnover_amount,
         )
-        self._write_cache("market", result)
+        if through is None:
+            self._write_cache("market", result)
         return result
 
     def _base_watchlist(self) -> list[CandidateObservation]:
@@ -618,15 +661,21 @@ class AkshareProvider(ValueHunterProvider):
         self._write_cache("candidates", candidates)
         return candidates
 
-    def _enrich_market_history(self, candidates: list[CandidateObservation]) -> None:
-        """Populate point-in-time OHLCV metrics through the shared loader registry."""
-        through = _latest_complete_weekday()
+    def _fetch_history_payload(self, through: date) -> dict[str, Any]:
+        """Fetch point-in-time OHLCV through ``through`` via the loader registry.
+
+        Reused by the historical market snapshot and candidate enrichment so
+        both share one fetch and identical provenance.
+        """
         start = through - timedelta(days=400)
-        normalized = {item.symbol: normalize_ashare_symbol(item.symbol) for item in candidates}
+        normalized = {
+            item.symbol: normalize_ashare_symbol(item.symbol)
+            for item in self._base_watchlist()
+        }
         benchmark_symbol = "000300.SH"
         codes = list(dict.fromkeys([*normalized.values(), benchmark_symbol]))
         try:
-            payload = self.market_fetcher(
+            return self.market_fetcher(
                 codes=codes,
                 start_date=start.isoformat(),
                 end_date=through.isoformat(),
@@ -639,12 +688,40 @@ class AkshareProvider(ValueHunterProvider):
                 include_metadata=True,
             )
         except Exception as exc:  # noqa: BLE001 - provider gaps belong on observations
-            for candidate in candidates:
-                candidate.security_type = security_type_for_symbol(candidate.symbol)
-                candidate.warnings.append(
-                    f"market_data_registry unavailable: {type(exc).__name__}: {exc}"
+            raise RuntimeError(f"market_data_registry unavailable: {type(exc).__name__}: {exc}") from exc
+
+    def _enrich_market_history(
+        self, candidates: list[CandidateObservation], through: date | None = None
+    ) -> None:
+        """Populate point-in-time OHLCV metrics through ``through`` (default: latest complete weekday)."""
+        through = through or _latest_complete_weekday()
+        start = through - timedelta(days=400)
+        normalized = {item.symbol: normalize_ashare_symbol(item.symbol) for item in candidates}
+        benchmark_symbol = "000300.SH"
+        codes = list(dict.fromkeys([*normalized.values(), benchmark_symbol]))
+        if self._history_payload is not None and self._history_payload[0] == through:
+            payload = self._history_payload[1]
+        else:
+            try:
+                payload = self.market_fetcher(
+                    codes=codes,
+                    start_date=start.isoformat(),
+                    end_date=through.isoformat(),
+                    source="tushare",
+                    interval="1D",
+                    max_rows=0,
+                    loader_resolver=get_loader_cls_exact,
+                    fallback_chain_provider=lambda _: list(RESEARCH_MARKET_DATA_FALLBACK_CHAIN),
+                    max_fallback_attempts=len(RESEARCH_MARKET_DATA_FALLBACK_CHAIN),
+                    include_metadata=True,
                 )
-            return
+            except Exception as exc:  # noqa: BLE001 - provider gaps belong on observations
+                for candidate in candidates:
+                    candidate.security_type = security_type_for_symbol(candidate.symbol)
+                    candidate.warnings.append(
+                        f"market_data_registry unavailable: {type(exc).__name__}: {exc}"
+                    )
+                return
 
         benchmark_rows = _market_rows(payload.get(benchmark_symbol), through=through)
         source_by_symbol = (payload.get("_metadata") or {}).get("source_by_symbol") or {}
@@ -934,14 +1011,140 @@ class AkshareProvider(ValueHunterProvider):
         except Exception as exc:
             candidate.warnings.append(f"财务指标读取失败: {type(exc).__name__}")
 
+    @staticmethod
+    def _enrich_point_in_time_valuation(
+        ak: Any, candidates: list[CandidateObservation], through: date
+    ) -> None:
+        """Populate PE/PB/market-cap history strictly as known by ``through``."""
+        for candidate in candidates:
+            if candidate.security_type == "etf":
+                continue
+            code = candidate.symbol[:6]
+            try:
+                values = ak.stock_value_em(symbol=code)
+                values["数据日期"] = values["数据日期"].astype(str)
+                published = values[values["数据日期"] <= through.isoformat()]
+                if published.empty:
+                    candidate.warnings.append("历史估值在所选日期前无可用数据")
+                    continue
+                pe = published["PE(TTM)"].astype(float)
+                pe = pe[pe > 0]
+                if not pe.empty:
+                    current_pe = float(pe.iloc[-1])
+                    candidate.pe_ttm = current_pe
+                    candidate.pe_history_percentile = float(
+                        (pe <= current_pe).sum() / len(pe)
+                    )
+                candidate.pb = _number(published["市净率"].iloc[-1])
+                market_cap = _number(published["总市值"].iloc[-1])
+                candidate.market_cap_billion = (
+                    market_cap / 1e9 if market_cap is not None else None
+                )
+                candidate.source_fields.append("eastmoney_point_in_time_value_history")
+            except Exception as exc:
+                candidate.warnings.append(f"历史估值读取失败: {type(exc).__name__}")
+
+    @staticmethod
+    def _enrich_point_in_time_financials(
+        ak: Any, candidates: list[CandidateObservation], through: date
+    ) -> None:
+        """Populate fundamentals strictly as known by ``through``.
+
+        ROE uses annual reports of years before ``through`` (those are certainly
+        published). Growth and cash-flow figures use the latest reported period
+        ending on or before ``through`` — the same period-end convention the
+        live scan applies to its current snapshot.
+        """
+        for candidate in candidates:
+            if candidate.security_type == "etf":
+                continue
+            code = candidate.symbol[:6]
+            try:
+                start_year = str(max(2000, through.year - 6))
+                frame = ak.stock_financial_analysis_indicator(
+                    symbol=code, start_year=start_year
+                ).copy()
+                frame["日期"] = frame["日期"].astype(str)
+                frame = frame.sort_values("日期")
+                published = frame[frame["日期"] <= through.isoformat()]
+                if published.empty:
+                    candidate.warnings.append("历史财务指标在所选日期前无可用报告")
+                    continue
+                annual = published[published["日期"].str.endswith("12-31")]
+                annual = annual[annual["日期"].str[:4] < str(through.year)].tail(5)
+                roe = annual["净资产收益率(%)"].dropna().astype(float)
+                if not roe.empty:
+                    candidate.roe_5y_median_pct = float(roe.median())
+                latest = published.iloc[-1]
+                cash_ratio = _number(latest.get("经营现金净流量与净利润的比率(%)"))
+                candidate.operating_cashflow_to_profit = (
+                    cash_ratio / 100 if cash_ratio is not None else None
+                )
+                candidate.revenue_growth_pct = _number(latest.get("主营业务收入增长率(%)"))
+                candidate.profit_growth_pct = _number(latest.get("净利润增长率(%)"))
+                candidate.source_fields.append("sina_point_in_time_financial_indicators")
+            except Exception as exc:
+                candidate.warnings.append(f"历史财务指标读取失败: {type(exc).__name__}")
+
+
+class HistoricalAkshareProvider(AkshareProvider):
+    """Point-in-time provider: rebuild the market and research universe as of a
+    past trade date using only data published on or before that date.
+
+    Current-only endpoints (spot breadth, NAV, announcements, PE history) are
+    skipped; every missing field stays a labelled Data Gap instead of leaking
+    future information into the reconstructed snapshot.
+    """
+
+    name = "akshare-historical"
+
+    def __init__(
+        self,
+        as_of: date,
+        watchlist_path: Path | None = None,
+        cache_dir: Path | None = None,
+        market_fetcher: MarketFetcher = fetch_market_data,
+    ):
+        super().__init__(
+            watchlist_path=watchlist_path,
+            cache_dir=cache_dir,
+            market_fetcher=market_fetcher,
+        )
+        self.as_of = as_of
+
+    def load_market(self) -> MarketObservation:
+        return super().load_market(through=self.as_of)
+
+    def load_candidates(self) -> list[CandidateObservation]:
+        ak = self._ak()
+        candidates = self._base_watchlist()
+        self._enrich_market_history(candidates, through=self.as_of)
+        self._enrich_point_in_time_financials(ak, candidates, through=self.as_of)
+        self._enrich_point_in_time_valuation(ak, candidates, through=self.as_of)
+        for item in candidates:
+            item.warnings.append(
+                f"历史回溯：行情与财务数据截至{self.as_of.isoformat()}，不含未来信息"
+            )
+            if item.security_type == "etf":
+                item.warnings.append(
+                    "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
+                )
+        return candidates
+
 
 def build_provider(
     name: str,
     watchlist_path: Path | None = None,
     cache_dir: Path | None = None,
+    as_of: date | None = None,
+    market_fetcher: MarketFetcher = fetch_market_data,
 ) -> ValueHunterProvider:
     if name == "demo":
         return DemoProvider()
     if name == "akshare":
-        return AkshareProvider(watchlist_path, cache_dir)
+        return AkshareProvider(watchlist_path, cache_dir, market_fetcher)
+    if name == "akshare-historical":
+        if as_of is None:
+            raise ValueError("akshare-historical需要as_of日期参数")
+        return HistoricalAkshareProvider(as_of, watchlist_path, cache_dir, market_fetcher)
     raise ValueError(f"未知Value Hunter数据源: {name}")

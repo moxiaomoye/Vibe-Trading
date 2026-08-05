@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 from src.value_hunter.models import CandidateResult, ScanResult
 from src.value_hunter.config import resolve_panic_sensitivity
+from src.value_hunter.providers import normalize_ashare_symbol
+from src.value_hunter.scoring import score_candidate, score_market
 from src.value_hunter.service import ValueHunterService
 from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
@@ -347,30 +349,62 @@ def _classify_outcome(return_pct: float | None, excess_pct: float | None) -> str
     return "不确定"
 
 
+def _candidate_forward_payload(
+    item: dict[str, Any],
+    symbol: str,
+    trade_date: date,
+    rows: Any,
+    benchmark_metrics: dict[str, dict[str, float | None]],
+    benchmark_gaps: list[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Build the T+5/20/60 payload for one candidate and its forward gaps."""
+    metrics, return_gaps = _forward_metrics(rows, trade_date)
+    horizon_payload: dict[str, Any] = {}
+    for key in ("t5", "t20", "t60"):
+        value = metrics[key]
+        benchmark_return = benchmark_metrics[key]["return_pct"]
+        excess = (
+            round(value["return_pct"] - benchmark_return, 2)
+            if value["return_pct"] is not None and benchmark_return is not None
+            else None
+        )
+        horizon_payload[key] = value["return_pct"]
+        horizon_payload[f"{key}_max_drawdown"] = value["max_drawdown_pct"]
+        horizon_payload[f"{key}_excess"] = excess
+        horizon_payload[f"{key}_outcome"] = _classify_outcome(
+            value["return_pct"], excess
+        )
+    candidate_gaps = list(return_gaps)
+    for gap in benchmark_gaps:
+        candidate_gaps.append(f"benchmark.{gap}")
+    return horizon_payload, candidate_gaps
+
+
 def build_historical_evaluation(
     service: ValueHunterService,
     trade_date: date,
     market_fetcher: MarketFetcher,
 ) -> dict[str, Any]:
-    """Evaluate a stored point-in-time scan without reconstructing it from future data."""
+    """Evaluate a point-in-time scan without reconstructing it from future data.
+
+    Uses the stored snapshot when one exists for the selected date; otherwise
+    rebuilds the market and universe strictly from data published on or before
+    the date (see ``HistoricalAkshareProvider``), so the loop still closes for
+    dates the live scanner never ran.
+    """
     snapshot = next(
         (item for item in service.history(200) if item.get("market", {}).get("observation", {}).get("as_of") == trade_date.isoformat()),
         None,
     )
     if snapshot is None:
-        return {
-            "trade_date": trade_date.isoformat(),
-            "market_state": None,
-            "panic_sensitivity": None,
-            "candidates": [],
-            "data_gaps": ["No point-in-time Value Hunter snapshot exists for the selected date."],
-        }
+        return _rebuild_historical_evaluation(service, trade_date, market_fetcher)
     stored_profile = snapshot.get("research_context", {}).get("panic_sensitivity")
     raw_candidates = snapshot.get("candidates", [])[:5]
     symbols = [item.get("observation", {}).get("symbol") for item in raw_candidates]
     symbols = [symbol for symbol in symbols if symbol]
+    normalized_symbols = [normalize_ashare_symbol(symbol) for symbol in symbols]
     benchmark_symbol = "000300.SH"
-    requested_symbols = list(dict.fromkeys([*symbols, benchmark_symbol]))
+    requested_symbols = list(dict.fromkeys([*normalized_symbols, benchmark_symbol]))
     price_data = market_fetcher(
         codes=requested_symbols,
         start_date=trade_date.isoformat(),
@@ -386,28 +420,12 @@ def build_historical_evaluation(
     gaps: list[str] = []
     if not stored_profile:
         gaps.append("panic_sensitivity_snapshot")
-    for item in raw_candidates:
+    for item, symbol in zip(raw_candidates, normalized_symbols):
         observation = item.get("observation", {})
-        symbol = observation.get("symbol", "")
-        metrics, return_gaps = _forward_metrics(price_data.get(symbol, []), trade_date)
-        horizon_payload: dict[str, Any] = {}
-        for key in ("t5", "t20", "t60"):
-            value = metrics[key]
-            benchmark_return = benchmark_metrics[key]["return_pct"]
-            excess = (
-                round(value["return_pct"] - benchmark_return, 2)
-                if value["return_pct"] is not None and benchmark_return is not None
-                else None
-            )
-            horizon_payload[key] = value["return_pct"]
-            horizon_payload[f"{key}_max_drawdown"] = value["max_drawdown_pct"]
-            horizon_payload[f"{key}_excess"] = excess
-            horizon_payload[f"{key}_outcome"] = _classify_outcome(
-                value["return_pct"], excess
-            )
-        candidate_gaps = list(return_gaps)
-        for gap in benchmark_gaps:
-            candidate_gaps.append(f"benchmark.{gap}")
+        horizon_payload, candidate_gaps = _candidate_forward_payload(
+            item, symbol, trade_date, price_data.get(symbol, []),
+            benchmark_metrics, benchmark_gaps,
+        )
         candidates.append({
             "name": observation.get("name", symbol),
             "code": symbol,
@@ -427,6 +445,116 @@ def build_historical_evaluation(
         "panic_sensitivity": stored_profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
+    }
+
+
+def _scan_historical_provider(
+    service: ValueHunterService,
+    provider: Any,
+    panic_sensitivity: int = 50,
+) -> tuple[Any, dict[str, Any]]:
+    """Run the deterministic scan over an arbitrary provider without notifications.
+
+    Mirrors ``ValueHunterService.run(include_incomplete=True)`` so the rebuilt
+    snapshot matches the shape of a live research run.
+    """
+    method, resolved = resolve_panic_sensitivity(panic_sensitivity, service.config.method)
+    market = score_market(provider.load_market(), method)
+    scored = [score_candidate(item, method) for item in provider.load_candidates()]
+    eligible = [item for item in scored if item.status != "Reject"]
+    eligible.sort(key=lambda item: item.score.total, reverse=True)
+    selected = eligible[: service.config.max_candidates]
+    started = datetime.now(timezone.utc).isoformat()
+    scan = ScanResult(
+        run_id=str(uuid5(NAMESPACE_URL, f"historical:{provider.as_of.isoformat()}")),
+        started_at=started,
+        completed_at=datetime.now(timezone.utc).isoformat(),
+        mode=provider.name,
+        market=market,
+        candidates=selected,
+        notification_required=False,
+        notification_reason="历史回溯重建，不触发通知",
+        universe=scored,
+    )
+    scan.research_context = {
+        "schema_version": 1,
+        "panic_sensitivity": _panic_profile(scan, resolved.to_dict()),
+    }
+    service.store.save_scan(scan.to_dict())
+    return scan, scan.research_context["panic_sensitivity"]
+
+
+def _rebuild_historical_evaluation(
+    service: ValueHunterService,
+    trade_date: date,
+    market_fetcher: MarketFetcher,
+) -> dict[str, Any]:
+    """Rebuild the market and universe as of ``trade_date`` from published data.
+
+    Only invoked when no stored point-in-time snapshot exists. The rebuilt
+    snapshot is persisted, so later evaluations of the same date take the
+    stored path.
+    """
+    from src.value_hunter.providers import build_provider
+
+    provider = build_provider(
+        "akshare-historical",
+        as_of=trade_date,
+        watchlist_path=service.config.watchlist_path,
+        cache_dir=service.config.database_path.parent / "cache",
+        market_fetcher=market_fetcher,
+    )
+    scan, profile = _scan_historical_provider(service, provider)
+
+    raw_candidates = scan.candidates[:5]
+    normalized_symbols = [
+        normalize_ashare_symbol(item.observation.symbol)
+        for item in raw_candidates
+        if item.observation.symbol
+    ]
+    benchmark_symbol = "000300.SH"
+    requested_symbols = list(dict.fromkeys([*normalized_symbols, benchmark_symbol]))
+    price_data = market_fetcher(
+        codes=requested_symbols,
+        start_date=trade_date.isoformat(),
+        end_date=(trade_date + timedelta(days=100)).isoformat(),
+        source="auto",
+        interval="1D",
+        max_rows=0,
+    ) if normalized_symbols else {}
+    benchmark_metrics, benchmark_gaps = _forward_metrics(
+        price_data.get(benchmark_symbol, []), trade_date
+    )
+    candidates: list[dict[str, Any]] = []
+    gaps: list[str] = list(scan.market.observation.warnings)
+    for item, symbol in zip(raw_candidates, normalized_symbols):
+        observation = item.observation
+        horizon_payload, candidate_gaps = _candidate_forward_payload(
+            item.to_dict(), symbol, trade_date, price_data.get(symbol, []),
+            benchmark_metrics, benchmark_gaps,
+        )
+        candidates.append({
+            "name": observation.name,
+            "code": symbol,
+            "research_status": item.status,
+            **horizon_payload,
+            "selection_reasons": list(item.reasons),
+            "risks": list(observation.risk_flags) + list(observation.risk_evidence),
+            "data_gaps": candidate_gaps,
+        })
+        gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
+        gaps.extend(observation.warnings)
+    return {
+        "trade_date": trade_date.isoformat(),
+        "market_state": _market_state(
+            scan.market.score,
+            profile.get("trigger_count"),
+            profile.get("required_confirmations"),
+        ),
+        "panic_sensitivity": profile,
+        "candidates": candidates,
+        "data_gaps": list(dict.fromkeys(gaps)),
+        "rebuilt": True,
     }
 
 

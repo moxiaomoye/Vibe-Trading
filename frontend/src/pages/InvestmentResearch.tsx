@@ -377,7 +377,7 @@ export function InvestmentResearch() {
 
       <section className="rounded-xl border bg-card p-5">
         <h2 className="font-semibold">历史验证</h2>
-        <p className="mt-1 text-sm text-muted-foreground">仅使用所选日期已保存的时点快照；缺失时不以当前候选回填。</p>
+        <p className="mt-1 text-sm text-muted-foreground">优先使用所选日期已保存的时点快照；缺失时从公开时点数据重建（不含未来信息）并自动保存，重建耗时约 1-2 分钟。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" />
           <button type="button" onClick={() => void evaluateHistory()} disabled={historyLoading} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60">

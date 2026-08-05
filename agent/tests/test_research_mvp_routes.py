@@ -132,14 +132,68 @@ def test_historical_evaluation_uses_stored_snapshot_and_trading_session_horizons
     assert result["candidates"][0]["t20_outcome"] == "不确定"
 
 
-def test_historical_evaluation_reports_missing_point_in_time_snapshot(tmp_path) -> None:
-    result = build_historical_evaluation(
-        _service(tmp_path), __import__("datetime").date(2025, 4, 7), lambda **_: {}
+def test_historical_evaluation_rebuilds_missing_snapshot_from_published_data(tmp_path, monkeypatch) -> None:
+    service = _service(tmp_path)
+    from src.value_hunter.models import CandidateObservation, IndexObservation, MarketObservation
+
+    class StubHistoricalProvider:
+        name = "akshare-historical"
+        as_of = __import__("datetime").date(2025, 4, 7)
+
+        def load_market(self):
+            return MarketObservation(
+                as_of="2025-04-07",
+                indices=[IndexObservation(
+                    "000300.SH", "沪深300", 3589.44, -7.05, -15.7, True, True,
+                )],
+                advancer_ratio=0.0, above_ma60_ratio=0.0, limit_down_count=None,
+                turnover_zscore=None, source="stub-historical",
+                coverage=["indices", "watchlist_breadth"],
+                warnings=["历史回溯：跌停数量为Data Gap"],
+            )
+
+        def load_candidates(self):
+            return [CandidateObservation(
+                "601991.SH", "大唐发电", "电力", "火电与新能源",
+                roe_5y_median_pct=8.0, operating_cashflow_to_profit=0.5,
+                pe_history_percentile=0.0, revenue_growth_pct=5.0,
+                profit_growth_pct=3.0, drawdown_252_pct=-30.0,
+                daily_return_pct=-5.0, return_20d_pct=-10.0, return_60d_pct=-15.0,
+                volume_ratio_20d=2.0, relative_to_market_pct=-2.0,
+                catalyst_evidence=["测试催化剂"], source_fields=["stub"],
+            )]
+
+    monkeypatch.setattr(
+        "src.value_hunter.providers.build_provider",
+        lambda *args, **kwargs: StubHistoricalProvider(),
     )
-    assert result["market_state"] is None
-    assert result["panic_sensitivity"] is None
-    assert result["candidates"] == []
-    assert "point-in-time" in result["data_gaps"][0]
+
+    def prices(**kwargs):
+        return {
+            symbol: [
+                {"date": f"2025-04-{day:02d}", "close": 100 + index}
+                for index, day in enumerate(range(7, 28))
+            ]
+            for symbol in kwargs["codes"]
+        }
+
+    result = build_historical_evaluation(
+        service, __import__("datetime").date(2025, 4, 7), prices
+    )
+
+    assert result["rebuilt"] is True
+    assert result["market_state"] == "PANIC"
+    assert result["panic_sensitivity"]["trigger_count"] >= 1
+    assert len(result["candidates"]) == 1
+    assert result["candidates"][0]["t5"] == 5.0
+    assert result["candidates"][0]["t20"] == 20.0
+    assert result["candidates"][0]["t60"] is None
+    assert result["candidates"][0]["selection_reasons"]
+    stored = service.history(200)
+    assert any(
+        item["market"]["observation"]["as_of"] == "2025-04-07" for item in stored
+    )
+    assert stored[0]["mode"] == "akshare-historical"
 
 
 def test_feishu_preview_defaults_to_no_send_and_confirmation_queues_once(tmp_path) -> None:
