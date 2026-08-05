@@ -13,6 +13,7 @@ from src.value_hunter.scoring import score_candidate, score_market
 from src.value_hunter.service import ValueHunterService
 from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
+from src.investment_research.models.research_context import attach_contract_metadata
 from uuid import NAMESPACE_URL, uuid5
 
 MarketFetcher = Callable[..., dict[str, Any]]
@@ -263,7 +264,7 @@ def build_research_run(
         gaps.extend(item.observation.warnings)
     if not candidates:
         gaps.append("No candidate met the existing Value Hunter research threshold.")
-    return {
+    report = {
         "trade_date": observation.as_of,
         "market_state": _market_state(
             scan.market.score,
@@ -275,6 +276,14 @@ def build_research_run(
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
     }
+    attach_contract_metadata(
+        scan.to_dict(),
+        report,
+        requested_date=date.fromisoformat(observation.as_of[:10]),
+        provider=service.provider.name,
+        profile=resolved.to_dict(),
+    )
+    return report
 
 
 def _row_date(row: dict[str, Any]) -> date | None:
@@ -435,7 +444,7 @@ def build_historical_evaluation(
         })
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
     market_score = float(snapshot.get("market", {}).get("score", 0.0))
-    return {
+    report = {
         "trade_date": trade_date.isoformat(),
         "market_state": _market_state(
             market_score,
@@ -446,6 +455,14 @@ def build_historical_evaluation(
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
     }
+    attach_contract_metadata(
+        snapshot,
+        report,
+        requested_date=trade_date,
+        provider=str(snapshot.get("mode", "akshare-historical")),
+        profile=stored_profile,
+    )
+    return report
 
 
 def _scan_historical_provider(
@@ -544,7 +561,7 @@ def _rebuild_historical_evaluation(
         })
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
         gaps.extend(observation.warnings)
-    return {
+    report = {
         "trade_date": trade_date.isoformat(),
         "market_state": _market_state(
             scan.market.score,
@@ -556,6 +573,14 @@ def _rebuild_historical_evaluation(
         "data_gaps": list(dict.fromkeys(gaps)),
         "rebuilt": True,
     }
+    attach_contract_metadata(
+        scan.to_dict(),
+        report,
+        requested_date=trade_date,
+        provider=provider.name,
+        profile=profile,
+    )
+    return report
 
 
 def render_feishu_preview(report: dict[str, Any]) -> str:
