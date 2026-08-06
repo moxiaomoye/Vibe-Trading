@@ -88,7 +88,12 @@ def mini_zoo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # monkey-patching sys.path to include tmp_path, then creating an `src`
     # alias that points to `factors/`-as-`src.factors`.
     src_alias = tmp_path / "src"
-    src_alias.symlink_to(tmp_path)
+    try:
+        src_alias.symlink_to(tmp_path)
+    except OSError:
+        # Windows without Developer Mode / admin rights cannot create
+        # symlinks (WinError 1314); these tests are environment-specific.
+        pytest.skip("symlink creation not permitted on this platform")
     monkeypatch.syspath_prepend(str(tmp_path))
     # Reset any cached modules from previous test
     for mod_name in list(sys.modules):
