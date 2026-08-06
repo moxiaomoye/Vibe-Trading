@@ -1,0 +1,88 @@
+schema_version: 1
+queue:
+- id: p0-contract-freeze
+  title: Research Pipeline Contract Freeze
+  phase: '0.8'
+  status: done
+  priority: 0
+  goal: 冻结 ResearchContext/Artifact/Report 契约，Contract Enforcement 测试
+  acceptance:
+  - enforcement 测试存在且通过
+  - research_run_id 贯穿
+  notes: commit 8e1ace9
+- id: p1-market-intelligence
+  title: Market Intelligence Layer
+  phase: '1'
+  status: done
+  priority: 1
+  goal: Market State Engine：NORMAL/STRESS/PANIC/EXTREME_PANIC/UNKNOWN
+  acceptance:
+  - 引擎纯函数、维度感知可用性
+  - 无交易指令、PIT 安全、确定性
+  notes: commit 8e1ace9；docs/status/phase1_market_intelligence.md
+- id: p1-historical-data-quality
+  title: Historical Market Data Quality
+  phase: '1.5'
+  status: in_progress
+  priority: 2
+  goal: 提升历史研究输入真实性：涨跌停/宽度/成交/缺口展示
+  constraints:
+  - 不修改 Market Intelligence 规则
+  - 只改善输入质量
+  - 禁止隐藏 Data Gap；估计必须显式标注
+  acceptance:
+  - 历史涨跌停：标的池估计 + ESTIMATED 标注，不占可用证据权重
+  - 历史宽度：保留既有 watchlist 池标注
+  - 成交异常：缺口显式保留
+  - DataQuality 报告区分 estimated/unavailable
+- id: p2-regime-detection
+  title: Regime Detection（Macro State 基础契约）
+  phase: '2'
+  status: pending
+  priority: 3
+  goal: 先设计 Macro State 契约，不建复杂模型
+  constraints:
+  - contract-first：类型/枚举/纯函数引擎 + 测试
+  - 数据源未接入时输出 UNKNOWN + 显式缺口
+  acceptance:
+  - MacroDimension 五维（利率/流动性/ERP/盈利/信贷）
+  - Regime 枚举：LIQUIDITY_PANIC/EARNINGS_DOWNGRADE/STRUCTURAL_REPRICING/STABLE/UNKNOWN
+  - 无交易指令、确定性、PIT 安全
+- id: p3-etf-research
+  title: ETF Research Layer
+  phase: '3'
+  status: pending
+  priority: 4
+  goal: ETF/指数研究：历史估值、PE/PB 分位、风险收益、历史恐慌表现
+  constraints:
+  - 指数代理优先，禁止复杂 ETF 复制计算
+  - 优先级高于个股
+- id: p4-risk-analyzer
+  title: Stock Risk Analyzer
+  phase: '4'
+  status: pending
+  priority: 5
+  goal: 排除价值陷阱：财务异常/现金流/负债/大股东/盈利恶化 → Risk Review
+  constraints:
+  - 输出风险审查，不是 Buy Rating
+- id: p5-fear-memory
+  title: Fear Memory System（Historical Crisis Library）
+  phase: '5'
+  status: pending
+  priority: 6
+  goal: 历史危机案例库，帮助人在恐慌时理解环境
+  constraints:
+  - PIT 安全：案例仅可见 date <= as_of_date
+  - 禁止未来案例污染
+- id: p6-research-quality-eval
+  title: Research Quality Evaluation
+  phase: '6'
+  status: pending
+  priority: 7
+  goal: 历史复盘 Case Review（非预测胜率）：判断是否合理/风险遗漏/数据充分
+- id: maintenance-weekly
+  title: 每周维护：Provider 健康/测试状态/依赖变化/数据源变化/架构违规
+  phase: maintenance
+  status: pending
+  priority: 8
+  goal: 优先修复稳定性
