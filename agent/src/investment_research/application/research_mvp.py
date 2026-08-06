@@ -17,6 +17,7 @@ from src.investment_research.models.research_context import (
     ResearchContext,
     attach_contract_metadata,
 )
+from src.investment_research.models.risk_review import evaluate_risk_review
 from pydantic import ValidationError
 from uuid import NAMESPACE_URL, uuid5
 
@@ -94,6 +95,17 @@ def _panic_profile(scan: ScanResult, sensitivity: dict[str, Any]) -> dict[str, A
     }
     trigger_count = sum(item["triggered"] is True for item in checks.values())
     return {**sensitivity, "trigger_count": trigger_count, "checks": checks}
+
+
+def _risk_review_inputs(observation: Any) -> dict[str, Any]:
+    return {
+        "security_type": observation.security_type,
+        "risk_flags": list(observation.risk_flags),
+        "risk_evidence": list(observation.risk_evidence),
+        "roe_5y_median_pct": observation.roe_5y_median_pct,
+        "operating_cashflow_to_profit": observation.operating_cashflow_to_profit,
+        "profit_growth_pct": observation.profit_growth_pct,
+    }
 
 
 def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
@@ -207,6 +219,7 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
             "pe_history_percentile": observation.pe_history_percentile,
             "pe_industry_percentile": observation.pe_industry_percentile,
         },
+        "risk_review": evaluate_risk_review(_risk_review_inputs(observation)).model_dump(),
         "etf_valuation": etf_valuation,
         "supporting_evidence": list(candidate.reasons),
         "counter_evidence": list(observation.risk_evidence),
