@@ -470,6 +470,23 @@ export interface ResearchMvpCandidate {
   score: number;
   research_status: string;
   first_rejection: string;
+  contract_version?: string;
+  score_components?: {
+    mispricing: number;
+    quality: number;
+    valuation: number;
+    relative_strength: number;
+    catalyst: number;
+    total: number;
+  };
+  missing_fields?: string[];
+  source_fields?: string[];
+  provider_warnings?: string[];
+  eligibility_status?: "ELIGIBLE" | "CONFIRMED_NOT_LISTED" | "UNKNOWN";
+  listing_date?: string | null;
+  eligibility_evidence_source?: string | null;
+  eligibility_reason?: string | null;
+  selected_excluded_reason?: string;
   quality: Record<string, number | null>;
   financials: Record<string, number | null>;
   valuation: Record<string, number | null>;
@@ -506,12 +523,77 @@ export interface ResearchMvpCandidate {
   };
   supporting_evidence: string[];
   counter_evidence: string[];
-  forward_validation: { t5: number | null; t20: number | null; t60: number | null };
+  forward_validation: {
+    t5: null | {
+      return_pct: number | null;
+      max_drawdown_pct: number | null;
+      excess_pct: number | null;
+      outcome: "正确" | "错误" | "不确定";
+    };
+    t20: null | {
+      return_pct: number | null;
+      max_drawdown_pct: number | null;
+      excess_pct: number | null;
+      outcome: "正确" | "错误" | "不确定";
+    };
+    t60: null | {
+      return_pct: number | null;
+      max_drawdown_pct: number | null;
+      excess_pct: number | null;
+      outcome: "正确" | "错误" | "不确定";
+    };
+  };
   research_plan: {
     observation_conditions: string[];
     risk_conditions: string[];
     validation_conditions: string[];
   };
+}
+
+export interface ResearchMvpMarketStateReconciliation {
+  legacy_market_state: "NORMAL" | "CAUTION" | "PANIC" | "EXTREME_PANIC";
+  effective_market_state: "NORMAL" | "CAUTION" | "PANIC" | "EXTREME_PANIC";
+  intelligence_state: "NORMAL" | "STRESS" | "PANIC" | "EXTREME_PANIC" | "UNKNOWN";
+  coverage_gate_passed: boolean;
+  coverage: {
+    available_dimensions: number;
+    has_index_or_breadth: boolean;
+    has_available_trigger: boolean;
+  };
+  upgraded: boolean;
+  reasons: string[];
+}
+
+export interface ResearchMvpUniverseAuditRow {
+  symbol: string;
+  code: string;
+  name: string;
+  security_type: "stock" | "etf";
+  eligibility_status: "ELIGIBLE" | "CONFIRMED_NOT_LISTED" | "UNKNOWN";
+  listing_date: string | null;
+  eligibility_reason: string;
+  selected: boolean;
+  exclusion_reason: string | null;
+  score: number;
+  research_status: string;
+  data_status: "available" | "stale" | "missing";
+  data_as_of: string | null;
+  data_source: string | null;
+  data_gaps: string[];
+}
+
+export interface ResearchMvpProviderHealth {
+  endpoint: string;
+  provider: string;
+  attempts: number;
+  successes: number;
+  failures: number;
+  state: "HEALTHY" | "DEGRADED" | "UNAVAILABLE" | "NOT_USED";
+  last_error_type: string | null;
+  last_error_summary: string | null;
+  cooldown_triggered: boolean;
+  cache_hits: number;
+  cache_original_as_of: string | null;
 }
 
 export interface ResearchMvpRun {
@@ -553,6 +635,9 @@ export interface ResearchMvpRun {
   };
   candidates: ResearchMvpCandidate[];
   data_gaps: string[];
+  market_state_reconciliation: ResearchMvpMarketStateReconciliation;
+  universe_audit: ResearchMvpUniverseAuditRow[];
+  provider_health: ResearchMvpProviderHealth[];
 }
 
 export interface ResearchMvpHistoricalEvaluation {
@@ -563,6 +648,9 @@ export interface ResearchMvpHistoricalEvaluation {
     name: string;
     code: string;
     research_status: string;
+    eligibility_status?: "ELIGIBLE" | "CONFIRMED_NOT_LISTED" | "UNKNOWN";
+    listing_date?: string | null;
+    eligibility_reason?: string | null;
     t5: number | null;
     t20: number | null;
     t60: number | null;
@@ -578,6 +666,9 @@ export interface ResearchMvpHistoricalEvaluation {
     data_gaps: string[];
   }>;
   data_gaps: string[];
+  market_state_reconciliation?: ResearchMvpMarketStateReconciliation;
+  universe_audit?: ResearchMvpUniverseAuditRow[];
+  provider_health?: ResearchMvpProviderHealth[];
 }
 
 export interface ResearchMvpFeishuPreview {

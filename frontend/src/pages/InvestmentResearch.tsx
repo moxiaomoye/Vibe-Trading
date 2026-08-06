@@ -11,6 +11,20 @@ const MARKET_TONE: Record<ResearchMvpRun["market_state"], string> = {
   EXTREME_PANIC: "text-red-600",
 };
 
+const INTELLIGENCE_TONE: Record<string, string> = {
+  NORMAL: "text-emerald-600",
+  STRESS: "text-amber-600",
+  PANIC: "text-orange-600",
+  EXTREME_PANIC: "text-red-600",
+  UNKNOWN: "text-muted-foreground",
+};
+
+const ELIGIBILITY_LABEL: Record<string, string> = {
+  ELIGIBLE: "已上市",
+  CONFIRMED_NOT_LISTED: "确认未上市",
+  UNKNOWN: "上市状态未知",
+};
+
 function formatNumber(value: number | null, suffix = "") {
   return value === null ? "Data Gap" : `${value.toFixed(2)}${suffix}`;
 }
@@ -89,6 +103,20 @@ function CandidateCard({ candidate }: { candidate: ResearchMvpCandidate }) {
           研究评分 {candidate.score.toFixed(1)}
         </span>
       </div>
+      {candidate.eligibility_status && (
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          <span className={cn(
+            "rounded-full border px-2 py-0.5 font-medium",
+            candidate.eligibility_status === "CONFIRMED_NOT_LISTED" && "border-red-300 text-red-700",
+            candidate.eligibility_status === "UNKNOWN" && "border-amber-300 text-amber-700",
+            candidate.eligibility_status === "ELIGIBLE" && "border-emerald-300 text-emerald-700",
+          )}>
+            {ELIGIBILITY_LABEL[candidate.eligibility_status]}
+          </span>
+          {candidate.listing_date && <span className="text-muted-foreground">上市日期：{candidate.listing_date}</span>}
+          {candidate.eligibility_reason && <span className="text-muted-foreground">{candidate.eligibility_reason}</span>}
+        </div>
+      )}
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Metric label="当前价格" value={formatNumber(candidate.current_price)} />
         <Metric label="距一年高点" value={formatNumber(candidate.drawdown_pct, "%")} />
@@ -199,7 +227,6 @@ export function InvestmentResearch() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [feishu, setFeishu] = useState<ResearchMvpFeishuPreview | null>(null);
   const [panicSensitivity, setPanicSensitivity] = useState(50);
-  const watchlistScan = report?.market_summary.watchlist_scan ?? [];
 
   const generate = async () => {
     setLoading(true);
@@ -327,6 +354,38 @@ export function InvestmentResearch() {
             <DataGapSummary gaps={report.data_gaps} className="mt-3" />
           </section>
 
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="font-semibold">市场状态协调</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              有效状态仅在智能层证据覆盖门槛通过且更严重时升级，绝不低于既有状态降级。
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-muted/60 p-3">
+                <p className="text-xs text-muted-foreground">既有市场状态（legacy）</p>
+                <p className={cn("mt-1 font-bold", MARKET_TONE[report.market_state_reconciliation.legacy_market_state])}>{report.market_state_reconciliation.legacy_market_state}</p>
+              </div>
+              <div className="rounded-lg bg-muted/60 p-3">
+                <p className="text-xs text-muted-foreground">智能证据状态（intelligence）</p>
+                <p className={cn("mt-1 font-bold", INTELLIGENCE_TONE[report.market_state_reconciliation.intelligence_state])}>{report.market_state_reconciliation.intelligence_state}</p>
+              </div>
+              <div className="rounded-lg bg-muted/60 p-3">
+                <p className="text-xs text-muted-foreground">有效状态（effective）</p>
+                <p className={cn("mt-1 font-bold", MARKET_TONE[report.market_state_reconciliation.effective_market_state])}>
+                  {report.market_state_reconciliation.effective_market_state}
+                  {report.market_state_reconciliation.upgraded && <span className="ml-2 text-xs font-medium text-red-600">已升级</span>}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              覆盖门槛：{report.market_state_reconciliation.coverage_gate_passed ? "通过" : "未通过"}（可用维度 {report.market_state_reconciliation.coverage.available_dimensions} 个 · 含指数/宽度 {report.market_state_reconciliation.coverage.has_index_or_breadth ? "是" : "否"} · 可用触发 {report.market_state_reconciliation.coverage.has_available_trigger ? "有" : "无"}）
+            </p>
+            {report.market_state_reconciliation.reasons.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                {report.market_state_reconciliation.reasons.map((reason) => <li key={reason}>· {reason}</li>)}
+              </ul>
+            )}
+          </section>
+
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -338,24 +397,70 @@ export function InvestmentResearch() {
           </section>
 
           <section className="rounded-xl border bg-card p-5">
-            <h2 className="font-semibold">观察池扫描结果</h2>
+            <h2 className="font-semibold">观察池审计（universe audit）</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              共扫描 {watchlistScan.length} 只；Top 5 之外仍保留未入选原因和数据日期。
+              全部 {report.universe_audit.length} 只逐一审计：先做时点上市资格判断，再说明未入选原因，杜绝把“无法取数”冒充“未上市”。
             </p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead><tr className="border-b"><th className="p-2">标的</th><th className="p-2">评分</th><th className="p-2">结果</th><th className="p-2">数据状态</th><th className="p-2">说明</th></tr></thead>
-                <tbody>{watchlistScan.map((item) => (
+                <thead><tr className="border-b"><th className="p-2">标的</th><th className="p-2">资格</th><th className="p-2">评分</th><th className="p-2">结果</th><th className="p-2">数据状态</th><th className="p-2">说明</th></tr></thead>
+                <tbody>{report.universe_audit.map((item) => (
                   <tr key={item.code} className="border-b align-top">
                     <td className="p-2"><div>{item.name}</div><div className="font-mono text-xs text-muted-foreground">{item.code} · {item.security_type.toUpperCase()}</div></td>
+                    <td className="p-2">
+                      <div className={cn(
+                        "text-xs font-medium",
+                        item.eligibility_status === "CONFIRMED_NOT_LISTED" && "text-red-700",
+                        item.eligibility_status === "UNKNOWN" && "text-amber-700",
+                        item.eligibility_status === "ELIGIBLE" && "text-emerald-700",
+                      )}>{ELIGIBILITY_LABEL[item.eligibility_status]}</div>
+                      <div className="text-xs text-muted-foreground">{item.listing_date ?? "无元数据"}</div>
+                    </td>
                     <td className="p-2">{item.score.toFixed(1)}</td>
                     <td className="p-2">{item.selected ? "Top 5" : item.research_status}</td>
                     <td className="p-2"><div>{item.data_status === "available" ? "可用" : item.data_status === "stale" ? "陈旧" : "缺失"}</div><div className="text-xs text-muted-foreground">{item.data_as_of ?? "Data Gap"} · {item.data_source ?? "Data Gap"}</div></td>
-                    <td className="p-2 text-xs text-muted-foreground">{item.exclusion_reason ?? "已进入 Research Candidate"}{item.data_gaps.length > 0 ? `；Data Gap ${item.data_gaps.length} 项` : ""}</td>
+                    <td className="p-2 text-xs text-muted-foreground">
+                      {item.exclusion_reason ?? "已进入 Research Candidate"}
+                      {item.data_gaps.length > 0 ? `；Data Gap ${item.data_gaps.length} 项` : ""}
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="font-semibold">数据源运行状况</h2>
+            {report.provider_health.length === 0 ? (
+              <p className="mt-1 text-sm text-muted-foreground">本次运行未记录端点健康快照（演示数据源）。</p>
+            ) : (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {report.provider_health.map((entry) => (
+                  <div key={entry.endpoint} className={cn(
+                    "rounded-lg border p-3 text-sm",
+                    entry.state === "HEALTHY" && "border-emerald-200 bg-emerald-50/60",
+                    entry.state === "DEGRADED" && "border-red-200 bg-red-50/60",
+                    entry.state === "UNAVAILABLE" && "border-amber-200 bg-amber-50/60",
+                    entry.state === "NOT_USED" && "border-gray-200 bg-muted/40",
+                  )}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs">{entry.endpoint}</span>
+                      <span className={cn(
+                        "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                        entry.state === "HEALTHY" && "border-emerald-300 text-emerald-700",
+                        entry.state === "DEGRADED" && "border-red-300 text-red-700",
+                        entry.state === "UNAVAILABLE" && "border-amber-300 text-amber-700",
+                        entry.state === "NOT_USED" && "border-gray-300 text-muted-foreground",
+                      )}>{entry.state}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      成功 {entry.successes} · 失败 {entry.failures} · 缓存命中 {entry.cache_hits}
+                    </p>
+                    {entry.last_error_type && <p className="mt-1 text-xs text-red-600">{entry.last_error_type}：{entry.last_error_summary}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="rounded-xl border bg-card p-5">
@@ -387,6 +492,22 @@ export function InvestmentResearch() {
         {history && (
           <div className="mt-4">
             <p className="text-sm">当时市场状态：{history.market_state ?? "Data Gap"}</p>
+            {history.market_state_reconciliation && (
+              <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                <div className="rounded-lg bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground">legacy</p>
+                  <p className={cn("mt-1 font-bold", MARKET_TONE[history.market_state_reconciliation.legacy_market_state])}>{history.market_state_reconciliation.legacy_market_state}</p>
+                </div>
+                <div className="rounded-lg bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground">intelligence</p>
+                  <p className={cn("mt-1 font-bold", INTELLIGENCE_TONE[history.market_state_reconciliation.intelligence_state])}>{history.market_state_reconciliation.intelligence_state}</p>
+                </div>
+                <div className="rounded-lg bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground">effective</p>
+                  <p className={cn("mt-1 font-bold", MARKET_TONE[history.market_state_reconciliation.effective_market_state])}>{history.market_state_reconciliation.effective_market_state}</p>
+                </div>
+              </div>
+            )}
             <p className="mt-1 text-xs text-muted-foreground">
               当时恐慌标准：{history.panic_sensitivity ? `${history.panic_sensitivity.label} · ${history.panic_sensitivity.value}（触发 ${history.panic_sensitivity.trigger_count}/${history.panic_sensitivity.required_confirmations}）` : "Data Gap"}
             </p>
@@ -397,7 +518,10 @@ export function InvestmentResearch() {
                   <thead><tr className="border-b"><th className="p-2">候选</th><th className="p-2">T+5</th><th className="p-2">T+20</th><th className="p-2">T+60</th></tr></thead>
                   <tbody>{history.candidates.map((candidate) => (
                     <tr key={candidate.code} className="border-b">
-                      <td className="p-2">{candidate.name} ({candidate.code})</td>
+                      <td className="p-2">
+                        {candidate.name} ({candidate.code})
+                        {candidate.eligibility_status && <div className="text-xs text-muted-foreground">{ELIGIBILITY_LABEL[candidate.eligibility_status]}</div>}
+                      </td>
                       {([5, 20, 60] as const).map((horizon) => (
                         <td key={horizon} className="p-2">
                           <div>{formatNumber(candidate[`t${horizon}`], "%")}</div>

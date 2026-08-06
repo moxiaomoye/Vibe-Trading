@@ -63,6 +63,26 @@ const report: ResearchMvpRun = {
     },
   }],
   data_gaps: [],
+  market_state_reconciliation: {
+    legacy_market_state: "PANIC",
+    effective_market_state: "PANIC",
+    intelligence_state: "PANIC",
+    coverage_gate_passed: true,
+    coverage: { available_dimensions: 2, has_index_or_breadth: true, has_available_trigger: true },
+    upgraded: false,
+    reasons: ["intelligence state does not exceed legacy state"],
+  },
+  universe_audit: [{
+    symbol: "601991.SH", code: "601991.SH", name: "大唐发电", security_type: "stock",
+    eligibility_status: "ELIGIBLE", listing_date: null, eligibility_reason: "资产元数据上市日期不晚于研究日期",
+    selected: false, exclusion_reason: "按既有评分排序未进入 Top 5", score: 41, research_status: "Research Candidate",
+    data_status: "available", data_as_of: "2026-07-24", data_source: "AKShare/Eastmoney", data_gaps: [],
+  }],
+  provider_health: [{
+    endpoint: "stock_value_em", provider: "akshare", attempts: 3, successes: 3, failures: 0,
+    state: "HEALTHY", last_error_type: null, last_error_summary: null, cooldown_triggered: false,
+    cache_hits: 0, cache_original_as_of: null,
+  }],
 };
 
 describe("InvestmentResearch page", () => {
@@ -136,7 +156,7 @@ describe("InvestmentResearch page", () => {
 
     expect(await screen.findByText("中芯国际")).toBeInTheDocument();
     expect(apiMock.runInvestmentResearch).toHaveBeenCalledWith(50);
-    expect(screen.getByText("PANIC")).toBeInTheDocument();
+    expect(screen.getAllByText("PANIC").length).toBeGreaterThan(0);
     expect(screen.getByText("4210.00")).toBeInTheDocument();
     expect(screen.getByText("Top 5 Research Candidate")).toBeInTheDocument();
     expect(screen.getByText((_, element) => (
