@@ -6,6 +6,7 @@ etfs:
     name: 科创50ETF
     sector: 科创板宽基
     theme: 科创50
+    listing_date: "2020-11-16"
   - symbol: "588170"
     name: 科创板半导体材料设备ETF
     sector: 半导体
@@ -18,6 +19,7 @@ etfs:
     name: 纳斯达克100ETF(QDII)
     sector: 海外科技
     theme: 纳斯达克100
+    listing_date: "2015-03-24"
   - symbol: "159516"
     name: 半导体材料设备ETF
     sector: 半导体

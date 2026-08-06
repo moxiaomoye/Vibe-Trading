@@ -6,18 +6,32 @@ from datetime import date, datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Callable
 
-from src.value_hunter.models import CandidateResult, ScanResult
+from src.value_hunter.models import (
+    CandidateObservation,
+    CandidateResult,
+    ScanResult,
+    ScoreBreakdown,
+)
 from src.value_hunter.config import resolve_panic_sensitivity
-from src.value_hunter.providers import normalize_ashare_symbol
+from src.value_hunter.providers import (
+    load_watchlist_listing_dates,
+    normalize_ashare_symbol,
+)
 from src.value_hunter.scoring import score_candidate, score_market
 from src.value_hunter.service import ValueHunterService
 from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
+from src.investment_research.models.candidate_contract import build_candidate_payload
+from src.investment_research.models.eligibility import (
+    EligibilityStatus,
+    EligibilityVerdict,
+    listing_date_from_value,
+    resolve_eligibility,
+)
 from src.investment_research.models.research_context import (
     ResearchContext,
     attach_contract_metadata,
 )
-from src.investment_research.models.risk_review import evaluate_risk_review
 from pydantic import ValidationError
 from uuid import NAMESPACE_URL, uuid5
 
@@ -97,139 +111,155 @@ def _panic_profile(scan: ScanResult, sensitivity: dict[str, Any]) -> dict[str, A
     return {**sensitivity, "trigger_count": trigger_count, "checks": checks}
 
 
-def _risk_review_inputs(observation: Any) -> dict[str, Any]:
-    return {
-        "security_type": observation.security_type,
-        "risk_flags": list(observation.risk_flags),
-        "risk_evidence": list(observation.risk_evidence),
-        "roe_5y_median_pct": observation.roe_5y_median_pct,
-        "operating_cashflow_to_profit": observation.operating_cashflow_to_profit,
-        "profit_growth_pct": observation.profit_growth_pct,
-    }
+def _resolve_candidate_eligibility(
+    observation: CandidateObservation,
+    as_of: date,
+    listing_dates: dict[str, str],
+) -> EligibilityVerdict:
+    """Resolve one candidate's point-in-time investability (shared by paths)."""
+    listing_date = listing_date_from_value(listing_dates.get(observation.symbol))
+    warnings = " ".join(observation.warnings or [])
+    if "registry unavailable" in warnings:
+        has_trading_history: bool | None = None
+    elif observation.market_data_as_of is not None:
+        has_trading_history = True
+    else:
+        has_trading_history = False
+    return resolve_eligibility(
+        observation.symbol,
+        observation.security_type,
+        as_of,
+        listing_date=listing_date,
+        has_trading_history=has_trading_history,
+        name=observation.name,
+    )
+
+
+def _candidate_from_dict(item: dict[str, Any]) -> CandidateResult:
+    """Reconstruct a typed candidate from a persisted scan snapshot dict."""
+    observation = CandidateObservation(**item["observation"])
+    score_dict = {key: value for key, value in item["score"].items() if key != "total"}
+    score = ScoreBreakdown(**score_dict)
+    return CandidateResult(
+        observation=observation,
+        score=score,
+        bucket=item.get("bucket", "Panic Value Hunter"),
+        status=item.get("status", "Research Candidate"),
+        reasons=list(item.get("reasons", []) or []),
+        first_rejection=item.get("first_rejection", ""),
+        missing_fields=list(item.get("missing_fields", []) or []),
+    )
 
 
 def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
     observation = candidate.observation
-    gaps = list(candidate.missing_fields)
-    if observation.security_type == "etf":
-        issuer_only = {
-            "roe_5y_median_pct",
-            "operating_cashflow_to_profit",
-            "pe_history_percentile",
-            "revenue_growth_pct",
-            "profit_growth_pct",
-        }
-        gaps = [gap for gap in gaps if gap not in issuer_only]
-    if observation.current_price is None:
-        gaps.append("current_price")
-    if observation.relative_to_sector_pct is None:
-        gaps.append("relative_to_sector_pct")
-    if not observation.catalyst_evidence:
-        gaps.append("catalyst_evidence")
-    for field in (
-        "daily_return_pct",
-        "return_20d_pct",
-        "return_60d_pct",
-        "volume_ratio_20d",
-        "relative_to_market_pct",
-        "market_data_as_of",
-        "market_data_source",
-    ):
-        if getattr(observation, field) is None:
-            gaps.append(field)
-    etf_valuation = observation.etf_valuation or None
-    if observation.security_type == "etf":
-        for field in (
-            "latest_nav",
-            "nav_premium_pct",
-            "reasonable_price_low",
-            "reasonable_price_high",
-            "bargain_price_low",
-            "bargain_price_high",
-            "underlying_valuation_premium_pct",
-            "underlying_ann_volatility_pct",
-            "underlying_max_drawdown_pct",
-            "underlying_panic_sessions_count",
-        ):
-            if not etf_valuation or etf_valuation.get(field) is None:
-                gaps.append(f"etf_valuation.{field}")
-    observation_conditions = list(candidate.reasons) or [
-        "补齐公司质量、财务、估值与价格错位证据后再进一步关注。"
-    ]
-    risk_conditions = list(observation.risk_evidence) or [candidate.first_rejection]
-    validation_conditions = [
-        "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
-        "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。",
-    ]
-    market_reasons = [reason for reason in (
-        f"单日涨跌幅{observation.daily_return_pct:.1f}%" if observation.daily_return_pct is not None else None,
-        f"20日相对大盘{observation.relative_to_market_pct:+.1f}%" if observation.relative_to_market_pct is not None else None,
-        f"距一年高点{observation.drawdown_252_pct:.1f}%" if observation.drawdown_252_pct is not None else None,
-    ) if reason]
-    company_reasons = [reason for reason in (
-        f"五年ROE中位数{observation.roe_5y_median_pct:.1f}%" if observation.roe_5y_median_pct is not None else None,
-        f"收入增长{observation.revenue_growth_pct:.1f}%" if observation.revenue_growth_pct is not None else None,
-        f"利润增长{observation.profit_growth_pct:.1f}%" if observation.profit_growth_pct is not None else None,
-    ) if reason]
-    valuation_reasons = [reason for reason in (
-        f"PE(TTM) {observation.pe_ttm:.1f}" if observation.pe_ttm is not None else None,
-        f"PE历史分位{observation.pe_history_percentile:.0%}" if observation.pe_history_percentile is not None else None,
-        f"PE行业分位{observation.pe_industry_percentile:.0%}" if observation.pe_industry_percentile is not None else None,
-    ) if reason]
-    return {
-        "name": observation.name,
-        "code": observation.symbol,
-        "current_price": observation.current_price,
-        "security_type": observation.security_type,
-        "daily_return_pct": observation.daily_return_pct,
-        "return_20d_pct": observation.return_20d_pct,
-        "return_60d_pct": observation.return_60d_pct,
-        "volume_ratio_20d": observation.volume_ratio_20d,
-        "drawdown_pct": observation.drawdown_252_pct,
-        "relative_to_market_pct": observation.relative_to_market_pct,
-        "market_data_as_of": observation.market_data_as_of,
-        "market_data_source": observation.market_data_source,
-        "sector": observation.sector,
-        "sector_performance_pct": observation.relative_to_sector_pct,
-        "selection_reasons": list(candidate.reasons),
-        "entry_reasons": {
-            "market": market_reasons,
-            "company": company_reasons,
-            "valuation": valuation_reasons,
-        },
-        "risks": list(observation.risk_flags) + list(observation.risk_evidence),
-        "catalysts": list(observation.catalyst_evidence),
-        "invalidation": risk_conditions,
-        "data_gaps": list(dict.fromkeys(gaps)),
-        "score": candidate.score.total,
-        "research_status": candidate.status,
-        "first_rejection": candidate.first_rejection,
-        "quality": {
-            "score": candidate.score.quality,
-            "roe_5y_median_pct": observation.roe_5y_median_pct,
-            "operating_cashflow_to_profit": observation.operating_cashflow_to_profit,
-        },
-        "financials": {
-            "revenue_growth_pct": observation.revenue_growth_pct,
-            "profit_growth_pct": observation.profit_growth_pct,
-        },
-        "valuation": {
-            "pe_ttm": observation.pe_ttm,
-            "pb": observation.pb,
-            "pe_history_percentile": observation.pe_history_percentile,
-            "pe_industry_percentile": observation.pe_industry_percentile,
-        },
-        "risk_review": evaluate_risk_review(_risk_review_inputs(observation)).model_dump(),
-        "etf_valuation": etf_valuation,
-        "supporting_evidence": list(candidate.reasons),
-        "counter_evidence": list(observation.risk_evidence),
-        "forward_validation": {"t5": None, "t20": None, "t60": None},
-        "research_plan": {
-            "observation_conditions": observation_conditions,
-            "risk_conditions": risk_conditions,
-            "validation_conditions": validation_conditions,
-        },
-    }
+    as_of = date.fromisoformat(str(observation.market_data_as_of)[:10]) if observation.market_data_as_of else date.today()
+    eligibility = _resolve_candidate_eligibility(observation, as_of, {})
+    return build_candidate_payload(candidate, as_of=as_of, eligibility=eligibility)
+
+
+def _universe_audit(
+    universe: list[Any],
+    selected_symbols: set[str],
+    as_of: date,
+    listing_dates: dict[str, str],
+    *,
+    dict_mode: bool,
+) -> list[dict[str, Any]]:
+    """Audit every universe member including excluded ones (eligibility first)."""
+    rows: list[dict[str, Any]] = []
+    for item in universe:
+        if dict_mode:
+            observation = item.get("observation", {})
+            symbol = observation.get("symbol", "")
+            name = observation.get("name", symbol)
+            security_type = observation.get("security_type", "stock")
+            status = item.get("status", "Research Candidate")
+            score = float(item.get("score", {}).get("total", 0.0))
+            rejection = item.get("first_rejection", "")
+            gaps = list(observation.get("missing_fields", []) or [])
+            warnings = list(observation.get("warnings", []) or [])
+            data_as_of = observation.get("market_data_as_of")
+            data_source = observation.get("market_data_source")
+        else:
+            observation = item.observation
+            symbol = observation.symbol
+            name = observation.name
+            security_type = observation.security_type
+            status = item.status
+            score = item.score.total
+            rejection = item.first_rejection
+            gaps = list(item.missing_fields)
+            warnings = list(observation.warnings)
+            data_as_of = observation.market_data_as_of
+            data_source = observation.market_data_source
+        if not symbol:
+            continue
+        eligibility = _resolve_candidate_eligibility(
+            observation, as_of, listing_dates
+        ) if not dict_mode else _resolve_eligibility_from_observation(
+            symbol, name, security_type, as_of, data_as_of, warnings, listing_dates
+        )
+        selected = symbol in selected_symbols
+        stale = any("不是当前交易日数据" in warning for warning in warnings)
+        exclusion_reason = None
+        if eligibility.eligibility_status is EligibilityStatus.CONFIRMED_NOT_LISTED:
+            exclusion_reason = eligibility.eligibility_reason
+        elif selected:
+            exclusion_reason = None
+        elif status == "Reject":
+            exclusion_reason = rejection or "未通过既有筛选条件"
+        else:
+            exclusion_reason = "按既有评分排序未进入 Top 5"
+        rows.append({
+            "symbol": symbol,
+            "code": normalize_ashare_symbol(symbol),
+            "name": name,
+            "security_type": security_type,
+            "eligibility_status": eligibility.eligibility_status.value,
+            "listing_date": eligibility.listing_date.isoformat() if eligibility.listing_date else None,
+            "eligibility_reason": eligibility.eligibility_reason,
+            "selected": selected,
+            "exclusion_reason": exclusion_reason,
+            "score": round(score, 1),
+            "research_status": status,
+            "data_status": (
+                "missing" if data_as_of is None
+                else "stale" if stale
+                else "available"
+            ),
+            "data_as_of": data_as_of,
+            "data_source": data_source,
+            "data_gaps": list(dict.fromkeys(gaps)),
+        })
+    return rows
+
+
+def _resolve_eligibility_from_observation(
+    symbol: str,
+    name: str,
+    security_type: str,
+    as_of: date,
+    market_data_as_of: str | None,
+    warnings: list[str],
+    listing_dates: dict[str, str],
+) -> EligibilityVerdict:
+    listing_date = listing_date_from_value(listing_dates.get(symbol))
+    joined = " ".join(warnings)
+    if "registry unavailable" in joined:
+        has_trading_history: bool | None = None
+    elif market_data_as_of is not None:
+        has_trading_history = True
+    else:
+        has_trading_history = False
+    return resolve_eligibility(
+        symbol,
+        security_type,
+        as_of,
+        listing_date=listing_date,
+        has_trading_history=has_trading_history,
+        name=name,
+    )
 
 
 def _watchlist_scan_payload(
@@ -321,6 +351,7 @@ def build_research_run(
         gaps.extend(item.observation.warnings)
     if not candidates:
         gaps.append("No candidate met the existing Value Hunter research threshold.")
+    listing_dates = load_watchlist_listing_dates(service.config.watchlist_path)
     report = {
         "trade_date": observation.as_of,
         "market_state": _market_state(
@@ -332,6 +363,14 @@ def build_research_run(
         "market_summary": summary_fields,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
+        "universe_audit": _universe_audit(
+            scan.universe or scan.candidates,
+            {item.observation.symbol for item in scan.candidates[:5]},
+            requested_date,
+            listing_dates,
+            dict_mode=False,
+        ),
+        "provider_health": list(getattr(service.provider, "provider_health", []) or []),
     }
     attach_contract_metadata(
         scan.to_dict(),
@@ -492,19 +531,33 @@ def build_historical_evaluation(
     gaps: list[str] = []
     if not stored_profile:
         gaps.append("panic_sensitivity_snapshot")
+    listing_dates = load_watchlist_listing_dates(service.config.watchlist_path)
     for item, symbol in zip(raw_candidates, normalized_symbols):
         observation = item.get("observation", {})
         horizon_payload, candidate_gaps = _candidate_forward_payload(
             item, symbol, trade_date, price_data.get(symbol, []),
             benchmark_metrics, benchmark_gaps,
         )
-        candidates.append({
-            "name": observation.get("name", symbol),
-            "code": symbol,
-            "research_status": item.get("status", "Research Candidate"),
-            **horizon_payload,
-            "data_gaps": candidate_gaps,
-        })
+        candidate = _candidate_from_dict(item)
+        eligibility = _resolve_eligibility_from_observation(
+            candidate.observation.symbol,
+            candidate.observation.name,
+            candidate.observation.security_type,
+            trade_date,
+            candidate.observation.market_data_as_of,
+            candidate.observation.warnings,
+            listing_dates,
+        )
+        if eligibility.eligibility_status is EligibilityStatus.CONFIRMED_NOT_LISTED:
+            gaps.append(f"{symbol}.excluded.{eligibility.eligibility_reason}")
+            continue
+        candidates.append(build_candidate_payload(
+            candidate,
+            as_of=trade_date,
+            eligibility=eligibility,
+            horizon_payload=horizon_payload,
+            horizon_gaps=candidate_gaps,
+        ))
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
     market_score = float(snapshot.get("market", {}).get("score", 0.0))
     report = {
@@ -517,6 +570,15 @@ def build_historical_evaluation(
         "panic_sensitivity": stored_profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
+        "universe_audit": _universe_audit(
+            snapshot.get("universe") or snapshot.get("candidates", []),
+            {item.get("observation", {}).get("symbol") for item in raw_candidates},
+            trade_date,
+            listing_dates,
+            dict_mode=True,
+        ),
+        "provider_health": [],
+        "rebuilt": False,
     }
     attach_contract_metadata(
         snapshot,
@@ -616,21 +678,26 @@ def _rebuild_historical_evaluation(
     )
     candidates: list[dict[str, Any]] = []
     gaps: list[str] = list(scan.market.observation.warnings)
+    listing_dates = load_watchlist_listing_dates(service.config.watchlist_path)
     for item, symbol in zip(raw_candidates, normalized_symbols):
         observation = item.observation
         horizon_payload, candidate_gaps = _candidate_forward_payload(
             item.to_dict(), symbol, trade_date, price_data.get(symbol, []),
             benchmark_metrics, benchmark_gaps,
         )
-        candidates.append({
-            "name": observation.name,
-            "code": symbol,
-            "research_status": item.status,
-            **horizon_payload,
-            "selection_reasons": list(item.reasons),
-            "risks": list(observation.risk_flags) + list(observation.risk_evidence),
-            "data_gaps": candidate_gaps,
-        })
+        eligibility = _resolve_candidate_eligibility(
+            observation, trade_date, listing_dates
+        )
+        if eligibility.eligibility_status is EligibilityStatus.CONFIRMED_NOT_LISTED:
+            gaps.append(f"{symbol}.excluded.{eligibility.eligibility_reason}")
+            continue
+        candidates.append(build_candidate_payload(
+            item,
+            as_of=trade_date,
+            eligibility=eligibility,
+            horizon_payload=horizon_payload,
+            horizon_gaps=candidate_gaps,
+        ))
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
         gaps.extend(observation.warnings)
     report = {
@@ -643,6 +710,14 @@ def _rebuild_historical_evaluation(
         "panic_sensitivity": profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
+        "universe_audit": _universe_audit(
+            scan.universe or scan.candidates,
+            {item.observation.symbol for item in scan.candidates[:5]},
+            trade_date,
+            listing_dates,
+            dict_mode=False,
+        ),
+        "provider_health": list(getattr(provider, "provider_health", []) or []),
         "rebuilt": True,
     }
     attach_contract_metadata(
