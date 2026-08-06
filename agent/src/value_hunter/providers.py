@@ -539,6 +539,7 @@ class AkshareProvider(ValueHunterProvider):
         limit_up_count = None
         turnover_amount = None
         above_ma60_ratio = None
+        estimated_fields: list[str] = []
         if through is not None:
             # Historical mode: current-only spot endpoints must not leak into
             # a past trade date. Breadth is rebuilt from the research universe
@@ -577,7 +578,16 @@ class AkshareProvider(ValueHunterProvider):
             warnings.append(
                 f"历史回溯：市场宽度基于研究标的池（{len(changes)}只有效标的）计算，非全市场统计"
             )
-            warnings.append("历史回溯：跌停/涨停数量与成交额分位暂未接入历史数据，为Data Gap")
+            if changes:
+                limit_up_count = int(sum(value >= 9.8 for value in changes))
+                limit_down_count = int(sum(value <= -9.8 for value in changes))
+                warnings.append(
+                    "历史回溯：跌停/涨停数量为基于研究标的池的估计（±9.8%近似），非全市场统计"
+                )
+            else:
+                warnings.append("历史回溯：标的池无有效日涨跌数据，跌停/涨停估计不可用")
+            warnings.append("历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap")
+            estimated_fields = ["limit_up_count", "limit_down_count"]
         else:
             try:
                 current = datetime.now(ZoneInfo("Asia/Shanghai"))
@@ -616,6 +626,7 @@ class AkshareProvider(ValueHunterProvider):
             source="AKShare/Eastmoney", coverage=["indices", "spot_breadth"], warnings=warnings,
             advancer_count=advancer_count, decliner_count=decliner_count,
             limit_up_count=limit_up_count, turnover_amount=turnover_amount,
+            estimated_fields=estimated_fields,
         )
         if through is None:
             self._write_cache("market", result)

@@ -187,10 +187,15 @@ def evaluate_market_intelligence(
             )
 
     limit_down = market.limit_down_count
+    estimated_fields = getattr(market, "estimated_fields", []) or []
     if limit_down is None:
         limit_triggered = None
         limit_status = DataQualityStatus.UNAVAILABLE
         limit_note = "跌停数量未提供（历史回溯为Data Gap）"
+    elif "limit_down_count" in estimated_fields:
+        limit_triggered = limit_down >= config.min_limit_down_count
+        limit_status = DataQualityStatus.ESTIMATED
+        limit_note = "基于研究标的池的显式估计（非全市场统计）"
     else:
         limit_triggered = limit_down >= config.min_limit_down_count
         limit_status = DataQualityStatus.AVAILABLE
@@ -252,6 +257,9 @@ def evaluate_market_intelligence(
     coverage = {
         "available": sum(
             verdict.status is DataQualityStatus.AVAILABLE for verdict in dimensions
+        ),
+        "estimated": sum(
+            verdict.status is DataQualityStatus.ESTIMATED for verdict in dimensions
         ),
         "total": TOTAL_DIMENSIONS,
     }

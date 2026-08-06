@@ -87,7 +87,7 @@ class TestStateBands:
         intel = evaluate_market_intelligence(_market())
         assert intel.state is MarketState.UNKNOWN
         assert intel.stress_score is None
-        assert intel.coverage == {"available": 0, "total": 6}
+        assert intel.coverage == {"available": 0, "estimated": 0, "total": 6}
 
 
 class TestAvailability:
@@ -124,6 +124,49 @@ class TestAvailability:
         )
         assert breadth.status is DataQualityStatus.AVAILABLE
         assert breadth.triggered is True
+
+
+class TestEstimatedEvidence:
+    def test_estimated_limit_is_visible_not_available(self) -> None:
+        intel = evaluate_market_intelligence(_market(
+            indices=[_index()],
+            advancer_ratio=0.6,
+            limit_down_count=170,
+            estimated_fields=["limit_down_count"],
+        ))
+        limit = next(
+            v for v in intel.dimensions if v.dimension is MarketDimension.LIMIT
+        )
+        assert limit.status is DataQualityStatus.ESTIMATED
+        assert "估计" in (limit.note or "")
+        assert limit.triggered is True
+        assert intel.coverage["available"] == 2
+        assert intel.coverage["estimated"] == 1
+        assert intel.coverage["total"] == 6
+        assert intel.state is not MarketState.UNKNOWN
+
+    def test_estimated_evidence_never_counts_toward_stress_score(self) -> None:
+        intel = evaluate_market_intelligence(_market(
+            indices=[_index()],
+            advancer_ratio=0.6,
+            limit_down_count=170,
+            estimated_fields=["limit_down_count"],
+        ))
+        assert intel.state is MarketState.NORMAL
+        assert 0 <= intel.stress_score < 40
+
+    def test_estimated_without_value_stays_unavailable(self) -> None:
+        intel = evaluate_market_intelligence(_market(
+            indices=[_index()],
+            advancer_ratio=0.6,
+            limit_down_count=None,
+            estimated_fields=["limit_down_count"],
+        ))
+        limit = next(
+            v for v in intel.dimensions if v.dimension is MarketDimension.LIMIT
+        )
+        assert limit.status is DataQualityStatus.UNAVAILABLE
+        assert "Data Gap" in (limit.note or "")
 
 
 class TestDeterminismAndPurity:

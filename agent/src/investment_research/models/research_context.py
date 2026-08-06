@@ -80,6 +80,9 @@ class MarketSnapshotModel(BaseModel):
     source: str = "unknown"
     coverage: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    estimated_fields: list[str] = Field(default_factory=list)
+    """Fields carrying explicitly-labelled estimates (e.g. watchlist-pool
+    limit counts in historical mode). Estimates are never market stats."""
 
 
 class ValuationSnapshotModel(BaseModel):
@@ -147,6 +150,7 @@ class ResearchContext(BaseModel):
             source=str(observation.get("source", "unknown")),
             coverage=list(observation.get("coverage", []) or []),
             warnings=warnings,
+            estimated_fields=list(observation.get("estimated_fields", []) or []),
         )
 
         valuation_snapshot: dict[str, ValuationSnapshotModel] = {}
@@ -204,8 +208,20 @@ def _market_data_quality_issues(
 ) -> list[DataQualityIssue]:
     issues: list[DataQualityIssue] = []
     warnings = list(observation.get("warnings", []) or [])
+    estimated = list(observation.get("estimated_fields", []) or [])
     for field in _MARKET_SUMMARY_FIELDS:
         value = observation.get(field)
+        if field in estimated and value is not None:
+            issues.append(
+                classify_data_quality(
+                    f"market.{field}",
+                    value,
+                    estimate_note="基于研究标的池的显式估计（非全市场统计）",
+                    as_of=as_of,
+                    source=str(observation.get("source", "")),
+                )
+            )
+            continue
         if value is None:
             keywords = _WARNING_KEYWORDS.get(field, ())
             reason = next(
@@ -306,7 +322,7 @@ def _market_intelligence_block(context: ResearchContext) -> dict[str, Any]:
         "thresholds_version": MARKET_INTELLIGENCE_VERSION,
         "state": MarketState.UNKNOWN.value,
         "stress_score": None,
-        "coverage": {"available": 0, "total": 6},
+        "coverage": {"available": 0, "estimated": 0, "total": 6},
         "dimensions": [],
         "summary": ["market intelligence unavailable: context did not carry a market snapshot"],
     }

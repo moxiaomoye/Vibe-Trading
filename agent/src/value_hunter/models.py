@@ -38,6 +38,10 @@ class MarketObservation:
     decliner_count: int | None = None
     limit_up_count: int | None = None
     turnover_amount: float | None = None
+    estimated_fields: list[str] = field(default_factory=list)
+    """Fields that hold explicitly-labelled estimates rather than market stats
+    (e.g. limit-up/down counts derived from the research universe pool in
+    historical mode). Estimates must never be mistaken for exchange stats."""
 
 
 @dataclass(slots=True)

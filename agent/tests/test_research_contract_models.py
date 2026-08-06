@@ -264,6 +264,35 @@ class TestResearchContext:
         )
         assert candidate_gap.status is DataQualityStatus.MISSING
 
+    def test_estimated_fields_flow_through_data_quality_and_intel(self) -> None:
+        payload = _scan_payload()
+        payload["market"]["observation"]["limit_down_count"] = 8
+        payload["market"]["observation"]["limit_up_count"] = 2
+        payload["market"]["observation"]["estimated_fields"] = [
+            "limit_down_count", "limit_up_count",
+        ]
+        context = ResearchContext.from_scan_payload(payload, provider="akshare-historical")
+        limit_down = next(
+            issue for issue in context.data_quality.issues
+            if issue.field == "market.limit_down_count"
+        )
+        assert limit_down.status is DataQualityStatus.ESTIMATED
+        assert "研究标的池" in (limit_down.reason or "")
+        limit_up = next(
+            issue for issue in context.data_quality.issues
+            if issue.field == "market.limit_up_count"
+        )
+        assert limit_up.status is DataQualityStatus.ESTIMATED
+        intel = context.market_intelligence
+        assert intel is not None
+        limit_verdict = next(
+            v for v in intel.dimensions if v.dimension.value == "limit"
+        )
+        assert limit_verdict.status is DataQualityStatus.ESTIMATED
+        assert intel.coverage["estimated"] == 1
+        assert intel.coverage["available"] == 2
+        assert intel.coverage["total"] == 6
+
     def test_market_intelligence_embedded_in_context(self) -> None:
         context = ResearchContext.from_scan_payload(
             _scan_payload(), provider="akshare-historical"
