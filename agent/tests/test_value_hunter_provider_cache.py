@@ -307,7 +307,7 @@ def test_etf_skips_stock_only_fundamental_endpoints() -> None:
 
     candidate = CandidateObservation("588060", "科创50ETF", "科创板", "宽基")
 
-    AkshareProvider._enrich_candidate(RejectStockEndpoints(), candidate)
+    AkshareProvider()._enrich_candidate(RejectStockEndpoints(), candidate)
 
     assert candidate.security_type == "etf"
     assert candidate.pe_ttm is None

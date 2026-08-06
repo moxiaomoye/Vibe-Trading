@@ -79,6 +79,8 @@ class CandidateObservation:
     market_data_source: str | None = None
     catalyst_evidence: list[str] = field(default_factory=list)
     etf_valuation: dict[str, Any] = field(default_factory=dict)
+    listing_date: str | None = None
+    """Optional trusted listing date (ISO) from asset metadata (watchlist)."""
 
 
 @dataclass(slots=True)

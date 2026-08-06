@@ -23,6 +23,7 @@ from backtest.loaders.registry import get_loader_cls_exact
 from src.market_data import fetch_market_data
 
 from .models import CandidateObservation, IndexObservation, MarketObservation
+from .provider_policy import PitEndpointCache, PublicEndpointPolicy
 
 
 MarketFetcher = Callable[..., dict[str, Any]]
@@ -458,9 +459,39 @@ def load_watchlist(path: Path) -> list[CandidateObservation]:
             sector=str(row.get("sector", "Data Gap")).strip(),
             theme=str(row.get("theme", "Data Gap")).strip(),
             security_type=security_type_for_symbol(symbol),
+            listing_date=_listing_date_or_none(row.get("listing_date")),
             source_fields=["watchlist_yaml"],
         ))
     return result
+
+
+def _listing_date_or_none(value: Any) -> str | None:
+    """Parse an optional ISO ``listing_date`` from watchlist metadata."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return None
+    return text
+
+
+def load_watchlist_listing_dates(path: Path) -> dict[str, str]:
+    """Return {symbol: listing_date_iso} for every watchlist row with metadata."""
+    if path is None or not Path(path).exists():
+        return {}
+    try:
+        rows = load_watchlist(path)
+    except (ValueError, OSError):
+        return {}
+    return {
+        item.symbol: item.listing_date
+        for item in rows
+        if item.listing_date is not None
+    }
 
 
 class AkshareProvider(ValueHunterProvider):
@@ -481,6 +512,27 @@ class AkshareProvider(ValueHunterProvider):
         self.cache_dir = cache_dir
         self.market_fetcher = market_fetcher
         self._history_payload: tuple[date, dict[str, Any]] | None = None
+        self.provider_health: list[dict[str, Any]] = []
+        self._policies: dict[str, Any] = {}
+        self._pit_cache = PitEndpointCache(
+            (cache_dir / "pit_cache") if cache_dir is not None else None
+        )
+
+    def _endpoint_policy(
+        self, endpoint: str, *, provider: str = "akshare"
+    ) -> PublicEndpointPolicy:
+        if endpoint not in self._policies:
+            self._policies[endpoint] = PublicEndpointPolicy(
+                endpoint,
+                provider=provider,
+                cache=self._pit_cache,
+            )
+        return self._policies[endpoint]
+
+    def _snapshot_provider_health(self) -> None:
+        self.provider_health = [
+            policy.health_entry() for policy in self._policies.values()
+        ]
 
     def _cache_path(self, kind: str) -> Path | None:
         if self.cache_dir is None:
@@ -1155,8 +1207,7 @@ class AkshareProvider(ValueHunterProvider):
             if errors:
                 candidate.warnings.append("部分公告日期读取失败: " + ", ".join(errors[:3]))
 
-    @staticmethod
-    def _enrich_candidate(ak: Any, candidate: CandidateObservation) -> None:
+    def _enrich_candidate(self, ak: Any, candidate: CandidateObservation) -> None:
         candidate.security_type = security_type_for_symbol(candidate.symbol)
         if candidate.security_type == "etf":
             candidate.warnings.append(
@@ -1164,8 +1215,9 @@ class AkshareProvider(ValueHunterProvider):
             )
             return
         code = candidate.symbol[:6]
+        valuation_policy = self._endpoint_policy("stock_value_em")
         try:
-            values = ak.stock_value_em(symbol=code)
+            values = valuation_policy.call(code, lambda: ak.stock_value_em(symbol=code))
             pe = values["PE(TTM)"].astype(float)
             pe = pe[pe > 0].tail(1250)
             if not pe.empty:
@@ -1183,9 +1235,13 @@ class AkshareProvider(ValueHunterProvider):
         except Exception as exc:
             candidate.warnings.append(f"历史估值读取失败: {type(exc).__name__}")
 
+        financials_policy = self._endpoint_policy("stock_financial_analysis_indicator")
         try:
             start_year = str(max(2000, date.today().year - 6))
-            frame = ak.stock_financial_analysis_indicator(symbol=code, start_year=start_year).copy()
+            frame = financials_policy.call(
+                code,
+                lambda: ak.stock_financial_analysis_indicator(symbol=code, start_year=start_year),
+            ).copy()
             frame["日期"] = frame["日期"].astype(str)
             frame = frame.sort_values("日期")
             annual = frame[frame["日期"].str.endswith("12-31")].tail(5)
@@ -1202,16 +1258,39 @@ class AkshareProvider(ValueHunterProvider):
             candidate.warnings.append(f"财务指标读取失败: {type(exc).__name__}")
 
     @staticmethod
+    def _filter_valuation_frame(values: Any, through: date) -> Any:
+        values = values.copy()
+        values["数据日期"] = values["数据日期"].astype(str)
+        return values[values["数据日期"] <= through.isoformat()]
+
+    @staticmethod
+    def _filter_financials_frame(frame: Any, through: date) -> Any:
+        frame = frame.copy()
+        frame["日期"] = frame["日期"].astype(str)
+        frame = frame.sort_values("日期")
+        return frame[frame["日期"] <= through.isoformat()]
+
     def _enrich_point_in_time_valuation(
-        ak: Any, candidates: list[CandidateObservation], through: date
+        self, ak: Any, candidates: list[CandidateObservation], through: date
     ) -> None:
-        """Populate PE/PB/market-cap history strictly as known by ``through``."""
+        """Populate PE/PB/market-cap history strictly as known by ``through``.
+
+        Calls go through the shared endpoint policy (retry/backoff/breaker) and
+        the PIT-safe success cache; a provider failure is recorded in health
+        and surfaces as a labelled Data Gap, never as fabricated data.
+        """
+        policy = self._endpoint_policy("stock_value_em")
         for candidate in candidates:
             if candidate.security_type == "etf":
                 continue
             code = candidate.symbol[:6]
             try:
-                values = ak.stock_value_em(symbol=code)
+                values = policy.call(
+                    code,
+                    lambda: ak.stock_value_em(symbol=code),
+                    requested_as_of=through,
+                    cache_normalize=lambda frame: self._filter_valuation_frame(frame, through),
+                )
                 values["数据日期"] = values["数据日期"].astype(str)
                 published = values[values["数据日期"] <= through.isoformat()]
                 if published.empty:
@@ -1234,9 +1313,8 @@ class AkshareProvider(ValueHunterProvider):
             except Exception as exc:
                 candidate.warnings.append(f"历史估值读取失败: {type(exc).__name__}")
 
-    @staticmethod
     def _enrich_point_in_time_financials(
-        ak: Any, candidates: list[CandidateObservation], through: date
+        self, ak: Any, candidates: list[CandidateObservation], through: date
     ) -> None:
         """Populate fundamentals strictly as known by ``through``.
 
@@ -1245,14 +1323,20 @@ class AkshareProvider(ValueHunterProvider):
         ending on or before ``through`` — the same period-end convention the
         live scan applies to its current snapshot.
         """
+        policy = self._endpoint_policy("stock_financial_analysis_indicator")
         for candidate in candidates:
             if candidate.security_type == "etf":
                 continue
             code = candidate.symbol[:6]
             try:
                 start_year = str(max(2000, through.year - 6))
-                frame = ak.stock_financial_analysis_indicator(
-                    symbol=code, start_year=start_year
+                frame = policy.call(
+                    code,
+                    lambda: ak.stock_financial_analysis_indicator(
+                        symbol=code, start_year=start_year
+                    ),
+                    requested_as_of=through,
+                    cache_normalize=lambda frame: self._filter_financials_frame(frame, through),
                 ).copy()
                 frame["日期"] = frame["日期"].astype(str)
                 frame = frame.sort_values("日期")
@@ -1319,6 +1403,7 @@ class HistoricalAkshareProvider(AkshareProvider):
                 item.warnings.append(
                     "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
                 )
+        self._snapshot_provider_health()
         return candidates
 
 
