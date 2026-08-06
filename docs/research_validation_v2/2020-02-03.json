@@ -1,0 +1,1664 @@
+{
+  "trade_date": "2020-02-03",
+  "market_state": "PANIC",
+  "market_state_reconciliation": {
+    "legacy_market_state": "PANIC",
+    "effective_market_state": "EXTREME_PANIC",
+    "intelligence_state": "EXTREME_PANIC",
+    "coverage_gate_passed": true,
+    "coverage": {
+      "available_dimensions": 2,
+      "has_index_or_breadth": true,
+      "has_available_trigger": true
+    },
+    "upgraded": true,
+    "reasons": [
+      "intelligence state EXTREME_PANIC is more severe than legacy PANIC and the coverage gate passed"
+    ]
+  },
+  "panic_sensitivity": {
+    "value": 50,
+    "label": "平衡",
+    "index_daily_return_pct": -2.25,
+    "max_advancer_ratio": 0.35,
+    "min_limit_down_count": 42,
+    "required_confirmations": 2,
+    "config_version": 2,
+    "trigger_count": 2,
+    "checks": {
+      "index_daily_return": {
+        "observed": -7.881,
+        "threshold": -2.25,
+        "triggered": true
+      },
+      "advancer_ratio": {
+        "observed": 0.0,
+        "threshold": 0.35,
+        "triggered": true
+      },
+      "limit_down_count": {
+        "observed": 4,
+        "threshold": 42,
+        "triggered": false
+      }
+    }
+  },
+  "candidates": [
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "中天科技",
+      "code": "600522",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 42.5,
+      "score_components": {
+        "mispricing": 16.0,
+        "quality": 10.5,
+        "valuation": 12.0,
+        "relative_strength": 4.0,
+        "catalyst": 0.0,
+        "total": 42.5
+      },
+      "selection_reasons": [
+        "距一年高点回撤38.2%",
+        "PE处于自身历史9%分位"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2020-02-03，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤38.2%",
+        "PE处于自身历史9%分位"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 2,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "MEDIUM",
+            "triggered": true,
+            "observed": -7.6118,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长-7.6%",
+              "五年ROE中位10.2%"
+            ],
+            "gap": false,
+            "note": "盈利恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.01471,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.01"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "盈利恶化(MEDIUM)：净利润增长-7.6%; 五年ROE中位10.2%",
+          "现金流(HIGH)：现金流/净利润0.01",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 3.52,
+          "max_drawdown_pct": -1.92,
+          "excess_pct": -2.65,
+          "outcome": "不确定"
+        },
+        "t20": {
+          "return_pct": 25.42,
+          "max_drawdown_pct": -13.6,
+          "excess_pct": 15.08,
+          "outcome": "正确"
+        },
+        "t60": {
+          "return_pct": 47.96,
+          "max_drawdown_pct": -23.61,
+          "excess_pct": 43.6,
+          "outcome": "正确"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "eligibility_as_of": "2020-02-03",
+      "current_price": 6.255,
+      "daily_return_pct": -11.7149,
+      "return_20d_pct": -12.0871,
+      "return_60d_pct": -8.6194,
+      "volume_ratio_20d": 0.3678214417847375,
+      "drawdown_pct": -38.234422830058264,
+      "relative_to_market_pct": -3.700799999999999,
+      "market_data_as_of": "2020-02-03",
+      "market_data_source": "tencent",
+      "sector": "通信设备",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-11.7%",
+          "20日相对大盘-3.7%",
+          "距一年高点-38.2%"
+        ],
+        "company": [
+          "五年ROE中位数10.2%",
+          "收入增长14.3%",
+          "利润增长-7.6%"
+        ],
+        "valuation": [
+          "PE(TTM) 11.9",
+          "PE历史分位9%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 10.5,
+        "roe_5y_median_pct": 10.16,
+        "operating_cashflow_to_profit": 0.01471
+      },
+      "financials": {
+        "revenue_growth_pct": 14.2893,
+        "profit_growth_pct": -7.6118
+      },
+      "valuation": {
+        "pe_ttm": 11.88857813,
+        "pb": 1.10515432,
+        "pe_history_percentile": 0.09325396825396826,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤38.2%",
+          "PE处于自身历史9%分位"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 3.52,
+      "t5_max_drawdown": -1.92,
+      "t5_excess": -2.65,
+      "t5_outcome": "不确定",
+      "t20": 25.42,
+      "t20_max_drawdown": -13.6,
+      "t20_excess": 15.08,
+      "t20_outcome": "正确",
+      "t60": 47.96,
+      "t60_max_drawdown": -23.61,
+      "t60_excess": 43.6,
+      "t60_outcome": "正确"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "甘肃能源",
+      "code": "000791",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 35.0,
+      "score_components": {
+        "mispricing": 21.0,
+        "quality": 2.0,
+        "valuation": 12.0,
+        "relative_strength": 0.0,
+        "catalyst": 0.0,
+        "total": 35.0
+      },
+      "selection_reasons": [
+        "距一年高点回撤42.2%",
+        "PE处于自身历史2%分位"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2020-02-03，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤42.2%",
+        "PE处于自身历史2%分位"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 1,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": -4.493,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长-4.5%",
+              "五年ROE中位4.4%"
+            ],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.031558,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.03"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "现金流(HIGH)：现金流/净利润0.03",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 3.9,
+          "max_drawdown_pct": -2.16,
+          "excess_pct": -2.27,
+          "outcome": "不确定"
+        },
+        "t20": {
+          "return_pct": 8.23,
+          "max_drawdown_pct": -7.34,
+          "excess_pct": -2.11,
+          "outcome": "不确定"
+        },
+        "t60": {
+          "return_pct": -3.03,
+          "max_drawdown_pct": -28.66,
+          "excess_pct": -7.39,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "eligibility_as_of": "2020-02-03",
+      "current_price": 2.31,
+      "daily_return_pct": -13.1579,
+      "return_20d_pct": -17.7936,
+      "return_60d_pct": -16.6065,
+      "volume_ratio_20d": 0.6293163172072701,
+      "drawdown_pct": -42.25,
+      "relative_to_market_pct": -9.407300000000001,
+      "market_data_as_of": "2020-02-03",
+      "market_data_source": "tencent",
+      "sector": "电力",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-13.2%",
+          "20日相对大盘-9.4%",
+          "距一年高点-42.2%"
+        ],
+        "company": [
+          "五年ROE中位数4.4%",
+          "收入增长-1.7%",
+          "利润增长-4.5%"
+        ],
+        "valuation": [
+          "PE(TTM) 9.1",
+          "PE历史分位2%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 2.0,
+        "roe_5y_median_pct": 4.37,
+        "operating_cashflow_to_profit": 0.031558
+      },
+      "financials": {
+        "revenue_growth_pct": -1.6626,
+        "profit_growth_pct": -4.493
+      },
+      "valuation": {
+        "pe_ttm": 9.12945141,
+        "pb": 0.67121381,
+        "pe_history_percentile": 0.021825396825396824,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤42.2%",
+          "PE处于自身历史2%分位"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 3.9,
+      "t5_max_drawdown": -2.16,
+      "t5_excess": -2.27,
+      "t5_outcome": "不确定",
+      "t20": 8.23,
+      "t20_max_drawdown": -7.34,
+      "t20_excess": -2.11,
+      "t20_outcome": "不确定",
+      "t60": -3.03,
+      "t60_max_drawdown": -28.66,
+      "t60_excess": -7.39,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "大唐发电",
+      "code": "601991",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 30.0,
+      "score_components": {
+        "mispricing": 21.0,
+        "quality": 6.0,
+        "valuation": 3.0,
+        "relative_strength": 0.0,
+        "catalyst": 0.0,
+        "total": 30.0
+      },
+      "selection_reasons": [
+        "距一年高点回撤43.4%"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2020-02-03，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤43.4%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 1,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": 6.7087,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长6.7%",
+              "五年ROE中位2.5%"
+            ],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.072784,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.07"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "现金流(HIGH)：现金流/净利润0.07",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 1.12,
+          "max_drawdown_pct": -2.79,
+          "excess_pct": -5.05,
+          "outcome": "错误"
+        },
+        "t20": {
+          "return_pct": 8.38,
+          "max_drawdown_pct": -4.12,
+          "excess_pct": -1.96,
+          "outcome": "不确定"
+        },
+        "t60": {
+          "return_pct": -1.68,
+          "max_drawdown_pct": -12.18,
+          "excess_pct": -6.04,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "eligibility_as_of": "2020-02-03",
+      "current_price": 1.79,
+      "daily_return_pct": -11.3861,
+      "return_20d_pct": -15.9624,
+      "return_60d_pct": -18.2648,
+      "volume_ratio_20d": 1.243378896144205,
+      "drawdown_pct": -43.35443037974683,
+      "relative_to_market_pct": -7.5761,
+      "market_data_as_of": "2020-02-03",
+      "market_data_source": "tencent",
+      "sector": "电力",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-11.4%",
+          "20日相对大盘-7.6%",
+          "距一年高点-43.4%"
+        ],
+        "company": [
+          "五年ROE中位数2.5%",
+          "收入增长2.2%",
+          "利润增长6.7%"
+        ],
+        "valuation": [
+          "PE(TTM) 41.1",
+          "PE历史分位62%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 6.0,
+        "roe_5y_median_pct": 2.46,
+        "operating_cashflow_to_profit": 0.072784
+      },
+      "financials": {
+        "revenue_growth_pct": 2.2095,
+        "profit_growth_pct": 6.7087
+      },
+      "valuation": {
+        "pe_ttm": 41.10731842,
+        "pb": 0.92798503,
+        "pe_history_percentile": 0.621031746031746,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤43.4%"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 1.12,
+      "t5_max_drawdown": -2.79,
+      "t5_excess": -5.05,
+      "t5_outcome": "错误",
+      "t20": 8.38,
+      "t20_max_drawdown": -4.12,
+      "t20_excess": -1.96,
+      "t20_outcome": "不确定",
+      "t60": -1.68,
+      "t60_max_drawdown": -12.18,
+      "t60_excess": -6.04,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "拓维信息",
+      "code": "002261",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 20.5,
+      "score_components": {
+        "mispricing": 4.0,
+        "quality": 3.5,
+        "valuation": 3.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 20.5
+      },
+      "selection_reasons": [
+        "20日表现相对大盘+15.1%"
+      ],
+      "first_rejection": "缺少2项关键时点数据",
+      "missing_fields": [
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "profit_growth_pct",
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2020-02-03，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "20日表现相对大盘+15.1%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 1,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": -20.0,
+            "evidence": [
+              "五年ROE中位1.7%"
+            ],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.07097,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.07"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data",
+          "profit_growth_pct"
+        ],
+        "summary": [
+          "现金流(HIGH)：现金流/净利润0.07",
+          "数据缺口（显式保留）：leverage_data, profit_growth_pct",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 33.92,
+          "max_drawdown_pct": -2.88,
+          "excess_pct": 27.75,
+          "outcome": "正确"
+        },
+        "t20": {
+          "return_pct": 19.38,
+          "max_drawdown_pct": -17.73,
+          "excess_pct": 9.04,
+          "outcome": "正确"
+        },
+        "t60": {
+          "return_pct": -5.51,
+          "max_drawdown_pct": -36.07,
+          "excess_pct": -9.87,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "eligibility_as_of": "2020-02-03",
+      "current_price": 9.08,
+      "daily_return_pct": -10.0099,
+      "return_20d_pct": 6.698,
+      "return_60d_pct": 42.9921,
+      "volume_ratio_20d": 0.05372305851643807,
+      "drawdown_pct": -19.000892060660135,
+      "relative_to_market_pct": 15.0843,
+      "market_data_as_of": "2020-02-03",
+      "market_data_source": "tencent",
+      "sector": "软件与信息技术服务",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-10.0%",
+          "20日相对大盘+15.1%",
+          "距一年高点-19.0%"
+        ],
+        "company": [
+          "五年ROE中位数1.7%",
+          "收入增长4.6%"
+        ],
+        "valuation": [
+          "PE(TTM) 114.6",
+          "PE历史分位79%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少2项关键时点数据"
+      ],
+      "quality": {
+        "score": 3.5,
+        "roe_5y_median_pct": 1.72,
+        "operating_cashflow_to_profit": 0.07097
+      },
+      "financials": {
+        "revenue_growth_pct": 4.6191,
+        "profit_growth_pct": null
+      },
+      "valuation": {
+        "pe_ttm": 114.64344733,
+        "pb": 4.0191029,
+        "pe_history_percentile": 0.7894736842105263,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "20日表现相对大盘+15.1%"
+        ],
+        "risk_conditions": [
+          "缺少2项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 33.92,
+      "t5_max_drawdown": -2.88,
+      "t5_excess": 27.75,
+      "t5_outcome": "正确",
+      "t20": 19.38,
+      "t20_max_drawdown": -17.73,
+      "t20_excess": 9.04,
+      "t20_outcome": "正确",
+      "t60": -5.51,
+      "t60_max_drawdown": -36.07,
+      "t60_excess": -9.87,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "纳斯达克100ETF(QDII)",
+      "code": "159941",
+      "security_type": "etf",
+      "research_status": "C - 数据不足",
+      "score": 11.0,
+      "score_components": {
+        "mispricing": 1.0,
+        "quality": 0.0,
+        "valuation": 0.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 11.0
+      },
+      "selection_reasons": [
+        "20日表现相对大盘+9.8%"
+      ],
+      "first_rejection": "缺少6项关键时点数据",
+      "missing_fields": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct",
+        "etf_valuation.latest_nav",
+        "etf_valuation.nav_premium_pct",
+        "etf_valuation.underlying_valuation_premium_pct",
+        "etf_valuation.underlying_ann_volatility_pct",
+        "etf_valuation.underlying_max_drawdown_pct",
+        "etf_valuation.underlying_panic_sessions_count"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2020-02-03，不含未来信息",
+        "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
+      ],
+      "supporting_evidence": [
+        "20日表现相对大盘+9.8%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "LOW",
+        "coverage": {
+          "evaluated": 3,
+          "triggered": 0,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": -20.0,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "经营现金流/净利润数据未提供（显式Data Gap）"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data",
+          "operating_cashflow_to_profit",
+          "profit_growth_pct",
+          "roe_5y_median_pct"
+        ],
+        "summary": [
+          "数据缺口（显式保留）：leverage_data, operating_cashflow_to_profit, profit_growth_pct, roe_5y_median_pct",
+          "风险审查等级：LOW（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 11.54,
+          "max_drawdown_pct": 0.0,
+          "excess_pct": 5.37,
+          "outcome": "正确"
+        },
+        "t20": {
+          "return_pct": 3.85,
+          "max_drawdown_pct": -17.88,
+          "excess_pct": -6.49,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": 3.24,
+          "max_drawdown_pct": -31.13,
+          "excess_pct": -1.12,
+          "outcome": "不确定"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": "2015-03-24",
+      "eligibility_evidence_source": "asset-metadata",
+      "eligibility_reason": "资产元数据上市日期不晚于研究日期",
+      "eligibility_as_of": "2020-02-03",
+      "current_price": 1.976,
+      "daily_return_pct": -2.2266,
+      "return_20d_pct": 1.4374,
+      "return_60d_pct": 8.8705,
+      "volume_ratio_20d": 1.2870649726960932,
+      "drawdown_pct": -3.2321253672869643,
+      "relative_to_market_pct": 9.8237,
+      "market_data_as_of": "2020-02-03",
+      "market_data_source": "akshare",
+      "sector": "海外科技",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-2.2%",
+          "20日相对大盘+9.8%",
+          "距一年高点-3.2%"
+        ],
+        "company": [],
+        "valuation": []
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少6项关键时点数据"
+      ],
+      "quality": {
+        "score": 0.0,
+        "roe_5y_median_pct": "NOT_APPLICABLE",
+        "operating_cashflow_to_profit": "NOT_APPLICABLE"
+      },
+      "financials": {
+        "revenue_growth_pct": "NOT_APPLICABLE",
+        "profit_growth_pct": "NOT_APPLICABLE"
+      },
+      "valuation": {
+        "pe_ttm": null,
+        "pb": null,
+        "pe_history_percentile": "NOT_APPLICABLE",
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": {
+        "reasonable_price_low": 1.6644,
+        "reasonable_price_high": 1.7673,
+        "bargain_price_low": 1.5411,
+        "bargain_price_high": 1.6345,
+        "deep_value_below": 1.5411,
+        "historical_price_percentile": 0.9444,
+        "valuation_state": "高于历史合理区间",
+        "history_sessions": 252,
+        "valuation_method": "近252个交易日市场价格分位（研究筛选口径）",
+        "confidence": "screen_grade",
+        "price_as_of": "2020-02-03",
+        "price_source": "akshare",
+        "underlying_valuation_premium_pct": null,
+        "split_adjustments": 0,
+        "calculation_version": 4
+      },
+      "research_plan": {
+        "observation_conditions": [
+          "20日表现相对大盘+9.8%"
+        ],
+        "risk_conditions": [
+          "缺少6项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 11.54,
+      "t5_max_drawdown": 0.0,
+      "t5_excess": 5.37,
+      "t5_outcome": "正确",
+      "t20": 3.85,
+      "t20_max_drawdown": -17.88,
+      "t20_excess": -6.49,
+      "t20_outcome": "错误",
+      "t60": 3.24,
+      "t60_max_drawdown": -31.13,
+      "t60_excess": -1.12,
+      "t60_outcome": "不确定"
+    }
+  ],
+  "data_gaps": [
+    "沪深300使用腾讯备用行情",
+    "中证500使用腾讯备用行情",
+    "中证1000使用腾讯备用行情",
+    "创业板指使用腾讯备用行情",
+    "上证指数使用腾讯备用行情",
+    "历史回溯：市场宽度基于研究标的池（5只有效标的）计算，非全市场统计",
+    "历史回溯：跌停/涨停数量为基于研究标的池的估计（±9.8%近似），非全市场统计",
+    "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+    "历史回溯：行情与财务数据截至2020-02-03，不含未来信息",
+    "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
+  ],
+  "universe_audit": [
+    {
+      "symbol": "000791",
+      "code": "000791.SZ",
+      "name": "甘肃能源",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 35.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2020-02-03",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "002261",
+      "code": "002261.SZ",
+      "name": "拓维信息",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 20.5,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2020-02-03",
+      "data_source": "tencent",
+      "data_gaps": [
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "601991",
+      "code": "601991.SH",
+      "name": "大唐发电",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 30.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2020-02-03",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "600522",
+      "code": "600522.SH",
+      "name": "中天科技",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2020-02-03 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 42.5,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2020-02-03",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588060",
+      "code": "588060.SH",
+      "name": "科创50ETF",
+      "security_type": "etf",
+      "eligibility_status": "CONFIRMED_NOT_LISTED",
+      "listing_date": "2020-11-16",
+      "eligibility_reason": "上市日期 2020-11-16 晚于研究日期 2020-02-03",
+      "selected": false,
+      "exclusion_reason": "上市日期 2020-11-16 晚于研究日期 2020-02-03",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588170",
+      "code": "588170.SH",
+      "name": "科创板半导体材料设备ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588200",
+      "code": "588200.SH",
+      "name": "科创芯片ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "159941",
+      "code": "159941.SZ",
+      "name": "纳斯达克100ETF(QDII)",
+      "security_type": "etf",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": "2015-03-24",
+      "eligibility_reason": "资产元数据上市日期不晚于研究日期",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 11.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2020-02-03",
+      "data_source": "akshare",
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "159516",
+      "code": "159516.SZ",
+      "name": "半导体材料设备ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    }
+  ],
+  "provider_health": [
+    {
+      "endpoint": "stock_financial_analysis_indicator",
+      "provider": "akshare",
+      "attempts": 4,
+      "successes": 4,
+      "failures": 0,
+      "state": "HEALTHY",
+      "last_error_type": null,
+      "last_error_summary": null,
+      "cooldown_triggered": false,
+      "cache_hits": 0,
+      "cache_original_as_of": null
+    },
+    {
+      "endpoint": "stock_value_em",
+      "provider": "akshare",
+      "attempts": 4,
+      "successes": 4,
+      "failures": 0,
+      "state": "HEALTHY",
+      "last_error_type": null,
+      "last_error_summary": null,
+      "cooldown_triggered": false,
+      "cache_hits": 0,
+      "cache_original_as_of": null
+    }
+  ],
+  "rebuilt": true,
+  "artifact": {
+    "research_id": "20200203-panic-core-v1",
+    "research_run_id": "a2aa83d4-be02-53a1-acc7-39835501846c",
+    "created_at": "2026-08-06 19:04:06.783838+00:00",
+    "as_of_date": "2020-02-03",
+    "requested_date": "2020-02-03",
+    "rules_version": "panic-core-v1",
+    "provider_version": "akshare-historical-v1",
+    "artifact_version": 1,
+    "rules_fingerprint": "4b5c222f20edb6ac7656718f97a118e7b47a69de45256732506701f7aa17acd7",
+    "data_snapshot_id": "0ce55f71d2956cd0e6109e0c3e43d4ed92f27dc5dfde9ceb907dc704fc42c2d4",
+    "content_hash": "89ee77805a54346e9e82d469ac371c2c01b70256b284bfd0f4a65f572c30edde"
+  },
+  "data_quality": {
+    "issues": [
+      {
+        "field": "market.limit_up_count",
+        "status": "estimated",
+        "reason": "基于研究标的池的显式估计（非全市场统计）",
+        "as_of": "2020-02-03",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.limit_down_count",
+        "status": "estimated",
+        "reason": "基于研究标的池的显式估计（非全市场统计）",
+        "as_of": "2020-02-03",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.turnover_zscore",
+        "status": "unavailable",
+        "reason": "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+        "as_of": "2020-02-03",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.turnover_amount",
+        "status": "unavailable",
+        "reason": "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+        "as_of": "2020-02-03",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "candidate.600522.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2020-02-03",
+        "source": null
+      },
+      {
+        "field": "candidate.000791.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2020-02-03",
+        "source": null
+      },
+      {
+        "field": "candidate.601991.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2020-02-03",
+        "source": null
+      },
+      {
+        "field": "candidate.002261.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2020-02-03",
+        "source": null
+      },
+      {
+        "field": "candidate.159941.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2020-02-03",
+        "source": null
+      }
+    ],
+    "counts": {
+      "estimated": 2,
+      "unavailable": 2,
+      "missing": 5
+    },
+    "all_available": false
+  },
+  "research_run_id": "a2aa83d4-be02-53a1-acc7-39835501846c",
+  "market_intelligence": {
+    "version": "market-intel-v1",
+    "thresholds_version": "market-intel-v1",
+    "state": "EXTREME_PANIC",
+    "stress_score": 100,
+    "coverage": {
+      "available": 2,
+      "estimated": 1,
+      "total": 6
+    },
+    "dimensions": [
+      {
+        "dimension": "index",
+        "status": "available",
+        "observed": -7.880816204200903,
+        "threshold": -2.0,
+        "triggered": true,
+        "note": null,
+        "signals": [
+          {
+            "signal": "index_daily_return",
+            "dimension": "index",
+            "status": "available",
+            "observed": -7.880816204200903,
+            "threshold": -2.0,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "index_drawdown",
+            "dimension": "index",
+            "status": "available",
+            "observed": -16.026354408707356,
+            "threshold": -20.0,
+            "triggered": false,
+            "note": null
+          },
+          {
+            "signal": "index_all_below_ma250",
+            "dimension": "index",
+            "status": "available",
+            "observed": 4.0,
+            "threshold": 5.0,
+            "triggered": false,
+            "note": null
+          },
+          {
+            "signal": "index_all_below_120d_low",
+            "dimension": "index",
+            "status": "available",
+            "observed": 1.0,
+            "threshold": 5.0,
+            "triggered": false,
+            "note": null
+          }
+        ]
+      },
+      {
+        "dimension": "breadth",
+        "status": "available",
+        "observed": 0.0,
+        "threshold": 0.3,
+        "triggered": true,
+        "note": null,
+        "signals": [
+          {
+            "signal": "breadth_advancer_ratio",
+            "dimension": "breadth",
+            "status": "available",
+            "observed": 0.0,
+            "threshold": 0.3,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "breadth_above_ma60_ratio",
+            "dimension": "breadth",
+            "status": "available",
+            "observed": 0.4,
+            "threshold": 0.35,
+            "triggered": false,
+            "note": null
+          }
+        ]
+      },
+      {
+        "dimension": "limit",
+        "status": "estimated",
+        "observed": 4.0,
+        "threshold": 50.0,
+        "triggered": false,
+        "note": "基于研究标的池的显式估计（非全市场统计）",
+        "signals": []
+      },
+      {
+        "dimension": "turnover",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": 1.5,
+        "triggered": null,
+        "note": "成交额分位（zscore）未接入历史数据；成交额无基线不可判定异常",
+        "signals": []
+      },
+      {
+        "dimension": "volatility",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": null,
+        "triggered": null,
+        "note": "波动率维度预留：当前 Provider Schema 未提供该输入",
+        "signals": []
+      },
+      {
+        "dimension": "erp",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": null,
+        "triggered": null,
+        "note": "ERP 维度预留：当前 Provider Schema 未提供该输入",
+        "signals": []
+      }
+    ],
+    "summary": [
+      "指数：中位日跌幅-7.9%（阈值-2.0%），回撤中位-16.0%（阈值-20.0%）",
+      "宽度：上涨占比0%（阈值30%）",
+      "状态判定：EXTREME_PANIC（压力得分100，可用证据权重60/100）"
+    ]
+  },
+  "market_regime": {
+    "version": "market-regime-v1",
+    "thresholds_version": "market-regime-v1",
+    "regime": "UNKNOWN",
+    "coverage": {
+      "available": 0,
+      "estimated": 0,
+      "total": 5
+    },
+    "dimensions": [],
+    "summary": [
+      "market regime unavailable: macro data sources are not wired yet (explicit gap)"
+    ]
+  },
+  "fear_memory": {
+    "version": "fear-memory-v1",
+    "as_of": "2020-02-03",
+    "visible_episodes": [
+      {
+        "crisis_id": "2015-leverage-crash",
+        "label": "2015年杠杆股灾",
+        "start_date": "2015-06-15",
+        "end_date": "2015-08-26",
+        "severity": "SYSTEMIC",
+        "narrative": "场外配资去杠杆叠加汇率冲击引发系统性下跌，上证综指从5178点回落至2850点附近，为A股历史上规模最大的去杠杆危机之一。",
+        "key_stats": {
+          "index_peak": 5178,
+          "index_trough_approx": 2850
+        },
+        "sources": [
+          "公开历史行情记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2016-circuit-breaker",
+        "label": "2016年初熔断机制",
+        "start_date": "2016-01-04",
+        "end_date": "2016-01-27",
+        "severity": "SYSTEMIC",
+        "narrative": "指数熔断机制推出后四天内两度触发，引发流动性踩踏，随后机制被暂停；1月全月主要指数跌幅约两成。",
+        "key_stats": {
+          "month_drawdown_approx_pct": -20
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2018-deleveraging",
+        "label": "2018年去杠杆与贸易摩擦熊市",
+        "start_date": "2018-01-29",
+        "end_date": "2018-10-19",
+        "severity": "SYSTEMIC",
+        "narrative": "资管新规去杠杆叠加外部贸易摩擦，A股全年单边下行，上证综指最低触及约2449点，估值进入历史低位区域。",
+        "key_stats": {
+          "index_trough_approx": 2449
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2020-covid-shock",
+        "label": "2020年新冠疫情冲击",
+        "start_date": "2020-02-03",
+        "end_date": "2020-03-23",
+        "severity": "SHOCK",
+        "narrative": "疫情冲击叠加海外流动性危机，节后开盘大幅补跌，上证综指最低触及约2646点；此后在全球宽松下快速修复。",
+        "key_stats": {
+          "index_trough_approx": 2646
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      }
+    ],
+    "hidden_episodes_count": 1,
+    "summary": [
+      "历史危机案例库：as_of=2020-02-03，可见案例4个，未来案例1个已隐藏（PIT安全）",
+      "距当前as_of最近的历史危机：2020年新冠疫情冲击（2020-02-03）"
+    ]
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "runner": "research_validation_v2",
+  "independent_store": "D:\\AIStock\\Vibe-Trading\\data\\rrv2",
+  "events": [
+    {
+      "trade_date": "2015-06-26",
+      "label": "2015 股灾第一波暴跌",
+      "seconds": 100.0,
+      "market_state": "PANIC",
+      "effective_market_state": "EXTREME_PANIC",
+      "intelligence_state": "EXTREME_PANIC",
+      "reconciliation_upgraded": true,
+      "coverage_gate_passed": true,
+      "candidates": 4,
+      "excluded": 1,
+      "gaps": 12,
+      "provider_health": [
+        {
+          "endpoint": "stock_financial_analysis_indicator",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        },
+        {
+          "endpoint": "stock_value_em",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        }
+      ]
+    },
+    {
+      "trade_date": "2018-10-11",
+      "label": "2018 贸易战暴跌传导",
+      "seconds": 97.5,
+      "market_state": "EXTREME_PANIC",
+      "effective_market_state": "EXTREME_PANIC",
+      "intelligence_state": "EXTREME_PANIC",
+      "reconciliation_upgraded": false,
+      "coverage_gate_passed": true,
+      "candidates": 5,
+      "excluded": 1,
+      "gaps": 10,
+      "provider_health": [
+        {
+          "endpoint": "stock_financial_analysis_indicator",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        },
+        {
+          "endpoint": "stock_value_em",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        }
+      ]
+    },
+    {
+      "trade_date": "2020-02-03",
+      "label": "2020 疫情节后千股跌停",
+      "seconds": 97.0,
+      "market_state": "PANIC",
+      "effective_market_state": "EXTREME_PANIC",
+      "intelligence_state": "EXTREME_PANIC",
+      "reconciliation_upgraded": true,
+      "coverage_gate_passed": true,
+      "candidates": 5,
+      "excluded": 1,
+      "gaps": 10,
+      "provider_health": [
+        {
+          "endpoint": "stock_financial_analysis_indicator",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        },
+        {
+          "endpoint": "stock_value_em",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        }
+      ]
+    },
+    {
+      "trade_date": "2022-03-15",
+      "label": "2022 俄乌冲突+疫情大跌",
+      "seconds": 96.3,
+      "market_state": "PANIC",
+      "effective_market_state": "EXTREME_PANIC",
+      "intelligence_state": "EXTREME_PANIC",
+      "reconciliation_upgraded": true,
+      "coverage_gate_passed": true,
+      "candidates": 5,
+      "excluded": 0,
+      "gaps": 10,
+      "provider_health": [
+        {
+          "endpoint": "stock_financial_analysis_indicator",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        },
+        {
+          "endpoint": "stock_value_em",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        }
+      ]
+    },
+    {
+      "trade_date": "2024-02-05",
+      "label": "2024 微盘股踩踏",
+      "seconds": 92.1,
+      "market_state": "CAUTION",
+      "effective_market_state": "EXTREME_PANIC",
+      "intelligence_state": "EXTREME_PANIC",
+      "reconciliation_upgraded": true,
+      "coverage_gate_passed": true,
+      "candidates": 5,
+      "excluded": 0,
+      "gaps": 11,
+      "provider_health": [
+        {
+          "endpoint": "stock_financial_analysis_indicator",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        },
+        {
+          "endpoint": "stock_value_em",
+          "provider": "akshare",
+          "attempts": 4,
+          "successes": 4,
+          "failures": 0,
+          "state": "HEALTHY",
+          "last_error_type": null,
+          "last_error_summary": null,
+          "cooldown_triggered": false,
+          "cache_hits": 0,
+          "cache_original_as_of": null
+        }
+      ]
+    }
+  ]
+}

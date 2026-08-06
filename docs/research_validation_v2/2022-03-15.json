@@ -1,0 +1,1671 @@
+{
+  "trade_date": "2022-03-15",
+  "market_state": "PANIC",
+  "market_state_reconciliation": {
+    "legacy_market_state": "PANIC",
+    "effective_market_state": "EXTREME_PANIC",
+    "intelligence_state": "EXTREME_PANIC",
+    "coverage_gate_passed": true,
+    "coverage": {
+      "available_dimensions": 2,
+      "has_index_or_breadth": true,
+      "has_available_trigger": true
+    },
+    "upgraded": true,
+    "reasons": [
+      "intelligence state EXTREME_PANIC is more severe than legacy PANIC and the coverage gate passed"
+    ]
+  },
+  "panic_sensitivity": {
+    "value": 50,
+    "label": "平衡",
+    "index_daily_return_pct": -2.25,
+    "max_advancer_ratio": 0.35,
+    "min_limit_down_count": 42,
+    "required_confirmations": 2,
+    "config_version": 2,
+    "trigger_count": 2,
+    "checks": {
+      "index_daily_return": {
+        "observed": -4.81,
+        "threshold": -2.25,
+        "triggered": true
+      },
+      "advancer_ratio": {
+        "observed": 0.0,
+        "threshold": 0.35,
+        "triggered": true
+      },
+      "limit_down_count": {
+        "observed": 1,
+        "threshold": 42,
+        "triggered": false
+      }
+    }
+  },
+  "candidates": [
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "拓维信息",
+      "code": "002261",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 45.0,
+      "score_components": {
+        "mispricing": 13.0,
+        "quality": 9.0,
+        "valuation": 13.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 45.0
+      },
+      "selection_reasons": [
+        "距一年高点回撤34.5%",
+        "收入与利润保持正增长",
+        "PE处于自身历史17%分位",
+        "20日表现相对大盘+7.3%"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2022-03-15，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤34.5%",
+        "收入与利润保持正增长",
+        "PE处于自身历史17%分位",
+        "20日表现相对大盘+7.3%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 1,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": 106.5281,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长106.5%",
+              "五年ROE中位1.7%"
+            ],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.016837,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.02"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "现金流(HIGH)：现金流/净利润0.02",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 2.9,
+          "max_drawdown_pct": -1.94,
+          "excess_pct": -3.91,
+          "outcome": "错误"
+        },
+        "t20": {
+          "return_pct": -9.58,
+          "max_drawdown_pct": -17.58,
+          "excess_pct": -14.8,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": -7.98,
+          "max_drawdown_pct": -35.03,
+          "excess_pct": -15.37,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "eligibility_as_of": "2022-03-15",
+      "current_price": 6.89,
+      "daily_return_pct": -4.3056,
+      "return_20d_pct": -6.1308,
+      "return_60d_pct": -14.6221,
+      "volume_ratio_20d": 0.5823984726104785,
+      "drawdown_pct": -34.50570342205324,
+      "relative_to_market_pct": 7.2665,
+      "market_data_as_of": "2022-03-15",
+      "market_data_source": "tencent",
+      "sector": "软件与信息技术服务",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-4.3%",
+          "20日相对大盘+7.3%",
+          "距一年高点-34.5%"
+        ],
+        "company": [
+          "五年ROE中位数1.7%",
+          "收入增长49.8%",
+          "利润增长106.5%"
+        ],
+        "valuation": [
+          "PE(TTM) 127.3",
+          "PE历史分位17%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 9.0,
+        "roe_5y_median_pct": 1.72,
+        "operating_cashflow_to_profit": 0.016837
+      },
+      "financials": {
+        "revenue_growth_pct": 49.8269,
+        "profit_growth_pct": 106.5281
+      },
+      "valuation": {
+        "pe_ttm": 127.30863659,
+        "pb": 2.44570192,
+        "pe_history_percentile": 0.17307692307692307,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤34.5%",
+          "收入与利润保持正增长",
+          "PE处于自身历史17%分位",
+          "20日表现相对大盘+7.3%"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 2.9,
+      "t5_max_drawdown": -1.94,
+      "t5_excess": -3.91,
+      "t5_outcome": "错误",
+      "t20": -9.58,
+      "t20_max_drawdown": -17.58,
+      "t20_excess": -14.8,
+      "t20_outcome": "错误",
+      "t60": -7.98,
+      "t60_max_drawdown": -35.03,
+      "t60_excess": -15.37,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "大唐发电",
+      "code": "601991",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 31.5,
+      "score_components": {
+        "mispricing": 20.0,
+        "quality": 4.5,
+        "valuation": 3.0,
+        "relative_strength": 4.0,
+        "catalyst": 0.0,
+        "total": 31.5
+      },
+      "selection_reasons": [
+        "距一年高点回撤37.8%"
+      ],
+      "first_rejection": "缺少2项关键时点数据",
+      "missing_fields": [
+        "operating_cashflow_to_profit",
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "operating_cashflow_to_profit",
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2022-03-15，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤37.8%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 3,
+          "triggered": 1,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": -323.7695,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长-323.8%",
+              "五年ROE中位2.5%"
+            ],
+            "gap": false,
+            "note": "盈利恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "经营现金流/净利润数据未提供（显式Data Gap）"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data",
+          "operating_cashflow_to_profit"
+        ],
+        "summary": [
+          "盈利恶化(HIGH)：净利润增长-323.8%; 五年ROE中位2.5%",
+          "数据缺口（显式保留）：leverage_data, operating_cashflow_to_profit",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 3.63,
+          "max_drawdown_pct": -0.88,
+          "excess_pct": -3.18,
+          "outcome": "错误"
+        },
+        "t20": {
+          "return_pct": -4.08,
+          "max_drawdown_pct": -8.24,
+          "excess_pct": -9.3,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": 2.27,
+          "max_drawdown_pct": -13.88,
+          "excess_pct": -5.12,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "eligibility_as_of": "2022-03-15",
+      "current_price": 2.206,
+      "daily_return_pct": -9.8119,
+      "return_20d_pct": -13.6933,
+      "return_60d_pct": -18.7776,
+      "volume_ratio_20d": 1.5773845008141034,
+      "drawdown_pct": -37.789058093626615,
+      "relative_to_market_pct": -0.29600000000000115,
+      "market_data_as_of": "2022-03-15",
+      "market_data_source": "tencent",
+      "sector": "电力",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-9.8%",
+          "20日相对大盘-0.3%",
+          "距一年高点-37.8%"
+        ],
+        "company": [
+          "五年ROE中位数2.5%",
+          "收入增长8.2%",
+          "利润增长-323.8%"
+        ],
+        "valuation": [
+          "PE(TTM) 113.9",
+          "PE历史分位91%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少2项关键时点数据"
+      ],
+      "quality": {
+        "score": 4.5,
+        "roe_5y_median_pct": 2.46,
+        "operating_cashflow_to_profit": null
+      },
+      "financials": {
+        "revenue_growth_pct": 8.1552,
+        "profit_growth_pct": -323.7695
+      },
+      "valuation": {
+        "pe_ttm": 113.88923109,
+        "pb": 1.49112489,
+        "pe_history_percentile": 0.9106967615309126,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤37.8%"
+        ],
+        "risk_conditions": [
+          "缺少2项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 3.63,
+      "t5_max_drawdown": -0.88,
+      "t5_excess": -3.18,
+      "t5_outcome": "错误",
+      "t20": -4.08,
+      "t20_max_drawdown": -8.24,
+      "t20_excess": -9.3,
+      "t20_outcome": "错误",
+      "t60": 2.27,
+      "t60_max_drawdown": -13.88,
+      "t60_excess": -5.12,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "甘肃能源",
+      "code": "000791",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 27.0,
+      "score_components": {
+        "mispricing": 12.0,
+        "quality": 2.0,
+        "valuation": 3.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 27.0
+      },
+      "selection_reasons": [
+        "20日表现相对大盘+8.0%"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2022-03-15，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "20日表现相对大盘+8.0%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 2,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": -38.6868,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长-38.7%",
+              "五年ROE中位6.6%"
+            ],
+            "gap": false,
+            "note": "盈利恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": 0.041626,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润0.04"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "盈利恶化(HIGH)：净利润增长-38.7%; 五年ROE中位6.6%",
+          "现金流(HIGH)：现金流/净利润0.04",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 6.45,
+          "max_drawdown_pct": -1.92,
+          "excess_pct": -0.36,
+          "outcome": "不确定"
+        },
+        "t20": {
+          "return_pct": -11.01,
+          "max_drawdown_pct": -18.01,
+          "excess_pct": -16.23,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": -2.09,
+          "max_drawdown_pct": -28.85,
+          "excess_pct": -9.48,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "eligibility_as_of": "2022-03-15",
+      "current_price": 5.27,
+      "daily_return_pct": -7.3814,
+      "return_20d_pct": -5.386,
+      "return_60d_pct": -19.1718,
+      "volume_ratio_20d": 0.783297405481295,
+      "drawdown_pct": -22.61380323054332,
+      "relative_to_market_pct": 8.011299999999999,
+      "market_data_as_of": "2022-03-15",
+      "market_data_source": "tencent",
+      "sector": "电力",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-7.4%",
+          "20日相对大盘+8.0%",
+          "距一年高点-22.6%"
+        ],
+        "company": [
+          "五年ROE中位数6.6%",
+          "收入增长-11.1%",
+          "利润增长-38.7%"
+        ],
+        "valuation": [
+          "PE(TTM) 29.8",
+          "PE历史分位87%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 2.0,
+        "roe_5y_median_pct": 6.58,
+        "operating_cashflow_to_profit": 0.041626
+      },
+      "financials": {
+        "revenue_growth_pct": -11.1472,
+        "profit_growth_pct": -38.6868
+      },
+      "valuation": {
+        "pe_ttm": 29.79720493,
+        "pb": 1.17562096,
+        "pe_history_percentile": 0.872423945044161,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "20日表现相对大盘+8.0%"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 6.45,
+      "t5_max_drawdown": -1.92,
+      "t5_excess": -0.36,
+      "t5_outcome": "不确定",
+      "t20": -11.01,
+      "t20_max_drawdown": -18.01,
+      "t20_excess": -16.23,
+      "t20_outcome": "错误",
+      "t60": -2.09,
+      "t60_max_drawdown": -28.85,
+      "t60_excess": -9.48,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "科创50ETF",
+      "code": "588060",
+      "security_type": "etf",
+      "research_status": "C - 数据不足",
+      "score": 23.0,
+      "score_components": {
+        "mispricing": 13.0,
+        "quality": 0.0,
+        "valuation": 0.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 23.0
+      },
+      "selection_reasons": [
+        "距一年高点回撤31.2%",
+        "20日表现相对大盘+5.5%"
+      ],
+      "first_rejection": "缺少6项关键时点数据",
+      "missing_fields": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct",
+        "etf_valuation.latest_nav",
+        "etf_valuation.nav_premium_pct",
+        "etf_valuation.underlying_valuation_premium_pct",
+        "etf_valuation.underlying_ann_volatility_pct",
+        "etf_valuation.underlying_max_drawdown_pct",
+        "etf_valuation.underlying_panic_sessions_count"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2022-03-15，不含未来信息",
+        "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
+      ],
+      "supporting_evidence": [
+        "距一年高点回撤31.2%",
+        "20日表现相对大盘+5.5%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "LOW",
+        "coverage": {
+          "evaluated": 3,
+          "triggered": 0,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": -20.0,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利未见恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "经营现金流/净利润数据未提供（显式Data Gap）"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data",
+          "operating_cashflow_to_profit",
+          "profit_growth_pct",
+          "roe_5y_median_pct"
+        ],
+        "summary": [
+          "数据缺口（显式保留）：leverage_data, operating_cashflow_to_profit, profit_growth_pct, roe_5y_median_pct",
+          "风险审查等级：LOW（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 2.8,
+          "max_drawdown_pct": -1.08,
+          "excess_pct": -4.01,
+          "outcome": "错误"
+        },
+        "t20": {
+          "return_pct": -12.04,
+          "max_drawdown_pct": -15.36,
+          "excess_pct": -17.26,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": -3.64,
+          "max_drawdown_pct": -23.58,
+          "excess_pct": -11.03,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": "2020-11-16",
+      "eligibility_evidence_source": "asset-metadata",
+      "eligibility_reason": "资产元数据上市日期不晚于研究日期",
+      "eligibility_as_of": "2022-03-15",
+      "current_price": 0.714,
+      "daily_return_pct": -2.8571,
+      "return_20d_pct": -7.871,
+      "return_60d_pct": -23.8806,
+      "volume_ratio_20d": 0.855647640346142,
+      "drawdown_pct": -31.213872832369947,
+      "relative_to_market_pct": 5.526299999999999,
+      "market_data_as_of": "2022-03-15",
+      "market_data_source": "akshare",
+      "sector": "科创板宽基",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-2.9%",
+          "20日相对大盘+5.5%",
+          "距一年高点-31.2%"
+        ],
+        "company": [],
+        "valuation": []
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少6项关键时点数据"
+      ],
+      "quality": {
+        "score": 0.0,
+        "roe_5y_median_pct": "NOT_APPLICABLE",
+        "operating_cashflow_to_profit": "NOT_APPLICABLE"
+      },
+      "financials": {
+        "revenue_growth_pct": "NOT_APPLICABLE",
+        "profit_growth_pct": "NOT_APPLICABLE"
+      },
+      "valuation": {
+        "pe_ttm": null,
+        "pb": null,
+        "pe_history_percentile": "NOT_APPLICABLE",
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": {
+        "reasonable_price_low": 0.881,
+        "reasonable_price_high": 0.919,
+        "bargain_price_low": 0.779,
+        "bargain_price_high": 0.8485,
+        "deep_value_below": 0.779,
+        "historical_price_percentile": 0.0066,
+        "valuation_state": "深度低估研究区",
+        "history_sessions": 151,
+        "valuation_method": "近252个交易日市场价格分位（研究筛选口径）",
+        "confidence": "screen_grade",
+        "price_as_of": "2022-03-15",
+        "price_source": "akshare",
+        "underlying_valuation_premium_pct": null,
+        "split_adjustments": 0,
+        "calculation_version": 4
+      },
+      "research_plan": {
+        "observation_conditions": [
+          "距一年高点回撤31.2%",
+          "20日表现相对大盘+5.5%"
+        ],
+        "risk_conditions": [
+          "缺少6项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 2.8,
+      "t5_max_drawdown": -1.08,
+      "t5_excess": -4.01,
+      "t5_outcome": "错误",
+      "t20": -12.04,
+      "t20_max_drawdown": -15.36,
+      "t20_excess": -17.26,
+      "t20_outcome": "错误",
+      "t60": -3.64,
+      "t60_max_drawdown": -23.58,
+      "t60_excess": -11.03,
+      "t60_outcome": "错误"
+    },
+    {
+      "contract_version": "candidate-contract-v1",
+      "name": "中天科技",
+      "code": "600522",
+      "security_type": "stock",
+      "research_status": "C - 数据不足",
+      "score": 20.5,
+      "score_components": {
+        "mispricing": 3.0,
+        "quality": 4.5,
+        "valuation": 3.0,
+        "relative_strength": 10.0,
+        "catalyst": 0.0,
+        "total": 20.5
+      },
+      "selection_reasons": [
+        "20日表现相对大盘+13.5%"
+      ],
+      "first_rejection": "缺少1项关键时点数据",
+      "missing_fields": [
+        "catalyst_evidence"
+      ],
+      "data_gaps": [
+        "catalyst_evidence",
+        "relative_to_sector_pct"
+      ],
+      "source_fields": [
+        "watchlist_yaml",
+        "market_data_registry_ohlcv",
+        "sina_point_in_time_financial_indicators",
+        "eastmoney_point_in_time_value_history"
+      ],
+      "provider_warnings": [
+        "历史回溯：行情与财务数据截至2022-03-15，不含未来信息"
+      ],
+      "supporting_evidence": [
+        "20日表现相对大盘+13.5%"
+      ],
+      "counter_evidence": [],
+      "risk_review": {
+        "version": "risk-review-v1",
+        "risk_level": "HIGH",
+        "coverage": {
+          "evaluated": 4,
+          "triggered": 2,
+          "total": 5
+        },
+        "dimensions": [
+          {
+            "dimension": "financial_anomaly",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无公告级财务异常证据"
+          },
+          {
+            "dimension": "shareholder",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": false,
+            "note": "无大股东减持证据"
+          },
+          {
+            "dimension": "profitability",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": -88.1057,
+            "threshold": -20.0,
+            "evidence": [
+              "净利润增长-88.1%",
+              "五年ROE中位9.7%"
+            ],
+            "gap": false,
+            "note": "盈利恶化证据"
+          },
+          {
+            "dimension": "cashflow",
+            "severity": "HIGH",
+            "triggered": true,
+            "observed": -0.019405,
+            "threshold": 0.8,
+            "evidence": [],
+            "gap": false,
+            "note": "盈利含金量低：现金流/净利润-0.02"
+          },
+          {
+            "dimension": "leverage",
+            "severity": "LOW",
+            "triggered": false,
+            "observed": null,
+            "threshold": null,
+            "evidence": [],
+            "gap": true,
+            "note": "负债/偿债数据源未接入（显式Data Gap）"
+          }
+        ],
+        "data_gaps": [
+          "leverage_data"
+        ],
+        "summary": [
+          "盈利恶化(HIGH)：净利润增长-88.1%; 五年ROE中位9.7%",
+          "现金流(HIGH)：现金流/净利润-0.02",
+          "数据缺口（显式保留）：leverage_data",
+          "风险审查等级：HIGH（最高维度严重度，非买入评级）"
+        ]
+      },
+      "forward_validation": {
+        "t5": {
+          "return_pct": 4.29,
+          "max_drawdown_pct": -5.71,
+          "excess_pct": -2.52,
+          "outcome": "不确定"
+        },
+        "t20": {
+          "return_pct": -14.34,
+          "max_drawdown_pct": -22.99,
+          "excess_pct": -19.56,
+          "outcome": "错误"
+        },
+        "t60": {
+          "return_pct": 4.29,
+          "max_drawdown_pct": -26.2,
+          "excess_pct": -3.1,
+          "outcome": "错误"
+        }
+      },
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_evidence_source": "trading-records",
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "eligibility_as_of": "2022-03-15",
+      "current_price": 16.322,
+      "daily_return_pct": -4.3932,
+      "return_20d_pct": 0.0613,
+      "return_60d_pct": -2.683,
+      "volume_ratio_20d": 0.8789112614061169,
+      "drawdown_pct": -12.865684390348065,
+      "relative_to_market_pct": 13.458599999999999,
+      "market_data_as_of": "2022-03-15",
+      "market_data_source": "tencent",
+      "sector": "通信设备",
+      "sector_performance_pct": null,
+      "entry_reasons": {
+        "market": [
+          "单日涨跌幅-4.4%",
+          "20日相对大盘+13.5%",
+          "距一年高点-12.9%"
+        ],
+        "company": [
+          "五年ROE中位数9.7%",
+          "收入增长4.8%",
+          "利润增长-88.1%"
+        ],
+        "valuation": [
+          "PE(TTM) 49.9",
+          "PE历史分位98%"
+        ]
+      },
+      "risks": [],
+      "catalysts": [],
+      "invalidation": [
+        "缺少1项关键时点数据"
+      ],
+      "quality": {
+        "score": 4.5,
+        "roe_5y_median_pct": 9.69,
+        "operating_cashflow_to_profit": -0.019405
+      },
+      "financials": {
+        "revenue_growth_pct": 4.7601,
+        "profit_growth_pct": -88.1057
+      },
+      "valuation": {
+        "pe_ttm": 49.89587032,
+        "pb": 2.19214135,
+        "pe_history_percentile": 0.9774288518155054,
+        "pe_industry_percentile": null
+      },
+      "etf_valuation": null,
+      "research_plan": {
+        "observation_conditions": [
+          "20日表现相对大盘+13.5%"
+        ],
+        "risk_conditions": [
+          "缺少1项关键时点数据"
+        ],
+        "validation_conditions": [
+          "在下一次定期报告或公告后复核收入、利润和经营现金流趋势。",
+          "复核相对大盘与行业表现是否改善，并确认改善不是未来数据回填。"
+        ]
+      },
+      "t5": 4.29,
+      "t5_max_drawdown": -5.71,
+      "t5_excess": -2.52,
+      "t5_outcome": "不确定",
+      "t20": -14.34,
+      "t20_max_drawdown": -22.99,
+      "t20_excess": -19.56,
+      "t20_outcome": "错误",
+      "t60": 4.29,
+      "t60_max_drawdown": -26.2,
+      "t60_excess": -3.1,
+      "t60_outcome": "错误"
+    }
+  ],
+  "data_gaps": [
+    "沪深300使用腾讯备用行情",
+    "中证500使用腾讯备用行情",
+    "中证1000使用腾讯备用行情",
+    "创业板指使用腾讯备用行情",
+    "上证指数使用腾讯备用行情",
+    "历史回溯：市场宽度基于研究标的池（6只有效标的）计算，非全市场统计",
+    "历史回溯：跌停/涨停数量为基于研究标的池的估计（±9.8%近似），非全市场统计",
+    "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+    "历史回溯：行情与财务数据截至2022-03-15，不含未来信息",
+    "历史回溯：ETF净值、底层指数估值与公告风险为当前未接入数据，保留Data Gap"
+  ],
+  "universe_audit": [
+    {
+      "symbol": "000791",
+      "code": "000791.SZ",
+      "name": "甘肃能源",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 27.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "002261",
+      "code": "002261.SZ",
+      "name": "拓维信息",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 45.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "601991",
+      "code": "601991.SH",
+      "name": "大唐发电",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 31.5,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "tencent",
+      "data_gaps": [
+        "operating_cashflow_to_profit",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "600522",
+      "code": "600522.SH",
+      "name": "中天科技",
+      "security_type": "stock",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": null,
+      "eligibility_reason": "研究日期 2022-03-15 前存在可验证交易记录",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 20.5,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "tencent",
+      "data_gaps": [
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588060",
+      "code": "588060.SH",
+      "name": "科创50ETF",
+      "security_type": "etf",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": "2020-11-16",
+      "eligibility_reason": "资产元数据上市日期不晚于研究日期",
+      "selected": true,
+      "exclusion_reason": null,
+      "score": 23.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "akshare",
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588170",
+      "code": "588170.SH",
+      "name": "科创板半导体材料设备ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "588200",
+      "code": "588200.SH",
+      "name": "科创芯片ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "159941",
+      "code": "159941.SZ",
+      "name": "纳斯达克100ETF(QDII)",
+      "security_type": "etf",
+      "eligibility_status": "ELIGIBLE",
+      "listing_date": "2015-03-24",
+      "eligibility_reason": "资产元数据上市日期不晚于研究日期",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 15.0,
+      "research_status": "C - 数据不足",
+      "data_status": "available",
+      "data_as_of": "2022-03-15",
+      "data_source": "akshare",
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "catalyst_evidence"
+      ]
+    },
+    {
+      "symbol": "159516",
+      "code": "159516.SZ",
+      "name": "半导体材料设备ETF",
+      "security_type": "etf",
+      "eligibility_status": "UNKNOWN",
+      "listing_date": null,
+      "eligibility_reason": "无资产元数据且研究日期前无可验证交易记录，无法确认上市状态",
+      "selected": false,
+      "exclusion_reason": "按既有评分排序未进入 Top 5",
+      "score": 0.0,
+      "research_status": "C - 数据不足",
+      "data_status": "missing",
+      "data_as_of": null,
+      "data_source": null,
+      "data_gaps": [
+        "roe_5y_median_pct",
+        "operating_cashflow_to_profit",
+        "pe_history_percentile",
+        "revenue_growth_pct",
+        "profit_growth_pct",
+        "drawdown_252_pct",
+        "relative_to_market_pct",
+        "catalyst_evidence"
+      ]
+    }
+  ],
+  "provider_health": [
+    {
+      "endpoint": "stock_financial_analysis_indicator",
+      "provider": "akshare",
+      "attempts": 4,
+      "successes": 4,
+      "failures": 0,
+      "state": "HEALTHY",
+      "last_error_type": null,
+      "last_error_summary": null,
+      "cooldown_triggered": false,
+      "cache_hits": 0,
+      "cache_original_as_of": null
+    },
+    {
+      "endpoint": "stock_value_em",
+      "provider": "akshare",
+      "attempts": 4,
+      "successes": 4,
+      "failures": 0,
+      "state": "HEALTHY",
+      "last_error_type": null,
+      "last_error_summary": null,
+      "cooldown_triggered": false,
+      "cache_hits": 0,
+      "cache_original_as_of": null
+    }
+  ],
+  "rebuilt": true,
+  "artifact": {
+    "research_id": "20220315-panic-core-v1",
+    "research_run_id": "4b2a9b3b-5e1d-5f2f-aad1-706736bbb4f8",
+    "created_at": "2026-08-06 19:05:43.017377+00:00",
+    "as_of_date": "2022-03-15",
+    "requested_date": "2022-03-15",
+    "rules_version": "panic-core-v1",
+    "provider_version": "akshare-historical-v1",
+    "artifact_version": 1,
+    "rules_fingerprint": "4b5c222f20edb6ac7656718f97a118e7b47a69de45256732506701f7aa17acd7",
+    "data_snapshot_id": "ffba0174b7cefde96e01a92ea7dbf11e236e36c7e3bbeabcecb89746e1955743",
+    "content_hash": "422b0e81d1d9c2d1cf9db195212680ee6e046db516cecdee9f1c7533ff2261c9"
+  },
+  "data_quality": {
+    "issues": [
+      {
+        "field": "market.limit_up_count",
+        "status": "estimated",
+        "reason": "基于研究标的池的显式估计（非全市场统计）",
+        "as_of": "2022-03-15",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.limit_down_count",
+        "status": "estimated",
+        "reason": "基于研究标的池的显式估计（非全市场统计）",
+        "as_of": "2022-03-15",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.turnover_zscore",
+        "status": "unavailable",
+        "reason": "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+        "as_of": "2022-03-15",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "market.turnover_amount",
+        "status": "unavailable",
+        "reason": "历史回溯：成交额分位（zscore）暂未接入历史数据，为Data Gap",
+        "as_of": "2022-03-15",
+        "source": "AKShare/Eastmoney"
+      },
+      {
+        "field": "candidate.002261.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2022-03-15",
+        "source": null
+      },
+      {
+        "field": "candidate.601991.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2022-03-15",
+        "source": null
+      },
+      {
+        "field": "candidate.000791.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2022-03-15",
+        "source": null
+      },
+      {
+        "field": "candidate.588060.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2022-03-15",
+        "source": null
+      },
+      {
+        "field": "candidate.600522.relative_to_sector_pct",
+        "status": "missing",
+        "reason": "not provided at the research point in time",
+        "as_of": "2022-03-15",
+        "source": null
+      }
+    ],
+    "counts": {
+      "estimated": 2,
+      "unavailable": 2,
+      "missing": 5
+    },
+    "all_available": false
+  },
+  "research_run_id": "4b2a9b3b-5e1d-5f2f-aad1-706736bbb4f8",
+  "market_intelligence": {
+    "version": "market-intel-v1",
+    "thresholds_version": "market-intel-v1",
+    "state": "EXTREME_PANIC",
+    "stress_score": 100,
+    "coverage": {
+      "available": 2,
+      "estimated": 1,
+      "total": 6
+    },
+    "dimensions": [
+      {
+        "dimension": "index",
+        "status": "available",
+        "observed": -4.810023836167165,
+        "threshold": -2.0,
+        "triggered": true,
+        "note": null,
+        "signals": [
+          {
+            "signal": "index_daily_return",
+            "dimension": "index",
+            "status": "available",
+            "observed": -4.810023836167165,
+            "threshold": -2.0,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "index_drawdown",
+            "dimension": "index",
+            "status": "available",
+            "observed": -22.013662363131235,
+            "threshold": -20.0,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "index_all_below_ma250",
+            "dimension": "index",
+            "status": "available",
+            "observed": 5.0,
+            "threshold": 5.0,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "index_all_below_120d_low",
+            "dimension": "index",
+            "status": "available",
+            "observed": 5.0,
+            "threshold": 5.0,
+            "triggered": true,
+            "note": null
+          }
+        ]
+      },
+      {
+        "dimension": "breadth",
+        "status": "available",
+        "observed": 0.0,
+        "threshold": 0.3,
+        "triggered": true,
+        "note": null,
+        "signals": [
+          {
+            "signal": "breadth_advancer_ratio",
+            "dimension": "breadth",
+            "status": "available",
+            "observed": 0.0,
+            "threshold": 0.3,
+            "triggered": true,
+            "note": null
+          },
+          {
+            "signal": "breadth_above_ma60_ratio",
+            "dimension": "breadth",
+            "status": "available",
+            "observed": 0.16666666666666666,
+            "threshold": 0.35,
+            "triggered": true,
+            "note": null
+          }
+        ]
+      },
+      {
+        "dimension": "limit",
+        "status": "estimated",
+        "observed": 1.0,
+        "threshold": 50.0,
+        "triggered": false,
+        "note": "基于研究标的池的显式估计（非全市场统计）",
+        "signals": []
+      },
+      {
+        "dimension": "turnover",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": 1.5,
+        "triggered": null,
+        "note": "成交额分位（zscore）未接入历史数据；成交额无基线不可判定异常",
+        "signals": []
+      },
+      {
+        "dimension": "volatility",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": null,
+        "triggered": null,
+        "note": "波动率维度预留：当前 Provider Schema 未提供该输入",
+        "signals": []
+      },
+      {
+        "dimension": "erp",
+        "status": "unavailable",
+        "observed": null,
+        "threshold": null,
+        "triggered": null,
+        "note": "ERP 维度预留：当前 Provider Schema 未提供该输入",
+        "signals": []
+      }
+    ],
+    "summary": [
+      "指数：中位日跌幅-4.8%（阈值-2.0%），回撤中位-22.0%（阈值-20.0%）",
+      "宽度：上涨占比0%（阈值30%）",
+      "状态判定：EXTREME_PANIC（压力得分100，可用证据权重60/100）"
+    ]
+  },
+  "market_regime": {
+    "version": "market-regime-v1",
+    "thresholds_version": "market-regime-v1",
+    "regime": "UNKNOWN",
+    "coverage": {
+      "available": 0,
+      "estimated": 0,
+      "total": 5
+    },
+    "dimensions": [],
+    "summary": [
+      "market regime unavailable: macro data sources are not wired yet (explicit gap)"
+    ]
+  },
+  "fear_memory": {
+    "version": "fear-memory-v1",
+    "as_of": "2022-03-15",
+    "visible_episodes": [
+      {
+        "crisis_id": "2015-leverage-crash",
+        "label": "2015年杠杆股灾",
+        "start_date": "2015-06-15",
+        "end_date": "2015-08-26",
+        "severity": "SYSTEMIC",
+        "narrative": "场外配资去杠杆叠加汇率冲击引发系统性下跌，上证综指从5178点回落至2850点附近，为A股历史上规模最大的去杠杆危机之一。",
+        "key_stats": {
+          "index_peak": 5178,
+          "index_trough_approx": 2850
+        },
+        "sources": [
+          "公开历史行情记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2016-circuit-breaker",
+        "label": "2016年初熔断机制",
+        "start_date": "2016-01-04",
+        "end_date": "2016-01-27",
+        "severity": "SYSTEMIC",
+        "narrative": "指数熔断机制推出后四天内两度触发，引发流动性踩踏，随后机制被暂停；1月全月主要指数跌幅约两成。",
+        "key_stats": {
+          "month_drawdown_approx_pct": -20
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2018-deleveraging",
+        "label": "2018年去杠杆与贸易摩擦熊市",
+        "start_date": "2018-01-29",
+        "end_date": "2018-10-19",
+        "severity": "SYSTEMIC",
+        "narrative": "资管新规去杠杆叠加外部贸易摩擦，A股全年单边下行，上证综指最低触及约2449点，估值进入历史低位区域。",
+        "key_stats": {
+          "index_trough_approx": 2449
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      },
+      {
+        "crisis_id": "2020-covid-shock",
+        "label": "2020年新冠疫情冲击",
+        "start_date": "2020-02-03",
+        "end_date": "2020-03-23",
+        "severity": "SHOCK",
+        "narrative": "疫情冲击叠加海外流动性危机，节后开盘大幅补跌，上证综指最低触及约2646点；此后在全球宽松下快速修复。",
+        "key_stats": {
+          "index_trough_approx": 2646
+        },
+        "sources": [
+          "公开历史记录（历史事实，非预测）"
+        ]
+      }
+    ],
+    "hidden_episodes_count": 1,
+    "summary": [
+      "历史危机案例库：as_of=2022-03-15，可见案例4个，未来案例1个已隐藏（PIT安全）",
+      "距当前as_of最近的历史危机：2020年新冠疫情冲击（2020-02-03）"
+    ]
+  }
+}
