@@ -1,9 +1,12 @@
 # CURRENT STATE — Vibe-Trading 长期维护 Handoff
 
 更新：2026-08-06（Phase 1–6 完成；Real Research Validation 首轮完成——5 事件
-真实跑通，发现 7 项问题，全部进 failure log 待用户裁决，未改代码）
+真实跑通，发现 7 项问题，全部进 failure log 待用户裁决，未改代码；
+同日用户指令变更：允许 push origin，已完成首次上传 GitHub）
 模式：LOCAL DEVELOPMENT MODE（禁止 push/PR/merge/remote 同步；本地 commit 仅
 为 checkpoint，`--no-gpg-sign`）
+**2026-08-06 更新**：用户明确指令允许推送 GitHub（`git push origin main`），
+已执行；其余纪律不变（无 DCO、--no-gpg-sign、hkuds 上游不动）。
 
 ---
 
