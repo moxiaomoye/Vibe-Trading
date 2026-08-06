@@ -13,10 +13,43 @@ from src.value_hunter.scoring import score_candidate, score_market
 from src.value_hunter.service import ValueHunterService
 from src.investment_research.operations.models import DeliveryChannel, OutboxMessage, OutboxStatus
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
-from src.investment_research.models.research_context import attach_contract_metadata
+from src.investment_research.models.research_context import (
+    ResearchContext,
+    attach_contract_metadata,
+)
+from pydantic import ValidationError
 from uuid import NAMESPACE_URL, uuid5
 
 MarketFetcher = Callable[..., dict[str, Any]]
+
+
+def _context_from_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    requested_date: date,
+    provider: str,
+) -> ResearchContext:
+    """Restore the unified research context for a persisted scan snapshot.
+
+    New snapshots carry the serialized ``ResearchContext`` in
+    ``research_context["context"]`` and are restored as-is (preserving the
+    original artifact identity). Legacy snapshots carrying only the dict
+    (``schema_version`` + ``panic_sensitivity``) fall back to the adapter
+    (``ResearchContext.from_scan_payload``). This is the single seam between
+    the persisted dict representation and the typed context.
+    """
+    stored = snapshot.get("research_context", {})
+    if isinstance(stored, dict) and stored.get("context") is not None:
+        try:
+            return ResearchContext.model_validate(stored["context"])
+        except (ValidationError, TypeError, ValueError):
+            pass
+    return ResearchContext.from_scan_payload(
+        snapshot,
+        requested_date=requested_date,
+        provider=provider,
+        profile=stored.get("panic_sensitivity") if isinstance(stored, dict) else None,
+    )
 
 
 def _market_state(
@@ -232,12 +265,20 @@ def build_research_run(
         method_override=method,
     )
     panic_profile = _panic_profile(scan, resolved.to_dict())
+    observation = scan.market.observation
+    requested_date = date.fromisoformat(str(observation.as_of)[:10])
+    context = ResearchContext.from_scan_payload(
+        scan.to_dict(),
+        requested_date=requested_date,
+        provider=service.provider.name,
+        profile=resolved.to_dict(),
+    )
     scan.research_context = {
         "schema_version": 1,
         "panic_sensitivity": panic_profile,
+        "context": context.model_dump(mode="json"),
     }
     service.store.save_scan(scan.to_dict())
-    observation = scan.market.observation
     gaps = list(observation.warnings)
     summary_fields = {
         "advancers": observation.advancer_count,
@@ -279,9 +320,10 @@ def build_research_run(
     attach_contract_metadata(
         scan.to_dict(),
         report,
-        requested_date=date.fromisoformat(observation.as_of[:10]),
+        requested_date=requested_date,
         provider=service.provider.name,
         profile=resolved.to_dict(),
+        context=context,
     )
     return report
 
@@ -408,6 +450,11 @@ def build_historical_evaluation(
     if snapshot is None:
         return _rebuild_historical_evaluation(service, trade_date, market_fetcher)
     stored_profile = snapshot.get("research_context", {}).get("panic_sensitivity")
+    context = _context_from_snapshot(
+        snapshot,
+        requested_date=trade_date,
+        provider=str(snapshot.get("mode", "akshare-historical")),
+    )
     raw_candidates = snapshot.get("candidates", [])[:5]
     symbols = [item.get("observation", {}).get("symbol") for item in raw_candidates]
     symbols = [symbol for symbol in symbols if symbol]
@@ -461,6 +508,7 @@ def build_historical_evaluation(
         requested_date=trade_date,
         provider=str(snapshot.get("mode", "akshare-historical")),
         profile=stored_profile,
+        context=context,
     )
     return report
 
@@ -493,12 +541,20 @@ def _scan_historical_provider(
         notification_reason="历史回溯重建，不触发通知",
         universe=scored,
     )
+    panic_profile = _panic_profile(scan, resolved.to_dict())
+    context = ResearchContext.from_scan_payload(
+        scan.to_dict(),
+        requested_date=provider.as_of,
+        provider=provider.name,
+        profile=resolved.to_dict(),
+    )
     scan.research_context = {
         "schema_version": 1,
-        "panic_sensitivity": _panic_profile(scan, resolved.to_dict()),
+        "panic_sensitivity": panic_profile,
+        "context": context.model_dump(mode="json"),
     }
     service.store.save_scan(scan.to_dict())
-    return scan, scan.research_context["panic_sensitivity"]
+    return scan, panic_profile
 
 
 def _rebuild_historical_evaluation(
@@ -579,6 +635,11 @@ def _rebuild_historical_evaluation(
         requested_date=trade_date,
         provider=provider.name,
         profile=profile,
+        context=_context_from_snapshot(
+            scan.to_dict(),
+            requested_date=trade_date,
+            provider=provider.name,
+        ),
     )
     return report
 

@@ -5,12 +5,29 @@ network requests. These models type the existing research payloads without
 introducing a second context.
 """
 
-from .artifact import ARTIFACT_SCHEMA_VERSION, ArtifactMetadata, compute_content_hash, make_research_id, provider_version_for
+from .artifact import (
+    ARTIFACT_SCHEMA_VERSION,
+    ArtifactMetadata,
+    compute_content_hash,
+    compute_data_snapshot_id,
+    make_research_id,
+    make_research_run_id,
+    provider_version_for,
+)
 from .data_quality import (
     DataQualityIssue,
     DataQualityReport,
     DataQualityStatus,
     classify_data_quality,
+)
+from .market_intelligence import (
+    MARKET_INTELLIGENCE_VERSION,
+    MarketDimension,
+    MarketDimensionVerdict,
+    MarketIntelligence,
+    MarketIntelligenceConfig,
+    MarketState,
+    evaluate_market_intelligence,
 )
 from .research_context import (
     IndexSnapshotModel,
@@ -28,15 +45,24 @@ __all__ = [
     "DataQualityReport",
     "DataQualityStatus",
     "IndexSnapshotModel",
+    "MARKET_INTELLIGENCE_VERSION",
+    "MarketDimension",
+    "MarketDimensionVerdict",
+    "MarketIntelligence",
+    "MarketIntelligenceConfig",
     "MarketSnapshotModel",
+    "MarketState",
     "RULES_VERSION",
     "ResearchContext",
     "ValuationSnapshotModel",
     "attach_contract_metadata",
     "classify_data_quality",
     "compute_content_hash",
+    "compute_data_snapshot_id",
     "current_rules_version",
+    "evaluate_market_intelligence",
     "make_research_id",
+    "make_research_run_id",
     "provider_version_for",
     "rules_fingerprint",
 ]

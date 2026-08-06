@@ -14,12 +14,26 @@ from typing import Any, Mapping
 
 from pydantic import BaseModel, Field
 
-from .artifact import ARTIFACT_SCHEMA_VERSION, ArtifactMetadata, compute_content_hash, make_research_id, provider_version_for
+from .artifact import (
+    ARTIFACT_SCHEMA_VERSION,
+    ArtifactMetadata,
+    compute_content_hash,
+    compute_data_snapshot_id,
+    make_research_id,
+    make_research_run_id,
+    provider_version_for,
+)
 from .data_quality import (
     DataQualityIssue,
     DataQualityReport,
     DataQualityStatus,
     classify_data_quality,
+)
+from .market_intelligence import (
+    MARKET_INTELLIGENCE_VERSION,
+    MarketIntelligence,
+    MarketState,
+    evaluate_market_intelligence,
 )
 from .rules_version import current_rules_version, rules_fingerprint
 
@@ -84,11 +98,13 @@ class ValuationSnapshotModel(BaseModel):
 class ResearchContext(BaseModel):
     """Pure-data research context for one point-in-time study."""
 
+    research_run_id: str | None = None
     as_of_date: date
     requested_date: date
     market_snapshot: MarketSnapshotModel
     valuation_snapshot: dict[str, ValuationSnapshotModel] = Field(default_factory=dict)
     data_quality: DataQualityReport = Field(default_factory=DataQualityReport)
+    market_intelligence: MarketIntelligence | None = None
     artifact_metadata: ArtifactMetadata
 
     @classmethod
@@ -155,23 +171,30 @@ class ResearchContext(BaseModel):
             obs = candidate.get("observation", {})
             issues.extend(_candidate_data_quality_issues(obs, as_of_date))
 
+        market_intelligence = evaluate_market_intelligence(market_snapshot)
+
         created = datetime.now(timezone.utc)
+        research_run_id = make_research_run_id(scan_payload)
         artifact = ArtifactMetadata(
             research_id=make_research_id(as_of_date),
+            research_run_id=research_run_id,
             created_at=created,
             as_of_date=as_of_date,
             requested_date=requested,
             rules_version=current_rules_version(),
             provider_version=provider_version_for(provider),
-            schema_version=ARTIFACT_SCHEMA_VERSION,
+            artifact_version=ARTIFACT_SCHEMA_VERSION,
             rules_fingerprint=rules_fingerprint(profile),
+            data_snapshot_id=compute_data_snapshot_id(scan_payload),
         )
         return cls(
+            research_run_id=research_run_id,
             as_of_date=as_of_date,
             requested_date=requested,
             market_snapshot=market_snapshot,
             valuation_snapshot=valuation_snapshot,
             data_quality=DataQualityReport(issues=issues),
+            market_intelligence=market_intelligence,
             artifact_metadata=artifact,
         )
 
@@ -234,20 +257,29 @@ def attach_contract_metadata(
     report: dict[str, Any],
     *,
     requested_date: date | None = None,
-    provider: str,
+    provider: str | None = None,
     profile: Mapping[str, Any] | None = None,
+    context: ResearchContext | None = None,
 ) -> dict[str, Any]:
     """Attach ``artifact`` and ``data_quality`` blocks to a research report.
 
-    Mutates and returns ``report``. The artifact ``content_hash`` covers the
-    research content (report minus the artifact block itself).
+    ``context`` is the unified research context when the caller already holds
+    one (the typed carrier for live/stored/rebuild paths); otherwise it is
+    derived from the legacy ``scan_payload`` dict through the adapter
+    (``ResearchContext.from_scan_payload``). Mutates and returns ``report``.
+    The artifact ``content_hash`` covers the research content (report minus
+    the artifact block itself) and never depends on ``created_at``, so the
+    same input snapshot and rules reproduce the same hash.
     """
-    context = ResearchContext.from_scan_payload(
-        scan_payload,
-        requested_date=requested_date,
-        provider=provider,
-        profile=profile,
-    )
+    if context is None:
+        if provider is None:
+            raise ValueError("provider is required when context is not provided")
+        context = ResearchContext.from_scan_payload(
+            scan_payload,
+            requested_date=requested_date,
+            provider=provider,
+            profile=profile,
+        )
     content = copy.deepcopy(dict(report))
     content.pop("artifact", None)
     artifact = context.artifact_metadata.model_copy(
@@ -259,4 +291,22 @@ def attach_contract_metadata(
         "counts": context.data_quality.counts(),
         "all_available": context.data_quality.all_available(),
     }
+    report["research_run_id"] = context.research_run_id
+    report["market_intelligence"] = _market_intelligence_block(context)
     return report
+
+
+def _market_intelligence_block(context: ResearchContext) -> dict[str, Any]:
+    """Deterministic ``market_intelligence`` block for the report payload."""
+    intel = context.market_intelligence
+    if intel is not None:
+        return intel.model_dump()
+    return {
+        "version": MARKET_INTELLIGENCE_VERSION,
+        "thresholds_version": MARKET_INTELLIGENCE_VERSION,
+        "state": MarketState.UNKNOWN.value,
+        "stress_score": None,
+        "coverage": {"available": 0, "total": 6},
+        "dimensions": [],
+        "summary": ["market intelligence unavailable: context did not carry a market snapshot"],
+    }

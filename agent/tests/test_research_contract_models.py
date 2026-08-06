@@ -3,6 +3,7 @@ versioning, rules_version tracking, and the data quality contract."""
 
 from __future__ import annotations
 
+import copy
 from datetime import date, datetime, timezone
 
 import pytest
@@ -13,6 +14,7 @@ from src.investment_research.models.artifact import (
     ArtifactMetadata,
     canonical_json,
     compute_content_hash,
+    compute_data_snapshot_id,
     make_research_id,
     provider_version_for,
 )
@@ -144,6 +146,17 @@ class TestArtifactMetadata:
         assert make_research_id(date(2025, 4, 7)) == "20250407-panic-core-v1"
         assert make_research_id(date(2024, 2, 5), "custom-v1") == "20240205-custom-v1"
 
+    def test_artifact_version_defaults_to_schema_version(self) -> None:
+        metadata = ArtifactMetadata(
+            research_id="x",
+            created_at=datetime.now(timezone.utc),
+            as_of_date=date(2025, 4, 7),
+            requested_date=date(2025, 4, 7),
+            provider_version="akshare-v1",
+        )
+        assert metadata.artifact_version == ARTIFACT_SCHEMA_VERSION
+        assert metadata.schema_version == metadata.artifact_version
+
     def test_provider_version_for(self) -> None:
         assert provider_version_for("akshare") == "akshare-v1"
         assert provider_version_for("akshare-historical") == "akshare-historical-v1"
@@ -157,6 +170,24 @@ class TestArtifactMetadata:
 
     def test_hash_changes_with_content(self) -> None:
         assert compute_content_hash({"a": 1}) != compute_content_hash({"a": 2})
+
+    def test_data_snapshot_id_deterministic_and_sensitive(self) -> None:
+        payload = _scan_payload()
+        assert compute_data_snapshot_id(payload) == compute_data_snapshot_id(dict(payload))
+        changed = copy.deepcopy(payload)
+        changed["market"]["observation"]["advancer_ratio"] = 0.25
+        assert compute_data_snapshot_id(changed) != compute_data_snapshot_id(payload)
+        changed = copy.deepcopy(payload)
+        changed["candidates"][0]["observation"]["pe_ttm"] = 15.0
+        assert compute_data_snapshot_id(changed) != compute_data_snapshot_id(payload)
+
+    def test_data_snapshot_id_ignores_derived_state(self) -> None:
+        payload = _scan_payload()
+        enriched = copy.deepcopy(payload)
+        enriched["research_context"] = {"schema_version": 1, "context": {"x": 1}}
+        enriched["universe"] = [{"ignored": True}]
+        enriched["errors"] = ["transient"]
+        assert compute_data_snapshot_id(enriched) == compute_data_snapshot_id(payload)
 
 
 class TestRulesVersion:
@@ -233,6 +264,30 @@ class TestResearchContext:
         )
         assert candidate_gap.status is DataQualityStatus.MISSING
 
+    def test_market_intelligence_embedded_in_context(self) -> None:
+        context = ResearchContext.from_scan_payload(
+            _scan_payload(), provider="akshare-historical"
+        )
+        intel = context.market_intelligence
+        assert intel is not None
+        assert intel.state.value in {"NORMAL", "STRESS", "PANIC", "EXTREME_PANIC", "UNKNOWN"}
+        assert intel.coverage["total"] == 6
+        verdicts = {v.dimension.value: v for v in intel.dimensions}
+        assert verdicts["index"].status is DataQualityStatus.AVAILABLE
+        assert verdicts["limit"].status is DataQualityStatus.UNAVAILABLE
+        assert "Data Gap" in (verdicts["limit"].note or "")
+        assert verdicts["volatility"].status is DataQualityStatus.UNAVAILABLE
+
+    def test_market_intelligence_deterministic_across_roundtrip(self) -> None:
+        context = ResearchContext.from_scan_payload(
+            _scan_payload(), provider="akshare-historical"
+        )
+        restored = ResearchContext.model_validate(context.model_dump(mode="json"))
+        assert (
+            restored.market_intelligence.model_dump()
+            == context.market_intelligence.model_dump()
+        )
+
     def test_artifact_metadata_embedded(self) -> None:
         context = ResearchContext.from_scan_payload(
             _scan_payload(),
@@ -241,11 +296,16 @@ class TestResearchContext:
         )
         metadata = context.artifact_metadata
         assert metadata.research_id == "20250407-panic-core-v1"
+        assert metadata.research_run_id == context.research_run_id
+        assert metadata.research_run_id is not None
         assert metadata.rules_version == "panic-core-v1"
         assert metadata.provider_version == "akshare-historical-v1"
+        assert metadata.artifact_version == ARTIFACT_SCHEMA_VERSION
         assert metadata.schema_version == ARTIFACT_SCHEMA_VERSION
         assert metadata.created_at.tzinfo is not None
         assert metadata.rules_fingerprint is not None
+        assert metadata.data_snapshot_id == compute_data_snapshot_id(_scan_payload())
+        assert metadata.data_snapshot_id is not None
 
 
 class TestAttachContractMetadata:
@@ -267,6 +327,13 @@ class TestAttachContractMetadata:
         assert "artifact" in result
         assert result["artifact"]["research_id"] == "20250407-panic-core-v1"
         assert result["artifact"]["content_hash"] is not None
+        assert result["research_run_id"] == result["artifact"]["research_run_id"]
+        assert result["research_run_id"] is not None
+        assert "market_intelligence" in result
+        assert result["market_intelligence"]["state"] in {
+            "NORMAL", "STRESS", "PANIC", "EXTREME_PANIC", "UNKNOWN",
+        }
+        assert result["market_intelligence"]["coverage"]["total"] == 6
         assert "data_quality" in result
         assert result["data_quality"]["counts"]["unavailable"] >= 1
         assert result["data_quality"]["all_available"] is False
@@ -299,3 +366,39 @@ class TestAttachContractMetadata:
         second = attach_contract_metadata(_scan_payload(), build(), provider="akshare-historical")
         assert first["artifact"]["content_hash"] == second["artifact"]["content_hash"]
         assert first["artifact"]["research_id"] == second["artifact"]["research_id"]
+        assert (
+            first["artifact"]["data_snapshot_id"]
+            == second["artifact"]["data_snapshot_id"]
+            == compute_data_snapshot_id(_scan_payload())
+        )
+        assert first["artifact"]["artifact_version"] == ARTIFACT_SCHEMA_VERSION
+        assert (
+            first["research_run_id"]
+            == second["research_run_id"]
+            == first["artifact"]["research_run_id"]
+        )
+
+    def test_attach_accepts_preexisting_context(self) -> None:
+        context = ResearchContext.from_scan_payload(
+            _scan_payload(),
+            requested_date=date(2025, 4, 7),
+            provider="akshare-historical",
+            profile={"min_limit_down_count": 20},
+        )
+        report = {
+            "trade_date": "2025-04-07",
+            "market_state": "PANIC",
+            "market_summary": {"source": "akshare-historical"},
+            "candidates": [],
+            "data_gaps": [],
+        }
+        result = attach_contract_metadata(
+            _scan_payload(), report, context=context
+        )
+        assert result["artifact"]["research_id"] == "20250407-panic-core-v1"
+        assert result["artifact"]["data_snapshot_id"] == context.artifact_metadata.data_snapshot_id
+        assert result["data_quality"]["counts"]["unavailable"] >= 1
+
+    def test_attach_requires_provider_without_context(self) -> None:
+        with pytest.raises(ValueError, match="provider"):
+            attach_contract_metadata(_scan_payload(), {})

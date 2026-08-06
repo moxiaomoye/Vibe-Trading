@@ -6,6 +6,7 @@ import pytest
 
 from src.api import research_mvp_routes
 from src.investment_research.application.research_mvp import build_historical_evaluation
+from src.investment_research.application.research_mvp import build_research_run
 from src.investment_research.application.research_mvp import prepare_feishu_delivery
 from src.investment_research.repositories.sqlite_operations import SQLiteOperationsRepository
 from src.value_hunter.config import ValueHunterConfig
@@ -37,12 +38,15 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     body = response.json()
     assert set(body) == {
         "trade_date", "market_state", "panic_sensitivity", "market_summary",
-        "candidates", "data_gaps", "artifact", "data_quality",
+        "candidates", "data_gaps", "artifact", "data_quality", "research_run_id",
+        "market_intelligence",
     }
     assert body["artifact"]["research_id"] == "20240205-panic-core-v1"
     assert body["artifact"]["rules_version"] == "panic-core-v1"
     assert body["artifact"]["provider_version"] == "demo-v1"
     assert body["artifact"]["content_hash"]
+    assert body["artifact"]["data_snapshot_id"]
+    assert body["artifact"]["artifact_version"] == 1
     assert body["data_quality"]["all_available"] is False
     assert body["data_quality"]["counts"]["unavailable"] >= 1
     assert body["trade_date"] == "2024-02-05"
@@ -67,9 +71,66 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
         "t5": None, "t20": None, "t60": None,
     }
     assert service.history(1)[0]["mode"] == "demo"
-    stored_profile = service.history(1)[0]["research_context"]["panic_sensitivity"]
+    stored = service.history(1)[0]
+    stored_profile = stored["research_context"]["panic_sensitivity"]
     assert stored_profile["value"] == 50
     assert stored_profile["trigger_count"] == 3
+    assert stored["research_context"]["context"]["artifact_metadata"][
+        "data_snapshot_id"
+    ] == body["artifact"]["data_snapshot_id"]
+    assert (
+        stored["research_context"]["context"]["artifact_metadata"]["research_id"]
+        == "20240205-panic-core-v1"
+    )
+    assert (
+        stored["research_context"]["context"]["research_run_id"]
+        == body["research_run_id"]
+        == body["artifact"]["research_run_id"]
+    )
+    assert body["market_intelligence"]["state"] == "EXTREME_PANIC"
+    assert body["market_intelligence"]["stress_score"] == 100
+    assert (
+        stored["research_context"]["context"]["market_intelligence"]["state"]
+        == "EXTREME_PANIC"
+    )
+
+
+def test_historical_evaluation_reproduces_artifact_from_stored_snapshot(tmp_path) -> None:
+    service = _service(tmp_path)
+
+    def prices(**kwargs):
+        rows = [
+            {"date": f"2024-02-{day:02d}", "close": 100 + index}
+            for index, day in enumerate(range(5, 29))
+        ] + [
+            {"date": f"2024-03-{day:02d}", "close": 124 + index}
+            for index, day in enumerate(range(1, 32))
+        ] + [
+            {"date": f"2024-04-{day:02d}", "close": 155 + index}
+            for index, day in enumerate(range(1, 12))
+        ]
+        return {symbol: rows for symbol in kwargs["codes"]}
+
+    first = build_research_run(service, 50)
+    stored = service.history(200)[0]
+    second = build_historical_evaluation(
+        service, __import__("datetime").date(2024, 2, 5), prices
+    )
+    third = build_historical_evaluation(
+        service, __import__("datetime").date(2024, 2, 5), prices
+    )
+
+    from datetime import datetime as _dt
+
+    assert _dt.fromisoformat(
+        stored["research_context"]["context"]["artifact_metadata"]["created_at"].replace(
+            "Z", "+00:00"
+        )
+    ) == first["artifact"]["created_at"]
+    assert second["artifact"]["data_snapshot_id"] == first["artifact"]["data_snapshot_id"]
+    assert second["artifact"]["created_at"] == first["artifact"]["created_at"]
+    assert second["artifact"]["content_hash"] == third["artifact"]["content_hash"]
+    assert second["data_quality"]["counts"] == third["data_quality"]["counts"]
 
 
 def test_research_run_applies_requested_panic_sensitivity(tmp_path, monkeypatch) -> None:
