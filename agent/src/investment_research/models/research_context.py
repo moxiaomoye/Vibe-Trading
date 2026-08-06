@@ -29,6 +29,11 @@ from .data_quality import (
     DataQualityStatus,
     classify_data_quality,
 )
+from .fear_memory import (
+    FEAR_MEMORY_VERSION,
+    FearMemory,
+    query_fear_memory,
+)
 from .market_intelligence import (
     MARKET_INTELLIGENCE_VERSION,
     MarketIntelligence,
@@ -120,6 +125,9 @@ class ResearchContext(BaseModel):
     data_quality: DataQualityReport = Field(default_factory=DataQualityReport)
     market_intelligence: MarketIntelligence | None = None
     market_regime: MarketRegime | None = None
+    fear_memory: FearMemory | None = None
+    """Historical Crisis Library visible at this research point in time
+    (PIT-filtered; future episodes never leak into the past)."""
     artifact_metadata: ArtifactMetadata
 
     @classmethod
@@ -188,6 +196,7 @@ class ResearchContext(BaseModel):
             issues.extend(_candidate_data_quality_issues(obs, as_of_date))
 
         market_intelligence = evaluate_market_intelligence(market_snapshot)
+        fear_memory = query_fear_memory(as_of_date)
 
         macro_block = scan_payload.get("macro")
         macro_snapshot = None
@@ -220,6 +229,7 @@ class ResearchContext(BaseModel):
             market_intelligence=market_intelligence,
             market_regime=market_regime,
             macro_snapshot=macro_snapshot,
+            fear_memory=fear_memory,
             artifact_metadata=artifact,
         )
 
@@ -331,6 +341,7 @@ def attach_contract_metadata(
     report["research_run_id"] = context.research_run_id
     report["market_intelligence"] = _market_intelligence_block(context)
     report["market_regime"] = _market_regime_block(context)
+    report["fear_memory"] = _fear_memory_block(context)
     return report
 
 
@@ -367,4 +378,18 @@ def _market_regime_block(context: ResearchContext) -> dict[str, Any]:
         "coverage": {"available": 0, "estimated": 0, "total": 5},
         "dimensions": [],
         "summary": ["market regime unavailable: macro data sources are not wired yet (explicit gap)"],
+    }
+
+
+def _fear_memory_block(context: ResearchContext) -> dict[str, Any]:
+    """Deterministic ``fear_memory`` block for the report payload."""
+    memory = context.fear_memory
+    if memory is not None:
+        return memory.model_dump(mode="json")
+    return {
+        "version": FEAR_MEMORY_VERSION,
+        "as_of": context.as_of_date.isoformat(),
+        "visible_episodes": [],
+        "hidden_episodes_count": 0,
+        "summary": ["fear memory unavailable: context did not carry a research date"],
     }

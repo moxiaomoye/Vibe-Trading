@@ -34,6 +34,10 @@ Intelligence Contract，typed block，见 phase1_market_intelligence.md）。
 Contract，typed block，见 phase2_regime_detection.md）。宏观数据源尚未接入：
 无 macro 快照时该键仍存在，输出 UNKNOWN + 显式缺口（绝不静默消失）。
 
+变更记录（2026-08-06, Phase 5）：新增 `fear_memory`（Historical Crisis
+Library，typed block，见 phase5_fear_memory.md）。PIT 安全：仅可见
+start_date <= as_of_date 的案例，未来案例计数隐藏，禁止污染过去。
+
 ## 3. ArtifactMetadata 冻结字段
 
 | 字段 | 含义 | 确定性来源 |
