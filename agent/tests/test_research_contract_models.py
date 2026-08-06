@@ -317,6 +317,53 @@ class TestResearchContext:
             == context.market_intelligence.model_dump()
         )
 
+    def test_macro_block_builds_regime_contract(self) -> None:
+        payload = _scan_payload()
+        payload["macro"] = {
+            "observation": {
+                "as_of": "2025-04-07",
+                "rate_change_bp": 80.0,
+                "liquidity_gap_bp": 10.0,
+                "equity_risk_premium_pct": 3.0,
+                "earnings_revision_pct": 0.0,
+                "credit_spread_bp": 40.0,
+            }
+        }
+        context = ResearchContext.from_scan_payload(payload, provider="akshare-historical")
+        assert context.macro_snapshot is not None
+        assert context.market_regime is not None
+        from src.investment_research.models.market_regime import Regime
+        assert context.market_regime.regime is Regime.STRUCTURAL_REPRICING
+        assert context.market_regime.coverage["available"] == 5
+
+    def test_regime_deterministic_across_roundtrip(self) -> None:
+        payload = _scan_payload()
+        payload["macro"] = {
+            "observation": {
+                "as_of": "2025-04-07",
+                "liquidity_gap_bp": 250.0,
+            }
+        }
+        context = ResearchContext.from_scan_payload(payload, provider="akshare-historical")
+        restored = ResearchContext.model_validate(context.model_dump(mode="json"))
+        assert (
+            restored.market_regime.model_dump()
+            == context.market_regime.model_dump()
+        )
+
+    def test_regime_unknown_fallback_when_macro_absent(self) -> None:
+        context = ResearchContext.from_scan_payload(
+            _scan_payload(), provider="akshare-historical"
+        )
+        assert context.macro_snapshot is None
+        assert context.market_regime is None
+        report: dict = {}
+        attach_contract_metadata(_scan_payload(), report, provider="akshare-historical")
+        block = report["market_regime"]
+        assert block["regime"] == "UNKNOWN"
+        assert block["coverage"] == {"available": 0, "estimated": 0, "total": 5}
+        assert "not wired" in block["summary"][0]
+
     def test_artifact_metadata_embedded(self) -> None:
         context = ResearchContext.from_scan_payload(
             _scan_payload(),

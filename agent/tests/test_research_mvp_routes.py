@@ -39,7 +39,7 @@ def test_research_run_reuses_value_hunter_and_returns_unified_contract(tmp_path,
     assert set(body) == {
         "trade_date", "market_state", "panic_sensitivity", "market_summary",
         "candidates", "data_gaps", "artifact", "data_quality", "research_run_id",
-        "market_intelligence",
+        "market_intelligence", "market_regime",
     }
     assert body["artifact"]["research_id"] == "20240205-panic-core-v1"
     assert body["artifact"]["rules_version"] == "panic-core-v1"

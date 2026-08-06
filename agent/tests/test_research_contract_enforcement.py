@@ -100,7 +100,7 @@ def test_report_contract_exposes_frozen_top_level_keys() -> None:
         "data_gaps": [],
     }
     attach_contract_metadata(_scan_payload(), report, provider="akshare-historical")
-    assert set(report) >= {"artifact", "data_quality", "research_run_id", "market_intelligence"}
+    assert set(report) >= {"artifact", "data_quality", "research_run_id", "market_intelligence", "market_regime"}
 
 
 def test_research_run_id_is_deterministic_across_restore_roundtrip() -> None:

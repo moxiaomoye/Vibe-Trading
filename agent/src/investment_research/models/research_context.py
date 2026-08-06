@@ -35,6 +35,13 @@ from .market_intelligence import (
     MarketState,
     evaluate_market_intelligence,
 )
+from .market_regime import (
+    MARKET_REGIME_VERSION,
+    MacroSnapshotModel,
+    MarketRegime,
+    Regime,
+    evaluate_market_regime,
+)
 from .rules_version import current_rules_version, rules_fingerprint
 
 _MARKET_SUMMARY_FIELDS = (
@@ -105,9 +112,14 @@ class ResearchContext(BaseModel):
     as_of_date: date
     requested_date: date
     market_snapshot: MarketSnapshotModel
+    macro_snapshot: MacroSnapshotModel | None = None
+    """Point-in-time macro inputs for Regime Detection (Phase 2). Data sources
+    are not wired yet: absent means the regime block reports UNKNOWN with an
+    explicit gap, never a silent guess."""
     valuation_snapshot: dict[str, ValuationSnapshotModel] = Field(default_factory=dict)
     data_quality: DataQualityReport = Field(default_factory=DataQualityReport)
     market_intelligence: MarketIntelligence | None = None
+    market_regime: MarketRegime | None = None
     artifact_metadata: ArtifactMetadata
 
     @classmethod
@@ -177,6 +189,13 @@ class ResearchContext(BaseModel):
 
         market_intelligence = evaluate_market_intelligence(market_snapshot)
 
+        macro_block = scan_payload.get("macro")
+        macro_snapshot = None
+        market_regime = None
+        if isinstance(macro_block, dict) and isinstance(macro_block.get("observation"), dict):
+            macro_snapshot = MacroSnapshotModel(**macro_block["observation"])
+            market_regime = evaluate_market_regime(macro_snapshot)
+
         created = datetime.now(timezone.utc)
         research_run_id = make_research_run_id(scan_payload)
         artifact = ArtifactMetadata(
@@ -199,6 +218,8 @@ class ResearchContext(BaseModel):
             valuation_snapshot=valuation_snapshot,
             data_quality=DataQualityReport(issues=issues),
             market_intelligence=market_intelligence,
+            market_regime=market_regime,
+            macro_snapshot=macro_snapshot,
             artifact_metadata=artifact,
         )
 
@@ -309,6 +330,7 @@ def attach_contract_metadata(
     }
     report["research_run_id"] = context.research_run_id
     report["market_intelligence"] = _market_intelligence_block(context)
+    report["market_regime"] = _market_regime_block(context)
     return report
 
 
@@ -325,4 +347,24 @@ def _market_intelligence_block(context: ResearchContext) -> dict[str, Any]:
         "coverage": {"available": 0, "estimated": 0, "total": 6},
         "dimensions": [],
         "summary": ["market intelligence unavailable: context did not carry a market snapshot"],
+    }
+
+
+def _market_regime_block(context: ResearchContext) -> dict[str, Any]:
+    """Deterministic ``market_regime`` block for the report payload.
+
+    Macro data sources are not wired yet (Phase 2 contract-first): the block
+    always exists, and without a macro snapshot it reports ``UNKNOWN`` with an
+    explicit gap instead of silently vanishing.
+    """
+    regime = context.market_regime
+    if regime is not None:
+        return regime.model_dump()
+    return {
+        "version": MARKET_REGIME_VERSION,
+        "thresholds_version": MARKET_REGIME_VERSION,
+        "regime": Regime.UNKNOWN.value,
+        "coverage": {"available": 0, "estimated": 0, "total": 5},
+        "dimensions": [],
+        "summary": ["market regime unavailable: macro data sources are not wired yet (explicit gap)"],
     }
