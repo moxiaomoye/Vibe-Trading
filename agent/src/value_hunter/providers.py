@@ -332,6 +332,81 @@ def _etf_price_bands(closes: list[float]) -> dict[str, Any]:
     }
 
 
+def _index_risk_return_stats(
+    rows: list[tuple[str, float]],
+) -> dict[str, Any] | None:
+    """Risk-return and historical panic statistics from chronological index rows.
+
+    ``rows`` must already be point-in-time cut (only bars published through the
+    research as-of date) and sorted by date. Returns ``None`` when the sample
+    is too small to be meaningful (< 60 sessions). Panic sessions use the same
+    -5.0% daily-move approximation as the screen, and episodes are the deepest
+    peak-to-trough drawdowns (non-overlapping, greedy by depth).
+    """
+    closes = [close for _, close in rows if close is not None and close > 0]
+    if len(closes) < 60:
+        return None
+    sessions = len(closes)
+    returns = [closes[i] / closes[i - 1] - 1.0 for i in range(1, sessions)]
+    days = len(returns)
+    total = closes[-1] / closes[0] if closes[0] > 0 else None
+    ann_return_pct = None
+    if total is not None and total > 0:
+        ann_return_pct = round((total ** (252.0 / days) - 1.0) * 100.0, 4)
+    mean = sum(returns) / days
+    variance = sum((value - mean) ** 2 for value in returns) / (days - 1)
+    ann_volatility_pct = round((variance ** 0.5) * (252.0 ** 0.5) * 100.0, 4)
+    panic_sessions_count = int(sum(value * 100.0 <= -5.0 for value in returns))
+
+    episodes: list[tuple[int, int]] = []
+    running_peak_idx = 0
+    running_trough_idx = 0
+    for index in range(1, sessions):
+        price = closes[index]
+        if price >= closes[running_peak_idx]:
+            if running_trough_idx > running_peak_idx:
+                episodes.append((running_peak_idx, running_trough_idx))
+            running_peak_idx = index
+            running_trough_idx = index
+        elif price < closes[running_trough_idx]:
+            running_trough_idx = index
+    if running_trough_idx > running_peak_idx:
+        episodes.append((running_peak_idx, running_trough_idx))
+
+    def depth(item: tuple[int, int]) -> float:
+        return 1.0 - closes[item[1]] / closes[item[0]]
+
+    selected: list[tuple[int, int]] = []
+    for episode in sorted(episodes, key=depth, reverse=True):
+        if any(
+            not (episode[0] >= other[1] or episode[1] <= other[0])
+            for other in selected
+        ):
+            continue
+        selected.append(episode)
+        if len(selected) >= 3:
+            break
+    selected.sort(key=lambda item: item[0])
+
+    max_drawdown_pct = round(depth(episodes[0]) * 100.0, 4) if episodes else 0.0
+    panic_episodes = [
+        {
+            "peak_date": rows[peak][0],
+            "trough_date": rows[trough][0],
+            "drawdown_pct": round(depth((peak, trough)) * 100.0, 4),
+        }
+        for peak, trough in selected
+    ]
+    return {
+        "ann_return_pct": ann_return_pct,
+        "ann_volatility_pct": ann_volatility_pct,
+        "max_drawdown_pct": max_drawdown_pct,
+        "panic_sessions_count": panic_sessions_count,
+        "panic_episodes": panic_episodes,
+        "sessions": sessions,
+    }
+
+
 def load_watchlist_csv(path: Path) -> list[CandidateObservation]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -643,13 +718,14 @@ class AkshareProvider(ValueHunterProvider):
             stale_etfs = [
                 item for item in cached
                 if item.security_type == "etf"
-                and (item.etf_valuation or {}).get("calculation_version") != 3
+                and (item.etf_valuation or {}).get("calculation_version") != 4
             ]
             if stale_etfs:
                 ak = self._ak()
                 self._enrich_market_history(stale_etfs)
                 self._enrich_etf_nav(ak, stale_etfs)
                 self._enrich_etf_index_valuation(ak, stale_etfs)
+                self._enrich_etf_index_risk_return(ak, stale_etfs)
                 self._write_cache("candidates", cached)
             return cached
         ak = self._ak()
@@ -657,6 +733,7 @@ class AkshareProvider(ValueHunterProvider):
         self._enrich_market_history(candidates)
         self._enrich_etf_nav(ak, candidates)
         self._enrich_etf_index_valuation(ak, candidates)
+        self._enrich_etf_index_risk_return(ak, candidates)
         # Financial and historical-valuation endpoints are per issuer. Four
         # workers keep a normal scan practical while avoiding a burst of
         # dozens of simultaneous public-data requests.
@@ -782,7 +859,7 @@ class AkshareProvider(ValueHunterProvider):
                     "price_source": candidate.market_data_source,
                     "underlying_valuation_premium_pct": None,
                     "split_adjustments": split_adjustments,
-                    "calculation_version": 3,
+                    "calculation_version": 4,
                 })
             if "market_data_registry_ohlcv" not in candidate.source_fields:
                 candidate.source_fields.append("market_data_registry_ohlcv")
@@ -925,6 +1002,108 @@ class AkshareProvider(ValueHunterProvider):
                     "underlying_valuation_source": "AKShare/中证指数 stock_zh_index_value_csindex",
                 })
                 candidate.source_fields.append("csindex_underlying_valuation")
+
+    @staticmethod
+    def _enrich_etf_index_risk_return(
+        ak: Any, candidates: list[CandidateObservation]
+    ) -> None:
+        """Historical risk-return and panic stats from the underlying index bars.
+
+        Index-proxy first: stats are computed from the underlying index's own
+        daily history (never an ETF replication model), cut at the same
+        point-in-time valuation as-of as the csindex PE percentile, so the
+        risk view never sees data published after the research date. NDX and
+        missing/too-short histories stay explicit Data Gaps.
+        """
+        etfs = [item for item in candidates if item.security_type == "etf"]
+        domestic: dict[str, list[CandidateObservation]] = {}
+        for candidate in etfs:
+            code = (candidate.etf_valuation or {}).get("underlying_index_code")
+            if code and code != "NDX":
+                domestic.setdefault(code, []).append(candidate)
+        if not domestic:
+            return
+
+        frames: dict[str, Any] = {}
+        failures: dict[str, str] = {}
+        with ThreadPoolExecutor(max_workers=min(4, len(domestic) or 1), thread_name_prefix="etf-index-risk") as pool:
+            futures = {
+                pool.submit(
+                    lambda code=code: _call_with_timeout(
+                        lambda: ak.stock_zh_index_daily_em(symbol=code), 25
+                    )
+                ): code
+                for code in domestic
+            }
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    frame = future.result()
+                    if frame is not None and not frame.empty:
+                        frames[code] = frame
+                    else:
+                        failures[code] = f"底层指数{code}历史行情为空"
+                except Exception as exc:
+                    failures[code] = f"底层指数{code}历史行情读取失败: {type(exc).__name__}"
+
+        for code, grouped in domestic.items():
+            frame = frames.get(code)
+            if frame is None:
+                gap = failures.get(code) or f"底层指数{code}历史行情不可用"
+                for candidate in grouped:
+                    candidate.etf_valuation.update({
+                        "underlying_risk_return_gap": gap,
+                    })
+                    candidate.warnings.append(gap)
+                continue
+            date_column = next(
+                (column for column in ("date", "trade_date", "日期") if column in frame.columns),
+                None,
+            )
+            if date_column is None:
+                continue
+            raw_rows: list[tuple[str, float | None]] = []
+            for _, row in frame.iterrows():
+                value = _number(row.get("close"))
+                raw_rows.append((str(row[date_column])[:10], value))
+            raw_rows.sort(key=lambda item: item[0])
+            for candidate in grouped:
+                valuation = candidate.etf_valuation
+                boundary = valuation.get("underlying_valuation_as_of")
+                try:
+                    boundary_date = date.fromisoformat(str(boundary)) if boundary else None
+                except ValueError:
+                    boundary_date = None
+                rows: list[tuple[str, float]] = []
+                for row_date, close in raw_rows:
+                    if close is None or close <= 0:
+                        continue
+                    if boundary_date is not None:
+                        try:
+                            parsed = date.fromisoformat(row_date)
+                        except ValueError:
+                            continue
+                        if parsed > boundary_date:
+                            continue
+                    rows.append((row_date, close))
+                stats = _index_risk_return_stats(rows)
+                if stats is None:
+                    valuation.update({
+                        "underlying_risk_return_gap": f"底层指数{code}历史样本不足60个交易日",
+                    })
+                    continue
+                valuation.update({
+                    "underlying_ann_return_pct": stats["ann_return_pct"],
+                    "underlying_ann_volatility_pct": stats["ann_volatility_pct"],
+                    "underlying_max_drawdown_pct": stats["max_drawdown_pct"],
+                    "underlying_panic_sessions_count": stats["panic_sessions_count"],
+                    "underlying_panic_episodes": stats["panic_episodes"],
+                    "underlying_risk_return_sessions": stats["sessions"],
+                    "underlying_risk_return_as_of": rows[-1][0],
+                    "underlying_risk_return_source": "AKShare/Eastmoney stock_zh_index_daily_em",
+                    "underlying_risk_return_method": "底层指数日线风险收益与恐慌统计（指数代理，PIT截至估值as_of）",
+                })
+                candidate.source_fields.append("index_proxy_risk_return")
 
     @staticmethod
     def _classify_announcement(title: str) -> str | None:

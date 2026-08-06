@@ -135,6 +135,9 @@ def _candidate_payload(candidate: CandidateResult) -> dict[str, Any]:
             "bargain_price_low",
             "bargain_price_high",
             "underlying_valuation_premium_pct",
+            "underlying_ann_volatility_pct",
+            "underlying_max_drawdown_pct",
+            "underlying_panic_sessions_count",
         ):
             if not etf_valuation or etf_valuation.get(field) is None:
                 gaps.append(f"etf_valuation.{field}")
