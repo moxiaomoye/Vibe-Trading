@@ -32,6 +32,7 @@ from src.investment_research.models.research_context import (
     ResearchContext,
     attach_contract_metadata,
 )
+from src.investment_research.models.reconciliation import reconcile_market_state
 from pydantic import ValidationError
 from uuid import NAMESPACE_URL, uuid5
 
@@ -352,13 +353,17 @@ def build_research_run(
     if not candidates:
         gaps.append("No candidate met the existing Value Hunter research threshold.")
     listing_dates = load_watchlist_listing_dates(service.config.watchlist_path)
+    legacy_market_state = _market_state(
+        scan.market.score,
+        panic_profile["trigger_count"],
+        panic_profile["required_confirmations"],
+    )
     report = {
         "trade_date": observation.as_of,
-        "market_state": _market_state(
-            scan.market.score,
-            panic_profile["trigger_count"],
-            panic_profile["required_confirmations"],
-        ),
+        "market_state": legacy_market_state,
+        "market_state_reconciliation": reconcile_market_state(
+            legacy_market_state, context.market_intelligence
+        ).to_report_block(),
         "panic_sensitivity": panic_profile,
         "market_summary": summary_fields,
         "candidates": candidates,
@@ -560,13 +565,17 @@ def build_historical_evaluation(
         ))
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
     market_score = float(snapshot.get("market", {}).get("score", 0.0))
+    legacy_market_state = _market_state(
+        market_score,
+        stored_profile.get("trigger_count") if stored_profile else None,
+        stored_profile.get("required_confirmations") if stored_profile else None,
+    )
     report = {
         "trade_date": trade_date.isoformat(),
-        "market_state": _market_state(
-            market_score,
-            stored_profile.get("trigger_count") if stored_profile else None,
-            stored_profile.get("required_confirmations") if stored_profile else None,
-        ),
+        "market_state": legacy_market_state,
+        "market_state_reconciliation": reconcile_market_state(
+            legacy_market_state, context.market_intelligence
+        ).to_report_block(),
         "panic_sensitivity": stored_profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
@@ -700,13 +709,22 @@ def _rebuild_historical_evaluation(
         ))
         gaps.extend(f"{symbol}.{gap}" for gap in candidate_gaps)
         gaps.extend(observation.warnings)
+    legacy_market_state = _market_state(
+        scan.market.score,
+        profile.get("trigger_count"),
+        profile.get("required_confirmations"),
+    )
+    rebuilt_context = _context_from_snapshot(
+        scan.to_dict(),
+        requested_date=trade_date,
+        provider=provider.name,
+    )
     report = {
         "trade_date": trade_date.isoformat(),
-        "market_state": _market_state(
-            scan.market.score,
-            profile.get("trigger_count"),
-            profile.get("required_confirmations"),
-        ),
+        "market_state": legacy_market_state,
+        "market_state_reconciliation": reconcile_market_state(
+            legacy_market_state, rebuilt_context.market_intelligence
+        ).to_report_block(),
         "panic_sensitivity": profile,
         "candidates": candidates,
         "data_gaps": list(dict.fromkeys(gaps)),
@@ -726,11 +744,7 @@ def _rebuild_historical_evaluation(
         requested_date=trade_date,
         provider=provider.name,
         profile=profile,
-        context=_context_from_snapshot(
-            scan.to_dict(),
-            requested_date=trade_date,
-            provider=provider.name,
-        ),
+        context=rebuilt_context,
     )
     return report
 

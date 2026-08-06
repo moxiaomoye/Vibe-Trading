@@ -52,6 +52,24 @@ class MarketDimension(StrEnum):
     ERP = "erp"
 
 
+class MarketSignalVerdict(BaseModel):
+    """One explicit sub-signal inside a dimension verdict (RF-004).
+
+    ``index`` carries four signals (daily return, drawdown, all-below-MA250,
+    all-below-120d-low); ``breadth`` carries two (advancer ratio, above-MA60
+    ratio). Each signal reports its own observed value, threshold and trigger
+    so a reader can see exactly which evidence fired.
+    """
+
+    signal: str
+    dimension: MarketDimension
+    status: DataQualityStatus
+    observed: float | None = None
+    threshold: float | None = None
+    triggered: bool | None = None
+    note: str | None = None
+
+
 class MarketDimensionVerdict(BaseModel):
     """Evidence verdict for one dimension at the research point in time."""
 
@@ -61,6 +79,7 @@ class MarketDimensionVerdict(BaseModel):
     threshold: float | None = None
     triggered: bool | None = None
     note: str | None = None
+    signals: list[MarketSignalVerdict] = Field(default_factory=list)
 
 
 class MarketIntelligenceConfig(BaseModel):
@@ -134,6 +153,7 @@ def evaluate_market_intelligence(
         index_triggered = False
         index_status = DataQualityStatus.UNAVAILABLE
         index_note = "无指数行情（快照为空）"
+        index_signals: list[MarketSignalVerdict] = []
     else:
         index_triggered = (
             (median_return is not None and median_return <= config.index_daily_return_pct)
@@ -143,6 +163,44 @@ def evaluate_market_intelligence(
         )
         index_status = DataQualityStatus.AVAILABLE
         index_note = None
+        index_signals = [
+            MarketSignalVerdict(
+                signal="index_daily_return",
+                dimension=MarketDimension.INDEX,
+                status=index_status,
+                observed=median_return,
+                threshold=config.index_daily_return_pct,
+                triggered=median_return is not None and median_return <= config.index_daily_return_pct,
+                note=None if median_return is not None else "指数日收益率缺失",
+            ),
+            MarketSignalVerdict(
+                signal="index_drawdown",
+                dimension=MarketDimension.INDEX,
+                status=index_status,
+                observed=median_drawdown,
+                threshold=config.index_drawdown_pct,
+                triggered=median_drawdown is not None and median_drawdown <= config.index_drawdown_pct,
+                note=None if median_drawdown is not None else "指数回撤缺失",
+            ),
+            MarketSignalVerdict(
+                signal="index_all_below_ma250",
+                dimension=MarketDimension.INDEX,
+                status=index_status,
+                observed=float(below_ma),
+                threshold=float(index_count),
+                triggered=below_ma == index_count,
+                note=None if index_count else "无指数行情",
+            ),
+            MarketSignalVerdict(
+                signal="index_all_below_120d_low",
+                dimension=MarketDimension.INDEX,
+                status=index_status,
+                observed=float(below_low),
+                threshold=float(index_count),
+                triggered=below_low == index_count,
+                note=None if index_count else "无指数行情",
+            ),
+        ]
     dimensions.append(MarketDimensionVerdict(
         dimension=MarketDimension.INDEX,
         status=index_status,
@@ -150,6 +208,7 @@ def evaluate_market_intelligence(
         threshold=config.index_daily_return_pct,
         triggered=index_triggered,
         note=index_note,
+        signals=index_signals,
     ))
     if index_triggered:
         summary.append(
@@ -163,6 +222,7 @@ def evaluate_market_intelligence(
         breadth_triggered = None
         breadth_status = DataQualityStatus.UNAVAILABLE
         breadth_note = "宽度数据未提供"
+        breadth_signals: list[MarketSignalVerdict] = []
     else:
         breadth_triggered = (
             (advancer is not None and advancer <= config.advancer_ratio)
@@ -170,6 +230,26 @@ def evaluate_market_intelligence(
         )
         breadth_status = DataQualityStatus.AVAILABLE
         breadth_note = None
+        breadth_signals = [
+            MarketSignalVerdict(
+                signal="breadth_advancer_ratio",
+                dimension=MarketDimension.BREADTH,
+                status=breadth_status,
+                observed=advancer,
+                threshold=config.advancer_ratio,
+                triggered=advancer is not None and advancer <= config.advancer_ratio,
+                note=None if advancer is not None else "上涨占比未提供",
+            ),
+            MarketSignalVerdict(
+                signal="breadth_above_ma60_ratio",
+                dimension=MarketDimension.BREADTH,
+                status=breadth_status,
+                observed=ma60,
+                threshold=config.above_ma60_ratio,
+                triggered=ma60 is not None and ma60 <= config.above_ma60_ratio,
+                note=None if ma60 is not None else "60日线以上占比未提供",
+            ),
+        ]
     dimensions.append(MarketDimensionVerdict(
         dimension=MarketDimension.BREADTH,
         status=breadth_status,
@@ -177,6 +257,7 @@ def evaluate_market_intelligence(
         threshold=config.advancer_ratio,
         triggered=breadth_triggered,
         note=breadth_note,
+        signals=breadth_signals,
     ))
     if breadth_triggered:
         if advancer is not None:
