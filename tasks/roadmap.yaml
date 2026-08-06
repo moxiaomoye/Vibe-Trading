@@ -23,7 +23,7 @@ queue:
 - id: p1-historical-data-quality
   title: Historical Market Data Quality
   phase: '1.5'
-  status: in_progress
+  status: done
   priority: 2
   goal: 提升历史研究输入真实性：涨跌停/宽度/成交/缺口展示
   constraints:
@@ -38,7 +38,7 @@ queue:
 - id: p2-regime-detection
   title: Regime Detection（Macro State 基础契约）
   phase: '2'
-  status: pending
+  status: done
   priority: 3
   goal: 先设计 Macro State 契约，不建复杂模型
   constraints:
@@ -51,7 +51,7 @@ queue:
 - id: p3-etf-research
   title: ETF Research Layer
   phase: '3'
-  status: pending
+  status: done
   priority: 4
   goal: ETF/指数研究：历史估值、PE/PB 分位、风险收益、历史恐慌表现
   constraints:
@@ -60,7 +60,7 @@ queue:
 - id: p4-risk-analyzer
   title: Stock Risk Analyzer
   phase: '4'
-  status: pending
+  status: done
   priority: 5
   goal: 排除价值陷阱：财务异常/现金流/负债/大股东/盈利恶化 → Risk Review
   constraints:
@@ -68,7 +68,7 @@ queue:
 - id: p5-fear-memory
   title: Fear Memory System（Historical Crisis Library）
   phase: '5'
-  status: pending
+  status: done
   priority: 6
   goal: 历史危机案例库，帮助人在恐慌时理解环境
   constraints:
@@ -77,12 +77,12 @@ queue:
 - id: p6-research-quality-eval
   title: Research Quality Evaluation
   phase: '6'
-  status: pending
+  status: done
   priority: 7
   goal: 历史复盘 Case Review（非预测胜率）：判断是否合理/风险遗漏/数据充分
 - id: maintenance-weekly
   title: 每周维护：Provider 健康/测试状态/依赖变化/数据源变化/架构违规
   phase: maintenance
-  status: pending
+  status: done
   priority: 8
   goal: 优先修复稳定性

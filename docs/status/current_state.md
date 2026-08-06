@@ -1,6 +1,7 @@
 # CURRENT STATE — Vibe-Trading 长期维护 Handoff
 
-更新：2026-08-06（Phase 1–6 全部完成；进入持续维护期）
+更新：2026-08-06（Phase 1–6 完成；Real Research Validation 首轮完成——5 事件
+真实跑通，发现 7 项问题，全部进 failure log 待用户裁决，未改代码）
 模式：LOCAL DEVELOPMENT MODE（禁止 push/PR/merge/remote 同步；本地 commit 仅
 为 checkpoint，`--no-gpg-sign`）
 
@@ -9,8 +10,13 @@
 ## 当前阶段
 
 - **路线图 Phase 1–6 全部完成**（tasks/roadmap.yaml 队列清空）。
-- 当前状态：**maintenance-weekly**（Provider 健康 / 测试状态 / 依赖变化 /
-  数据源变化 / 架构违规周检，优先修复稳定性）。
+- 当前状态：**Real Research Validation**（不新增功能）：真实数据跑 5 个历史
+  恐慌事件、人工审查报告、Research Failure Log 先记录不修。
+- 首轮验证已完成（2026-08-06）：5 事件全部跑通，报告存
+  `docs/research_validation/*.json`；审查见 `research_validation_review.md`；
+  问题见 `research_failure_log.md`（RF-001..007）。核心发现：市场层识别
+  5/5 命中；候选研究层 0/25 可评分（eastmoney/sina 批量被断连）；2024 结构性
+  恐慌顶层状态失灵；2015 报告含未上市 ETF（指标未污染）。
 
 ## 已完成（本session，按提交顺序）
 
@@ -24,6 +30,7 @@
 | 5 | `cd6ed81` | Fear Memory：策展危机案例库 + PIT 查询，报告键 `fear_memory` |
 | 6 | `c31302e` | Research Quality Eval：事后 Case Review 契约（非预测胜率） |
 | maintenance | `0d592f8` | factors registry 测试 symlink 无权限时干净跳过（WinError 1314） |
+| RRV 首轮 | 待提交 | `automation/research_validation.py` + 5 事件真实报告 + Failure Log（RF-001..007）+ 人工审查 |
 
 ## 测试状态
 
