@@ -1,6 +1,6 @@
 # CURRENT STATE — Vibe-Trading 长期维护 Handoff
 
-更新：2026-08-06（Phase 1 完成；Phase 1.5 完成；Phase 2 进行中）
+更新：2026-08-06（Phase 1–6 全部完成；进入持续维护期）
 模式：LOCAL DEVELOPMENT MODE（禁止 push/PR/merge/remote 同步；本地 commit 仅
 为 checkpoint，`--no-gpg-sign`）
 
@@ -8,52 +8,56 @@
 
 ## 当前阶段
 
-- **Phase 2（Regime Detection）进行中**：Macro State 基础契约（contract-first）。
-- Phase 1（Market Intelligence）与 Phase 1.5（Historical Data Quality）已完成。
-- Phase 0–0.8（架构审计 / Contract / Context 迁移 / 契约冻结）全部完成。
+- **路线图 Phase 1–6 全部完成**（tasks/roadmap.yaml 队列清空）。
+- 当前状态：**maintenance-weekly**（Provider 健康 / 测试状态 / 依赖变化 /
+  数据源变化 / 架构违规周检，优先修复稳定性）。
 
-## 已完成
+## 已完成（本session，按提交顺序）
 
-- **Phase 0–0.8**：ResearchContract、ResearchContext 接管数据流、Artifact
-  可复现（data_snapshot_id + research_run_id）、Contract Enforcement 测试。
-- **Phase 1**：`market_intelligence` 引擎（NORMAL/STRESS/PANIC/EXTREME_PANIC/
-  UNKNOWN），六维（指数/宽度/涨跌停/成交/波动率/ERP），维度感知可用性，无交易
-  指令，PIT 安全，确定性可复现；已接入 ResearchContext + report + 存储往返。
-- **Phase 1.5（commit e1b13c1）**：历史回溯真实化 —— 跌停/涨停数量基于研究标的池
-  估计（±9.8% 近似，与 live 路径同口径），仅用目标日已发布 bar（PIT 安全），显式
-  标注 ESTIMATED：
-  - `MarketObservation.estimated_fields` → `MarketSnapshotModel.estimated_fields`
-    → DataQuality `ESTIMATED`（原因注明"基于研究标的池"）。
-  - 引擎：LIMIT 维度判定 ESTIMATED（note 显式标注）；ESTIMATED 证据**不计入**
-    可用权重（仅 AVAILABLE 归一化）；coverage 增加 `estimated` 计数。
-  - 警告拆分：宽度=标的池标注、跌停/涨停=估计标注、成交额分位=仍为 Data Gap。
-  - 缓存校验按 required_summary 键，新字段向后兼容（旧缓存缺省空列表）。
-- 测试：97 passed（相关套件全量，含新增 3 引擎 + 1 契约传导）。
+| Phase | 提交 | 内容 |
+|---|---|---|
+| 1.5 | `e1b13c1` | 历史涨跌停标的池估计 + `estimated_fields` 全链路（ESTIMATED 不占可用权重） |
+| — | `f44f6a8` | 交接文档更新 |
+| 2 | `f96fe9e` | Regime Detection：Macro 五维契约 + UNKNOWN 显式缺口，报告键 `market_regime` |
+| 3 | `b0db04f` | ETF Research Layer：指数代理风险收益/恐慌统计（PIT 截至估值 as-of，v4） |
+| 4 | `c3c88d3` | Stock Risk Analyzer：`risk_review` 契约（五维价值陷阱审查，无评级指令） |
+| 5 | `cd6ed81` | Fear Memory：策展危机案例库 + PIT 查询，报告键 `fear_memory` |
+| 6 | `c31302e` | Research Quality Eval：事后 Case Review 契约（非预测胜率） |
+| maintenance | `0d592f8` | factors registry 测试 symlink 无权限时干净跳过（WinError 1314） |
 
-## 未完成 / 下一步
+## 测试状态
 
-1. **Phase 2**：Regime Detection（Macro State 基础契约）：MacroDimension 五维
-   （利率/流动性/ERP/盈利/信贷）；Regime 枚举 LIQUIDITY_PANIC/
-   EARNINGS_DOWNGRADE/STRUCTURAL_REPRICING/STABLE/UNKNOWN；contract-first 纯
-   函数；数据源未接入时输出 UNKNOWN + 显式缺口；无交易指令、确定性、PIT 安全。
-2. **Phase 3**：ETF/指数研究层（指数代理优先，禁止复杂复制计算）。
-3. 长期维护项：Provider 健康 / 依赖变化 / 数据源变化 / 架构违规周检。
+- 全量套件：**1038 passed, 5 skipped**（修复后 factors registry 的 9 项
+  环境依赖测试干净跳过；其余全绿）。
+- 研究/价值猎人相关套件：167 passed。
 
-## 风险
+## 未完成 / 下一步（维护期）
 
-- 阈值（-2.0% / -20% / 0.30 / 50 / 1.5σ）为经验值：变更必须走
-  MarketIntelligenceConfig 版本化，不得裸改常量。
-- 历史估计（标的池 ±9.8%）是显式标签的估计，**永远不得**冒充全市场统计；
-  成交额分位仍未接入（Data Gap），禁止静默填充。
+1. **maintenance-weekly**：跑全量测试、检查 provider 端点健康（AKShare 依赖
+   外部接口，可能漂移）、依赖版本变化、新警告（如 pct_change fill_method
+   FutureWarning 已在全量输出中出现，可评估是否收敛）。
+2. 可选增强（均需先设计再动契约）：
+   - 历史路径补 ETF 底层指数估值（当前历史回溯为 Data Gap，见 providers 1139 行附近）。
+   - Macro 数据源接入（当前 regime 恒为 UNKNOWN+缺口）。
+   - PB 分位（中证指数接口当前仅 PE/股息率）。
+3. 每次 session 结束必须更新本文件。
+
+## 风险 / 纪律（不变）
+
+- 阈值全部走版本化 Config（market-intel-v1 / market-regime-v1 /
+  risk-review-v1 / research-quality-v1 / fear-memory-v1），禁止裸改常量。
+- 估计必须显式标注（ESTIMATED）；缺口禁止静默填充。
+- PIT 纪律：历史研究输入只可见 date <= as_of 的数据；fear_memory 案例
+  start_date <= as_of 才可见；research_quality 是事后复盘，不得进入 PIT
+  研究报告。
 - 本地 commit 为 checkpoint，格式 feat:/fix:/refactor:/docs:，无 DCO。
 
 ## 关键文件
 
-- `agent/src/value_hunter/providers.py`（历史路径估计 + estimated_fields 标注）
-- `agent/src/value_hunter/models.py`（MarketObservation.estimated_fields）
-- `agent/src/investment_research/models/market_intelligence.py`（Phase 1 引擎）
-- `agent/src/investment_research/models/research_context.py`（attach/context/
-  ESTIMATED DataQuality 传导）
-- `agent/tests/test_market_intelligence.py`、`test_research_contract_models.py`
-- `automation/long_runner.py` + `tasks/roadmap.yaml`（任务队列，P2 in_progress）
-- `docs/status/phase0_8_contract_freeze.md`、`docs/status/phase1_market_intelligence.md`
+- `agent/src/investment_research/models/`：market_intelligence.py、
+  market_regime.py、risk_review.py、fear_memory.py、research_quality.py、
+  research_context.py（接线中枢）、artifact.py
+- `agent/src/value_hunter/providers.py`（P1.5/P3 provider 增强）
+- `agent/tests/`：对应 6 个新测试文件 + 契约/路由/缓存套件
+- `automation/long_runner.py` + `tasks/roadmap.yaml`（队列，全部 done）
+- `docs/status/`：phase0_8 / phase1 / phase2 / phase5 / phase6 文档 + 本文件
