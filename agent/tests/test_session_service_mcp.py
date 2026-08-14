@@ -21,8 +21,11 @@ class _DummyIndex:
 
 
 class _DummyAgentLoop:
-    def __init__(self, *, registry, llm, event_callback, max_iterations, persistent_memory) -> None:
-        del registry, llm, event_callback, max_iterations, persistent_memory
+    def __init__(
+        self, *, registry, llm, event_callback, max_iterations,
+        persistent_memory, prompt_profile,
+    ) -> None:
+        del registry, llm, event_callback, max_iterations, persistent_memory, prompt_profile
 
     def run(self, *, user_message: str, history, session_id: str) -> dict[str, str]:
         del user_message, history, session_id
@@ -70,3 +73,59 @@ def test_run_with_agent_keeps_event_loop_responsive_during_registry_build(
     assert result["status"] == "completed"
     assert tick_times, "Expected the event loop ticker to run while registry build was pending"
     assert tick_times[0] < 0.18, f"Registry build blocked the event loop for too long: {tick_times[0]:.3f}s"
+
+
+def test_channel_session_uses_compact_prompt_and_intent_tool_whitelist(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _build_registry(**kwargs):
+        captured["allowed_tool_names"] = kwargs.get("allowed_tool_names")
+        return object()
+
+    class _CapturingAgentLoop:
+        def __init__(self, **kwargs) -> None:
+            captured["prompt_profile"] = kwargs["prompt_profile"]
+            captured["max_iterations"] = kwargs["max_iterations"]
+
+        def run(self, *, user_message: str, history, session_id: str) -> dict[str, str]:
+            del user_message, history, session_id
+            return {"status": "completed"}
+
+    monkeypatch.setattr("src.session.service.get_shared_index", lambda: _DummyIndex())
+    monkeypatch.setattr("src.tools.build_registry", _build_registry)
+    monkeypatch.setattr("src.providers.chat.ChatLLM", lambda: object())
+    monkeypatch.setattr("src.memory.persistent.PersistentMemory", lambda: object())
+    monkeypatch.setattr("src.agent.loop.AgentLoop", _CapturingAgentLoop)
+    monkeypatch.setattr("src.config.loader.load_runtime_agent_config", lambda overrides=None: object())
+    monkeypatch.setattr("src.config.loader.sanitize_session_overrides", lambda overrides: dict(overrides))
+
+    service = SessionService(
+        store=SessionStore(tmp_path / "sessions"),
+        event_bus=EventBus(),
+        runs_dir=tmp_path / "runs",
+    )
+    attempt = Attempt(
+        session_id="session-1",
+        prompt=(
+            "\u4e2d\u5929\u4eca\u5929\u6da86%\uff0c\u621134.2\u5356\u4e86200\u80a1\uff0c"
+            "\u5468\u4e00\u600e\u4e48\u505aT\u56de\u6765\uff1f"
+        ),
+    )
+
+    asyncio.run(
+        service._run_with_agent(
+            attempt,
+            messages=[],
+            session_config={"channel": "feishu", "channel_chat_id": "oc_fixture"},
+        )
+    )
+
+    allowed = set(captured["allowed_tool_names"])
+    assert captured["prompt_profile"] == "channel"
+    assert captured["max_iterations"] == 10
+    assert "get_market_data" in allowed
+    assert "financial_rigor" not in allowed
+    assert "trading_place_order" not in allowed

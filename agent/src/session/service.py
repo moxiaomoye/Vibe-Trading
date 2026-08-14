@@ -218,6 +218,7 @@ class SessionService:
         from src.agent.loop import AgentLoop
         from src.memory.persistent import PersistentMemory
         from src.config.loader import load_runtime_agent_config, sanitize_session_overrides
+        from src.agent.context import classify_conversation_route
 
         llm = ChatLLM()
         pm = PersistentMemory()
@@ -228,6 +229,12 @@ class SessionService:
 
         safe_overrides = sanitize_session_overrides(session_config) if session_config else session_config
         agent_config = load_runtime_agent_config(overrides=safe_overrides)
+        channel_name = str((session_config or {}).get("channel") or "").strip()
+        conversation_route = (
+            classify_conversation_route(attempt.prompt)
+            if channel_name
+            else None
+        )
 
         def event_callback(event_type: str, data: Dict[str, Any]) -> None:
             """Forward AgentLoop events to the SSE event bus."""
@@ -247,15 +254,33 @@ class SessionService:
                 session_id=session_id,
                 event_callback=event_callback,
                 warn_callback=_mcp_collision_warn,
+                allowed_tool_names=(
+                    list(conversation_route.tool_names)
+                    if conversation_route is not None
+                    else None
+                ),
             ),
         )
+
+        channel_iteration_limits = {
+            "general_conversation": 6,
+            "market_observation": 10,
+            "tactical_position": 10,
+            "valuation": 20,
+            "company_research": 20,
+        }
 
         agent = AgentLoop(
             registry=registry,
             llm=llm,
             event_callback=event_callback,
-            max_iterations=50,
+            max_iterations=(
+                channel_iteration_limits[conversation_route.intent]
+                if conversation_route is not None
+                else 50
+            ),
             persistent_memory=pm,
+            prompt_profile="channel" if channel_name else "research",
         )
         self._active_loops[session_id] = agent
 
