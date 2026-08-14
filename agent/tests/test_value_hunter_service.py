@@ -71,6 +71,18 @@ def test_rendered_message_labels_research_not_buy(tmp_path):
     assert "首要否决项" in text
 
 
+def test_market_panic_notifies_even_when_no_candidate_clears_research_gate(tmp_path):
+    cfg = config(tmp_path, candidate_alert_score=101)
+    result = ValueHunterService(
+        cfg, DemoProvider(), ValueHunterStore(cfg.database_path)
+    ).run(notify=False)
+
+    assert result.market.level in {"恐慌", "股灾"}
+    assert result.candidates == []
+    assert result.notification_required is True
+    assert "仅提示市场恐慌" in render_text(result)
+
+
 def test_scheduler_computes_next_local_run(tmp_path):
     cfg = config(tmp_path)
     service = ValueHunterService(cfg, DemoProvider(), ValueHunterStore(cfg.database_path))
