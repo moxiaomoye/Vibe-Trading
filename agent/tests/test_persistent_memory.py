@@ -68,17 +68,16 @@ class TestTokenize:
         # All < 3 chars, should be excluded
         assert len(tokens) == 0
 
-    def test_cjk_bigrams(self) -> None:
+    def test_cjk_characters(self) -> None:
         tokens = _tokenize("比特币价格分析")
-        assert "比特" in tokens
-        assert "特币" in tokens
-        assert "价格" in tokens
-        assert "比" not in tokens
+        assert "比" in tokens
+        assert "币" in tokens
+        assert "价" in tokens
 
     def test_mixed(self) -> None:
         tokens = _tokenize("AAPL 苹果 stock analysis")
         assert "aapl" in tokens
-        assert "苹果" in tokens
+        assert "苹" in tokens
         assert "stock" in tokens
         assert "analysis" in tokens
 
@@ -236,12 +235,6 @@ class TestFindRelevant:
         pm.add("a-share", "上证指数分析报告", "project", description="A股市场分析")
         results = pm.find_relevant("上证指数")
         assert len(results) >= 1
-
-    def test_cjk_single_character_overlap_does_not_recall_unrelated_memory(self, tmp_path: Path) -> None:
-        pm = PersistentMemory(memory_dir=tmp_path)
-        pm.add("用户投资偏好", "用户偏好长期投资和风险控制", "user")
-
-        assert pm.find_relevant("你好") == []
 
     def test_no_match(self, tmp_path: Path) -> None:
         pm = PersistentMemory(memory_dir=tmp_path)

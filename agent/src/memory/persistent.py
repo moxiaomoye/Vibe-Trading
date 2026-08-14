@@ -41,8 +41,6 @@ _NON_LATIN_SCRIPT_RANGES = (
 )
 
 _TOKEN_RE = re.compile(rf"[a-zA-Z0-9]{{3,}}|[{_NON_LATIN_SCRIPT_RANGES}]")
-_CJK_CHAR_RE = re.compile(r"[一-鿿㐀-䶿]")
-_CJK_SPAN_RE = re.compile(r"[一-鿿㐀-䶿]+")
 _SLUG_DISALLOWED_RE = re.compile(rf"[^a-z0-9_\-{_NON_LATIN_SCRIPT_RANGES}]")
 
 
@@ -70,10 +68,9 @@ class MemoryEntry:
 def _tokenize(text: str) -> set[str]:
     """Split text into searchable tokens.
 
-    ASCII words >= 3 chars + CJK bigrams + individual characters from the
-    other non-Latin scripts listed in ``_NON_LATIN_SCRIPT_RANGES``. CJK
-    bigrams avoid the false-positive recall caused by ubiquitous single
-    characters such as ``你`` or ``股``. Underscores are
+    ASCII words >= 3 chars + individual characters from non-Latin scripts
+    listed in ``_NON_LATIN_SCRIPT_RANGES`` (CJK, Thai, Arabic, Hebrew,
+    Cyrillic). Underscores are
     treated as word boundaries so snake_case titles (e.g. ``mcp_wiring_test``)
     match natural-language queries (``"mcp wiring"``) as well as verbatim
     lookups.
@@ -84,15 +81,7 @@ def _tokenize(text: str) -> set[str]:
     Returns:
         Set of tokens.
     """
-    lowered = text.lower()
-    tokens = {
-        token
-        for token in _TOKEN_RE.findall(lowered)
-        if not _CJK_CHAR_RE.fullmatch(token)
-    }
-    for span in _CJK_SPAN_RE.findall(lowered):
-        tokens.update(span[index:index + 2] for index in range(len(span) - 1))
-    return tokens
+    return set(_TOKEN_RE.findall(text.lower()))
 
 
 # Strip C0 (U+0000-U+001F except \t \n) and C1 (U+0080-U+009F) bytes from

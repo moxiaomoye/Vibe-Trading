@@ -6,6 +6,8 @@ import asyncio
 import time
 from pathlib import Path
 
+import pytest
+
 from src.session.events import EventBus
 from src.session.models import Attempt
 from src.session.service import SessionService
@@ -23,9 +25,9 @@ class _DummyIndex:
 class _DummyAgentLoop:
     def __init__(
         self, *, registry, llm, event_callback, max_iterations,
-        persistent_memory, prompt_profile,
+        persistent_memory,
     ) -> None:
-        del registry, llm, event_callback, max_iterations, persistent_memory, prompt_profile
+        del registry, llm, event_callback, max_iterations, persistent_memory
 
     def run(self, *, user_message: str, history, session_id: str) -> dict[str, str]:
         del user_message, history, session_id
@@ -75,20 +77,32 @@ def test_run_with_agent_keeps_event_loop_responsive_during_registry_build(
     assert tick_times[0] < 0.18, f"Registry build blocked the event loop for too long: {tick_times[0]:.3f}s"
 
 
-def test_channel_session_uses_compact_prompt_and_intent_tool_whitelist(
+@pytest.mark.parametrize(
+    ("session_config", "expects_shared_memory"),
+    [
+        ({}, True),
+        ({"channel": "feishu", "channel_chat_id": "oc_fixture"}, False),
+    ],
+)
+def test_channel_session_isolates_shared_project_memory_without_changing_agent_defaults(
     monkeypatch,
     tmp_path: Path,
+    session_config: dict[str, str],
+    expects_shared_memory: bool,
 ) -> None:
     captured: dict[str, object] = {}
+    shared_memory = object()
 
     def _build_registry(**kwargs):
-        captured["allowed_tool_names"] = kwargs.get("allowed_tool_names")
+        captured["registry_memory"] = kwargs.get("persistent_memory")
+        captured["include_memory_tool"] = kwargs.get("include_persistent_memory_tool")
         return object()
 
     class _CapturingAgentLoop:
         def __init__(self, **kwargs) -> None:
-            captured["prompt_profile"] = kwargs["prompt_profile"]
+            captured["agent_memory"] = kwargs["persistent_memory"]
             captured["max_iterations"] = kwargs["max_iterations"]
+            captured["agent_kwargs"] = set(kwargs)
 
         def run(self, *, user_message: str, history, session_id: str) -> dict[str, str]:
             del user_message, history, session_id
@@ -97,7 +111,7 @@ def test_channel_session_uses_compact_prompt_and_intent_tool_whitelist(
     monkeypatch.setattr("src.session.service.get_shared_index", lambda: _DummyIndex())
     monkeypatch.setattr("src.tools.build_registry", _build_registry)
     monkeypatch.setattr("src.providers.chat.ChatLLM", lambda: object())
-    monkeypatch.setattr("src.memory.persistent.PersistentMemory", lambda: object())
+    monkeypatch.setattr("src.memory.persistent.PersistentMemory", lambda: shared_memory)
     monkeypatch.setattr("src.agent.loop.AgentLoop", _CapturingAgentLoop)
     monkeypatch.setattr("src.config.loader.load_runtime_agent_config", lambda overrides=None: object())
     monkeypatch.setattr("src.config.loader.sanitize_session_overrides", lambda overrides: dict(overrides))
@@ -119,13 +133,24 @@ def test_channel_session_uses_compact_prompt_and_intent_tool_whitelist(
         service._run_with_agent(
             attempt,
             messages=[],
-            session_config={"channel": "feishu", "channel_chat_id": "oc_fixture"},
+            session_config=session_config,
         )
     )
 
-    allowed = set(captured["allowed_tool_names"])
-    assert captured["prompt_profile"] == "channel"
-    assert captured["max_iterations"] == 10
-    assert "get_market_data" in allowed
-    assert "financial_rigor" not in allowed
-    assert "trading_place_order" not in allowed
+    expected_memory = shared_memory if expects_shared_memory else None
+    assert captured["registry_memory"] is expected_memory
+    assert captured["agent_memory"] is expected_memory
+    assert captured["include_memory_tool"] is expects_shared_memory
+    assert captured["max_iterations"] == 50
+    assert "prompt_profile" not in captured["agent_kwargs"]
+
+
+def test_registry_can_hide_only_persistent_memory_tool_for_im_channels() -> None:
+    from src.tools import build_registry
+
+    classic = build_registry(include_persistent_memory_tool=False)
+    research = build_registry(include_persistent_memory_tool=True)
+
+    assert "remember" not in classic.tool_names
+    assert "remember" in research.tool_names
+    assert set(classic.tool_names) == set(research.tool_names) - {"remember"}

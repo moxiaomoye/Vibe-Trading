@@ -72,7 +72,7 @@ def build_registry(
     event_callback: Callable[[str, dict], None] | None = None,
     warn_callback: Callable[[str], None] | None = None,
     interactive: bool | None = None,
-    allowed_tool_names: list[str] | None = None,
+    include_persistent_memory_tool: bool = True,
     _mcp_server_tool_name_segments: Mapping[str, str] | None = None,
 ) -> ToolRegistry:
     """Build the tool registry via auto-discovery, optionally enriched with MCP tools.
@@ -109,9 +109,9 @@ def build_registry(
             channel rather than blocking on a browser that cannot open
             (SPEC Transport §4). ``None`` (default) auto-detects via
             ``sys.stdin.isatty()``.
-        allowed_tool_names: Optional per-conversation whitelist. Tools still
-            follow normal construction and availability checks, then the
-            registry is projected down before schemas reach the model.
+        include_persistent_memory_tool: Preserve the original ``remember``
+            tool by default. IM channels can disable only this tool to isolate
+            normal chat from Investment Research project memories.
 
     Returns:
         ToolRegistry containing all available local tools followed by any
@@ -145,7 +145,9 @@ def build_registry(
             if not cls.check_available():
                 logger.info("Tool %s unavailable, skipping", cls.name)
                 continue
-            if cls is RememberTool and persistent_memory is not None:
+            if cls is RememberTool:
+                if not include_persistent_memory_tool:
+                    continue
                 registry.register(cls(memory=persistent_memory))
             elif cls in session_injected_classes:
                 registry.register(cls(default_session_id=session_id, event_callback=event_callback))
@@ -246,12 +248,6 @@ def build_registry(
                 if warn_callback is not None:
                     warn_callback(skip_msg)
 
-    if allowed_tool_names is not None:
-        return _filter_registry(
-            registry,
-            allowed_tool_names,
-            include_shell_tools=include_shell_tools,
-        )
     return registry
 
 

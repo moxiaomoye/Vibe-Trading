@@ -529,7 +529,6 @@ class AgentLoop:
         event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         max_iterations: int = 50,
         persistent_memory: Optional[Any] = None,
-        prompt_profile: str = "research",
     ) -> None:
         """Initialize AgentLoop.
 
@@ -540,14 +539,12 @@ class AgentLoop:
             event_callback: Event callback (event_type, data).
             max_iterations: Maximum number of loop iterations.
             persistent_memory: PersistentMemory for cross-session recall.
-            prompt_profile: System-prompt profile selected by the caller.
         """
         self.registry = registry
         self.llm = llm
         self.memory = memory or WorkspaceMemory()
         self._event_callback = event_callback
         self.max_iterations = max_iterations
-        self.prompt_profile = prompt_profile
         self._called_ok: set[str] = set()
         self._cancel_event = threading.Event()
         self._previous_summary: str = ""
@@ -596,12 +593,8 @@ class AgentLoop:
 
         state_store.save_request(run_dir, user_message, {"session_id": session_id})
 
-        context = ContextBuilder(
-            self.registry,
-            self.memory,
-            persistent_memory=self._persistent_memory,
-            prompt_profile=self.prompt_profile,
-        )
+        context = ContextBuilder(self.registry, self.memory,
+                                  persistent_memory=self._persistent_memory)
         goal_context, active_goal_id = get_current_goal_context(session_id) if session_id else ("", None)
         llm_user_message = user_message
         if goal_context:

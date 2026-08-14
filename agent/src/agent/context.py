@@ -5,8 +5,6 @@ from __future__ import annotations
 import copy
 import json
 import logging
-import re
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -141,133 +139,6 @@ _MEMORY_SECTION = """
 """
 
 
-@dataclass(frozen=True, slots=True)
-class ConversationRoute:
-    """Small intent contract used to keep IM conversations proportional."""
-
-    intent: str
-    requires_fresh_data: bool
-    tool_names: tuple[str, ...]
-
-
-_TACTICAL_RE = re.compile(
-    r"做\s*[tT]|回补|买回|卖了|减仓|加仓|持仓|剩余.*股|成本价|盘中|分时|盘口|"
-    r"关键价位|明天|周一|次日|高抛低吸|止盈|止损"
-)
-_VALUATION_RE = re.compile(
-    r"估值|值多少钱|合理价|目标价|内在价值|安全边际|[dD][cC][fF]|"
-    r"市盈率|市净率|\b[Pp][Ee]\b|\b[Pp][Bb]\b|三情景|情景估值"
-)
-_COMPANY_RESEARCH_RE = re.compile(
-    r"长期持有|长期投资|基本面|财报|现金流|护城河|公司质量|商业模式|"
-    r"投资价值|深度分析|公司研究|竞争格局|盈利能力"
-)
-_MARKET_RE = re.compile(
-    r"走势|[kK]线|均线|量价|资金流|板块强度|技术面|涨停|跌停|涨了|跌了|"
-    r"行情|股价|股票|[eE][tT][fF]|\b\d{6}\b"
-)
-_FRESHNESS_RE = re.compile(r"今天|今日|现在|当前|最新|实时|盘中|明天|周一|次日|刚刚")
-_SWARM_RE = re.compile(r"多智能体|委员会|团队分析|swarm", re.IGNORECASE)
-
-_GENERAL_CHANNEL_TOOLS = (
-    "web_search",
-    "read_url",
-    "read_document",
-    "analyze_image",
-)
-_MARKET_CHANNEL_TOOLS = (
-    "search_symbol",
-    "get_market_data",
-    "get_stock_news",
-    "get_fund_flow",
-    "get_sector_info",
-    "get_dragon_tiger",
-    "get_northbound_flow",
-    "get_margin_trading",
-    "get_block_trades",
-)
-_RESEARCH_CHANNEL_TOOLS = (
-    "get_stock_profile",
-    "get_financial_statements",
-    "get_fundamentals",
-    "get_research_reports",
-    "get_sec_filings",
-    "get_shareholder_count",
-    "get_lockup_expiry",
-    "load_skill",
-)
-
-
-def classify_conversation_route(user_message: str) -> ConversationRoute:
-    """Classify the user's decision horizon before selecting research machinery."""
-    text = user_message.strip()
-    if _TACTICAL_RE.search(text):
-        intent = "tactical_position"
-    elif _VALUATION_RE.search(text):
-        intent = "valuation"
-    elif _COMPANY_RESEARCH_RE.search(text):
-        intent = "company_research"
-    elif _MARKET_RE.search(text):
-        intent = "market_observation"
-    else:
-        intent = "general_conversation"
-
-    tools = list(_GENERAL_CHANNEL_TOOLS)
-    if intent in {"tactical_position", "market_observation", "valuation", "company_research"}:
-        tools.extend(_MARKET_CHANNEL_TOOLS)
-    if intent in {"valuation", "company_research"}:
-        tools.extend(_RESEARCH_CHANNEL_TOOLS)
-    if intent == "valuation":
-        tools.append("financial_rigor")
-    if _SWARM_RE.search(text) and intent in {"valuation", "company_research"}:
-        tools.append("run_swarm")
-
-    return ConversationRoute(
-        intent=intent,
-        requires_fresh_data=(
-            intent in {"tactical_position", "market_observation"}
-            or bool(_FRESHNESS_RE.search(text))
-        ),
-        tool_names=tuple(dict.fromkeys(tools)),
-    )
-
-
-_CHANNEL_SYSTEM_PROMPT = """You are Vibe-Trading's conversational research assistant.
-The current message was routed as: {intent}.
-
-## Response fit
-
-- Answer the user's actual time horizon and decision question first. Match the answer length to the question.
-- Do not turn a short question into a sell-side report. Do not add tables, capability self-evaluation, or "what I did / did not do" unless requested.
-- Do not advertise skills or suggest `report-generate` unless the user explicitly asks for a formal report.
-- Never execute a trade. Keep any position discussion conditional and research-oriented.
-
-## Intent boundaries
-
-- `tactical_position`: prioritize the user's stated position, executed price, remaining shares, latest quote/time, intraday price-volume, sector strength, key levels, and next-session scenarios. Do not start Market Snapshot, Munger, moat, three-year EPS, DCF, scenario valuation, or `financial_rigor` unless explicitly requested.
-- `market_observation`: prioritize price action, volume, relative strength, sector/market context, and dated evidence. Valuation and company-quality frameworks are secondary and opt-in.
-- `valuation`: verify current price and dated financial inputs, then use transparent arithmetic and assumptions. Scenario valuation is allowed only when it answers the question. Munger/safety-margin framing is opt-in, not a default conclusion engine.
-- `company_research`: use financial statements, cash flow, business quality, cycle, valuation, evidence and counter-evidence as needed. Do not force every framework into every answer.
-- `general_conversation`: answer normally and concisely; do not inject investment-project language.
-
-## Freshness
-
-{freshness_rule}
-- Every market-sensitive answer must state the effective as-of date/time near the relevant claim.
-- Recalled memories and prior reports are historical context only. They never prove a current price, current financial period, current market state, or latest event.
-- When a required current observation is unavailable, state the Data Gap and stop that branch instead of substituting an older value.
-
-## Framework gates
-
-- A unified Market Snapshot is required only for broad market/regime questions, not every ticker question.
-- Use `financial_rigor` only for material exact calculations, not as an opening ritual.
-- Use Munger, safety margin, DCF, three-scenario valuation, risk lists, invalidation conditions, or operating discipline only when the intent calls for them or the user requests them.
-- Technical, tactical, valuation, and long-term research questions are different workflows. Do not answer one with another.
-
-Respond in the same language as the user. Today is {current_datetime}.
-"""
-
-
 class ContextBuilder:
     """Builds message context for AgentLoop.
 
@@ -279,8 +150,7 @@ class ContextBuilder:
 
     def __init__(self, registry: ToolRegistry, memory: WorkspaceMemory,
                  skills_loader: Optional[SkillsLoader] = None,
-                 persistent_memory: Optional[PersistentMemory] = None,
-                 prompt_profile: str = "research") -> None:
+                 persistent_memory: Optional[PersistentMemory] = None) -> None:
         """Initialize ContextBuilder.
 
         Args:
@@ -288,14 +158,11 @@ class ContextBuilder:
             memory: Workspace memory.
             skills_loader: Skills loader (auto-created if not provided).
             persistent_memory: PersistentMemory instance for cross-session recall.
-            prompt_profile: ``research`` for the full workstation prompt or
-                ``channel`` for proportional IM conversations.
         """
         self.registry = registry
         self.memory = memory
         self.skills_loader = skills_loader or SkillsLoader()
         self._persistent_memory = persistent_memory
-        self.prompt_profile = prompt_profile
 
     def build_system_prompt(self, user_message: str = "") -> str:
         """Build system prompt.
@@ -310,20 +177,6 @@ class ContextBuilder:
             System prompt text.
         """
         now = datetime.now(timezone.utc)
-
-        if self.prompt_profile == "channel":
-            route = classify_conversation_route(user_message)
-            freshness_rule = (
-                "This request requires fresh data. Fetch the latest available observation before "
-                "drawing a market-sensitive conclusion; do not rely on memory or a prior report."
-                if route.requires_fresh_data
-                else "Use dated evidence when the answer depends on market or company facts."
-            )
-            return _CHANNEL_SYSTEM_PROMPT.format(
-                intent=route.intent,
-                freshness_rule=freshness_rule,
-                current_datetime=now.strftime("%A, %B %d, %Y %H:%M UTC"),
-            )
 
         # Build memory section only if there are saved memories
         memory_section = ""
@@ -381,21 +234,14 @@ class ContextBuilder:
 
         # Auto-recall: inject relevant memories into user message
         enriched = user_message
-        route = classify_conversation_route(user_message)
-        recall_allowed = (
-            self.prompt_profile != "channel"
-            or route.intent in {"valuation", "company_research"}
-        )
-        if self._persistent_memory and recall_allowed:
+        if self._persistent_memory:
             try:
                 recalls = self._persistent_memory.find_relevant(user_message, max_results=3)
                 if recalls:
                     lines = [f"- **{r.title}** ({r.memory_type}): {r.body[:500]}" for r in recalls]
                     recall_block = "\n".join(lines)
                     enriched = (
-                        "<recalled-memories historical-context-only=\"true\">\n"
-                        "These notes may be stale. Verify every time-sensitive fact with current data.\n"
-                        f"{recall_block}\n</recalled-memories>\n\n"
+                        f"<recalled-memories>\n{recall_block}\n</recalled-memories>\n\n"
                         f"{user_message}"
                     )
             except Exception as exc:
