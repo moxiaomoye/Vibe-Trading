@@ -696,3 +696,36 @@ for the continuation milestones.
   confirmed the research Webhook fallback, Outbox `delivered` status, Feishu
   WebSocket connection, Bot Info access and proactive bot send with Feishu
   `code=0`.
+
+### M16 handoff — classic chat isolation and local acceptance refresh
+
+- Conversation boundary: the existing classic chat path remains the default
+  experience and no longer inherits research memory unless the user explicitly
+  invokes a research intent. Investment Research and Value Hunter remain
+  available through their existing explicit surfaces; no second assistant was
+  created.
+- Panic alert boundary: market PANIC/EXTREME_PANIC can notify through the
+  existing Value Hunter channel even when no candidate clears the research
+  threshold. The change does not enable trading, position advice or a second
+  notification system.
+- Configuration cleanup: all Value Hunter environment reads now pass through
+  the existing typed `EnvConfig` accessor. Defaults and optional-off behavior
+  are unchanged, and the environment-variable CI gate passes.
+- Runtime (2026-08-24): Docker rebuilt and is healthy at port 8899. Feishu is
+  configured, loaded and running through application startup, so the obsolete
+  unauthenticated external `POST /channels/start` call is unnecessary. No live
+  message was sent during acceptance.
+- Real data: the personal nine-security watchlist resolved 2026-08-24 prices
+  through AKShare/Tencent fallbacks. Research returned NORMAL and Top 5 while
+  preserving missing breadth as Data Gap. Historical dates 2025-04-07 and
+  2026-07-24 returned PANIC, five candidates and T+5/T+20/T+60 metrics.
+- Browser: a clean headless Chrome session supplied the configured local API
+  credential, clicked “生成盘后研究”, and verified the trade date, top candidate
+  and Data Gap rendering without an authentication error.
+- Verification: 98 Value Hunter/config tests and 43 chat/research/provider
+  regressions passed; all 316 frontend tests passed and the production build
+  passed during Docker build. A full backend run passed 1,174 tests and skipped
+  14 before reaching the pre-existing Windows/POSIX `0600` mode assertion in
+  `test_alpha_bench_cache.py`. Feishu preview returned `send=false`. PR #23
+  remains unmerged as requested, and this continuation was not committed or
+  pushed.

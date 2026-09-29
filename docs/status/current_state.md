@@ -1,12 +1,32 @@
 # CURRENT STATE — Vibe-Trading 长期维护 Handoff
 
-更新：2026-08-06（Phase 1–6 完成；Real Research Validation 首轮完成——5 事件
-真实跑通，发现 7 项问题，全部进 failure log 待用户裁决，未改代码；
-同日用户指令变更：允许 push origin，已完成首次上传 GitHub）
+更新：2026-08-24（Research MVP、研究可靠性收敛、经典聊天隔离与恐慌提醒
+运行验收完成；PR #23 按用户要求暂不合并）
 模式：LOCAL DEVELOPMENT MODE（禁止 push/PR/merge/remote 同步；本地 commit 仅
 为 checkpoint，`--no-gpg-sign`）
 **2026-08-06 更新**：用户明确指令允许推送 GitHub（`git push origin main`），
 已执行；其余纪律不变（无 DCO、--no-gpg-sign、hkuds 上游不动）。
+
+## 2026-08-24 当前验收状态
+
+- 当前分支：`agent/fix-conversation-intent-routing`，HEAD `3a756d8`；PR #23
+  保持未合并，当前工作未 commit/push。
+- 经典聊天默认不再自动注入 Investment Research/Value Hunter 研究记忆；研究能力
+  保留在显式研究页面/意图中。恐慌提醒只依赖真实 PANIC/EXTREME_PANIC 市场状态，
+  无候选时也可提醒市场风险，但不会产生交易指令。
+- Docker 服务健康运行于 `127.0.0.1:8899`；飞书长连接为
+  configured/enabled/loaded/running，未执行真实通知发送。
+- 真实研究运行：`2026-08-24`，9 个个人观察池标的均取得真实当日价格，统一研究
+  API 返回 NORMAL 和 Top 5；市场宽度上游失败被明确记录为 Data Gap。
+- 历史验证：`2025-04-07` 与 `2026-07-24` 均返回 PANIC、5 个当时候选，以及
+  T+5/T+20/T+60 收益、最大回撤、基准超额和结果分类。
+- 浏览器验收：真实点击“生成盘后研究”后，交易日、候选和 Data Gap 正常显示，
+  无 API 密钥错误。Feishu Preview 保持 `send=false`。
+- 本轮测试：Value Hunter/统一配置 98 项通过；聊天隔离、提醒、Provider 与研究路由
+  43 项通过；前端 316 项通过；环境变量 CI 门禁通过。完整后端回归在 Windows
+  上通过 1,174 项、跳过 14 项后，停在既有 POSIX `0600` 文件模式断言（Windows
+  实际报告 `0666`），与本轮改动无关。全仓 `git diff --check` 仅被用户已有的
+  `auto-start.log` 尾随空格阻塞，本轮修改文件自身无格式错误。
 
 ---
 

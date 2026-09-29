@@ -35,6 +35,7 @@ __all__ = [
     "PathConfig",
     "OcrConfig",
     "ResearchDeliveryConfig",
+    "ValueHunterSettings",
 ]
 
 
@@ -410,6 +411,31 @@ class ResearchDeliveryConfig(_EnvBase):
         return self
 
 
+class ValueHunterSettings(_EnvBase):
+    """Environment settings for the optional Panic Value Hunter module."""
+
+    panic_value_config_path: str = Field(alias="PANIC_VALUE_CONFIG_PATH", default="")
+    enabled: EnvBool = Field(alias="VALUE_HUNTER_ENABLED", default=False)
+    provider: str = Field(alias="VALUE_HUNTER_PROVIDER", default="akshare")
+    schedule: str = Field(alias="VALUE_HUNTER_SCHEDULE", default="18:10")
+    timezone: str = Field(alias="VALUE_HUNTER_TIMEZONE", default="Asia/Shanghai")
+    market_alert_score: float = Field(alias="VALUE_HUNTER_MARKET_ALERT_SCORE", default=70.0)
+    candidate_alert_score: float = Field(
+        alias="VALUE_HUNTER_CANDIDATE_ALERT_SCORE", default=75.0,
+    )
+    max_candidates: int = Field(alias="VALUE_HUNTER_MAX_CANDIDATES", default=5)
+    database_path: str = Field(alias="VALUE_HUNTER_DB_PATH", default="")
+    watchlist_path: str = Field(alias="VALUE_HUNTER_WATCHLIST_PATH", default="")
+    feishu_webhook_url: str = Field(alias="VALUE_HUNTER_FEISHU_WEBHOOK", default="")
+    smtp_host: str = Field(alias="VALUE_HUNTER_SMTP_HOST", default="")
+    smtp_port: int = Field(alias="VALUE_HUNTER_SMTP_PORT", default=465)
+    smtp_username: str = Field(alias="VALUE_HUNTER_SMTP_USERNAME", default="")
+    smtp_password: str = Field(alias="VALUE_HUNTER_SMTP_PASSWORD", default="")
+    smtp_from: str = Field(alias="VALUE_HUNTER_SMTP_FROM", default="")
+    email_to: str = Field(alias="VALUE_HUNTER_EMAIL_TO", default="")
+    notify_on_demo: EnvBool = Field(alias="VALUE_HUNTER_NOTIFY_ON_DEMO", default=False)
+
+
 # ---------------------------------------------------------------------------
 # Top-level composition
 # ---------------------------------------------------------------------------
@@ -434,6 +460,7 @@ class EnvConfig(_EnvBase):
     paths: PathConfig = Field(default_factory=PathConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     research_delivery: ResearchDeliveryConfig = Field(default_factory=ResearchDeliveryConfig)
+    value_hunter: ValueHunterSettings = Field(default_factory=ValueHunterSettings)
 
     @model_validator(mode="after")
     def _resolve_api_key_alias(self) -> "EnvConfig":

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import yaml
 
+from src.config.accessor import get_env_config
 from src.config.paths import get_runtime_root
 
 
@@ -84,7 +84,8 @@ def resolve_panic_sensitivity(
 
 
 def load_panic_value_config(path: Path | None = None) -> PanicValueMethodConfig:
-    config_path = path or Path(os.getenv("PANIC_VALUE_CONFIG_PATH", "").strip() or (
+    configured_path = get_env_config().value_hunter.panic_value_config_path.strip()
+    config_path = path or Path(configured_path or (
         Path(__file__).resolve().parents[3] / "config" / "panic_value_config.yaml"
     ))
     if not config_path.exists():
@@ -107,27 +108,6 @@ def load_panic_value_config(path: Path | None = None) -> PanicValueMethodConfig:
         relative_strength_weight=float(weights.get("relative_strength", 10.0)),
         catalyst_weight=float(weights.get("catalyst", 10.0)),
     )
-
-
-def _bool(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _float(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, str(default)))
-    except ValueError:
-        return default
-
-
-def _int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except ValueError:
-        return default
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,31 +133,32 @@ class ValueHunterConfig:
 
     @classmethod
     def from_env(cls) -> "ValueHunterConfig":
+        settings = get_env_config().value_hunter
         root = get_runtime_root() / "value-hunter"
-        db_value = os.getenv("VALUE_HUNTER_DB_PATH", "").strip()
-        watchlist = os.getenv("VALUE_HUNTER_WATCHLIST_PATH", "").strip()
+        db_value = settings.database_path.strip()
+        watchlist = settings.watchlist_path.strip()
         default_watchlist = Path(__file__).resolve().parents[3] / "config" / "watchlist.yaml"
         return cls(
-            enabled=_bool("VALUE_HUNTER_ENABLED"),
-            provider=os.getenv("VALUE_HUNTER_PROVIDER", "akshare").strip().lower(),
-            schedule=os.getenv("VALUE_HUNTER_SCHEDULE", "18:10").strip(),
-            timezone=os.getenv("VALUE_HUNTER_TIMEZONE", "Asia/Shanghai").strip(),
-            market_alert_score=_float("VALUE_HUNTER_MARKET_ALERT_SCORE", 70.0),
-            candidate_alert_score=_float("VALUE_HUNTER_CANDIDATE_ALERT_SCORE", 75.0),
-            max_candidates=max(1, _int("VALUE_HUNTER_MAX_CANDIDATES", 5)),
+            enabled=settings.enabled,
+            provider=settings.provider.strip().lower(),
+            schedule=settings.schedule.strip(),
+            timezone=settings.timezone.strip(),
+            market_alert_score=settings.market_alert_score,
+            candidate_alert_score=settings.candidate_alert_score,
+            max_candidates=max(1, settings.max_candidates),
             database_path=Path(db_value) if db_value else root / "value_hunter.sqlite3",
             watchlist_path=(
                 Path(watchlist) if watchlist
                 else default_watchlist if default_watchlist.exists()
                 else None
             ),
-            feishu_webhook_url=os.getenv("VALUE_HUNTER_FEISHU_WEBHOOK", "").strip(),
-            smtp_host=os.getenv("VALUE_HUNTER_SMTP_HOST", "").strip(),
-            smtp_port=_int("VALUE_HUNTER_SMTP_PORT", 465),
-            smtp_username=os.getenv("VALUE_HUNTER_SMTP_USERNAME", "").strip(),
-            smtp_password=os.getenv("VALUE_HUNTER_SMTP_PASSWORD", "").strip(),
-            smtp_from=os.getenv("VALUE_HUNTER_SMTP_FROM", "").strip(),
-            email_to=os.getenv("VALUE_HUNTER_EMAIL_TO", "").strip(),
-            notify_on_demo=_bool("VALUE_HUNTER_NOTIFY_ON_DEMO"),
+            feishu_webhook_url=settings.feishu_webhook_url.strip(),
+            smtp_host=settings.smtp_host.strip(),
+            smtp_port=settings.smtp_port,
+            smtp_username=settings.smtp_username.strip(),
+            smtp_password=settings.smtp_password.strip(),
+            smtp_from=settings.smtp_from.strip(),
+            email_to=settings.email_to.strip(),
+            notify_on_demo=settings.notify_on_demo,
             method=load_panic_value_config(),
         )
