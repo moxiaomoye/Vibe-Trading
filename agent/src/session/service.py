@@ -228,6 +228,11 @@ class SessionService:
 
         safe_overrides = sanitize_session_overrides(session_config) if session_config else session_config
         agent_config = load_runtime_agent_config(overrides=safe_overrides)
+        channel_name = str((session_config or {}).get("channel") or "").strip()
+        # IM adapters must keep the original chat behavior isolated from
+        # Investment Research project memories.  The research page and other
+        # explicit research sessions still receive the shared memory store.
+        channel_memory = None if channel_name else pm
 
         def event_callback(event_type: str, data: Dict[str, Any]) -> None:
             """Forward AgentLoop events to the SSE event bus."""
@@ -241,12 +246,13 @@ class SessionService:
         registry = await loop.run_in_executor(
             _AGENT_EXECUTOR,
             lambda: build_registry(
-                persistent_memory=pm,
+                persistent_memory=channel_memory,
                 include_shell_tools=include_shell_tools,
                 agent_config=agent_config,
                 session_id=session_id,
                 event_callback=event_callback,
                 warn_callback=_mcp_collision_warn,
+                include_persistent_memory_tool=not bool(channel_name),
             ),
         )
 
@@ -255,7 +261,7 @@ class SessionService:
             llm=llm,
             event_callback=event_callback,
             max_iterations=50,
-            persistent_memory=pm,
+            persistent_memory=channel_memory,
         )
         self._active_loops[session_id] = agent
 

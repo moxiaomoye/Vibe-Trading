@@ -15,14 +15,14 @@ from .models import ScanResult
 def render_text(result: ScanResult) -> str:
     market = result.market
     lines = [
-        f"【Value Hunter】A股科技研究提醒",
+        "【Vibe-Trading】A股市场恐慌提醒",
         f"日期：{market.observation.as_of}",
         f"市场状态：{market.level}（{market.score:.1f}/100）",
         "触发依据：" + "；".join(market.reasons[:4]),
         "",
     ]
     if not result.candidates:
-        lines.append("本轮没有达到研究门槛且数据完整的候选。")
+        lines.append("本轮没有达到研究门槛且数据完整的候选；本消息仅提示市场恐慌。")
     for index, item in enumerate(result.candidates, 1):
         obs = item.observation
         lines.extend([

@@ -33,6 +33,7 @@ from src.config.env_schema import (
     LLMConfig,
     PathConfig,
     SwarmConfig,
+    ValueHunterSettings,
     _parse_env_bool,
 )
 
@@ -43,7 +44,10 @@ from src.config.env_schema import (
 
 # All env-var aliases used by EnvConfig sub-models.
 _ALL_ALIASES: list[str] = []
-for _model in (LLMConfig, DataConfig, APIConfig, SwarmConfig, AgentTuningConfig, PathConfig):
+for _model in (
+    LLMConfig, DataConfig, APIConfig, SwarmConfig, AgentTuningConfig, PathConfig,
+    ValueHunterSettings,
+):
     for _info in _model.model_fields.values():
         if _info.alias:
             _ALL_ALIASES.append(_info.alias)
@@ -149,6 +153,17 @@ class TestEnvConfigDefaults:
         assert c.paths.vibe_trading_swarm_agent_config == ""
         assert c.paths.allow_session_mcp_servers is False
 
+    def test_value_hunter_defaults(self) -> None:
+        c = EnvConfig()
+        assert c.value_hunter.enabled is False
+        assert c.value_hunter.provider == "akshare"
+        assert c.value_hunter.schedule == "18:10"
+        assert c.value_hunter.market_alert_score == 70.0
+        assert c.value_hunter.candidate_alert_score == 75.0
+        assert c.value_hunter.max_candidates == 5
+        assert c.value_hunter.feishu_webhook_url == ""
+        assert c.value_hunter.notify_on_demo is False
+
 
 # ===================================================================
 # TestEnvConfigTypeCoercion
@@ -194,6 +209,15 @@ class TestEnvConfigTypeCoercion:
         monkeypatch.setenv("SWARM_HEARTBEAT_INTERVAL_S", "5.5")
         c = EnvConfig()
         assert c.swarm.swarm_heartbeat_interval_s == 5.5
+
+    def test_value_hunter_coercion(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("VALUE_HUNTER_ENABLED", "true")
+        monkeypatch.setenv("VALUE_HUNTER_MAX_CANDIDATES", "7")
+        monkeypatch.setenv("VALUE_HUNTER_MARKET_ALERT_SCORE", "82.5")
+        c = EnvConfig()
+        assert c.value_hunter.enabled is True
+        assert c.value_hunter.max_candidates == 7
+        assert c.value_hunter.market_alert_score == 82.5
 
 
 # ===================================================================

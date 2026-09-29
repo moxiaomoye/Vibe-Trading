@@ -61,10 +61,14 @@ class ValueHunterService:
                 eligible = [item for item in scored if item.status != "Reject"]
             eligible.sort(key=lambda item: item.score.total, reverse=True)
             selected = eligible[: self.config.max_candidates]
-            required = not include_incomplete and market.score >= 70.0 and bool(selected)
+            # Panic monitoring is independent from candidate research.  A real
+            # market panic must still reach Feishu when no stock/ETF clears the
+            # research-quality gate; missing market breadth remains
+            # ``数据不足`` and therefore cannot notify.
+            required = not include_incomplete and market.level in {"恐慌", "股灾"}
             reason = (
-                f"市场{market.score:.1f}分且{len(selected)}家公司达到研究门槛"
-                if required else "市场或候选未同时达到通知门槛"
+                f"市场状态为{market.level}（{market.score:.1f}/100）"
+                if required else "市场未达到恐慌提醒门槛"
             )
             result = ScanResult(
                 run_id=str(uuid.uuid4()), started_at=started,
